@@ -9,6 +9,7 @@ from pydantic import BaseModel, EmailStr
 from bson import ObjectId
 
 from database import db
+from templates import TEMPLATE_MAP
 
 JWT_ALGORITHM = "HS256"
 router = APIRouter(prefix="/api/auth", tags=["auth"])
@@ -62,6 +63,7 @@ class RegisterInput(BaseModel):
     email: EmailStr
     password: str
     tax_type: str = "autonomo"
+    activity: str = ""
 
 
 class LoginInput(BaseModel):
@@ -78,6 +80,7 @@ def _public_user(user: dict) -> dict:
         "tax_type": user.get("tax_type", "autonomo"),
         "plan": user.get("plan", "basico"),
         "is_blocked": bool(user.get("is_blocked", False)),
+        "activity": user.get("activity", ""),
     }
 
 
@@ -151,6 +154,8 @@ async def register(data: RegisterInput, response: Response):
         "tax_type": data.tax_type if data.tax_type in ("autonomo", "empresa") else "autonomo",
         "created_at": datetime.now(timezone.utc).isoformat(),
     }
+    if data.activity in TEMPLATE_MAP:
+        doc["activity"] = data.activity
     result = await db.users.insert_one(doc)
     uid = str(result.inserted_id)
     _set_cookies(response, create_access_token(uid, email), create_refresh_token(uid))

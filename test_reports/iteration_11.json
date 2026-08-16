@@ -1,0 +1,30 @@
+{
+  "summary": "Iter11: all 4 new features verified end-to-end. Backend: /app/backend/tests/test_iter11_features.py = 16/16 PASS. (1) Registration with activity='electricista' stores it (GET /auth/me.activity='electricista') and GET /company for user w/o company returns {template_id:'electricista'}. Registering with no activity OR invalid activity ('not_a_real_activity') -> activity not stored, /company returns {template_id:'clasico'}. (2) GET /payments/history returns [] for basico users with no stripe_customer_id (200); requires auth (401 without cookie). (3) POST /payments/portal without stripe_customer_id -> 400 detail 'No tienes una suscripción activa que gestionar'; requires auth. Real-portal flow with an active subscription was not exercised (per request, best-effort). (4) GET /admin/audit returns list with keys action/actor_email/target_email/at; 401 unauth, 403 for non-admin. Performing POST /admin/users/{id}/block increases audit length by 1 and top entry has action='block', actor_email=admin@fiscalhub.es, target_email = the blocked user (case-insensitive). Regression: POST /payments/checkout for medio/platino returns valid cs_test_ + checkout.stripe.com URLs; admin GET /plans defaults intact (medio 9.99, platino 24.99); GET /admin/global-templates/goroky still returns legal_notice. Frontend: /registro shows 'Tipo de actividad' select (register-activity); selecting 'Electricista' + registering -> lands on /configuracion with tpl-electricista highlighted (border-[#0052FF] ring-1 ring-[#0052FF] class present). /precios for basico user: manage-subscription NOT rendered (count=0), payment-history table NOT rendered (empty history). /admin as admin: audit-log-section renders and populates 58 audit-row entries with Spanish action labels (e.g. 'Desbloqueó usuario'), actor and target emails and formatted dates. No console errors. Plan defaults left intact.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": [
+    "/app/backend/tests/test_iter11_features.py",
+    "/app/test_reports/pytest/iter11.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "payments_routes.customer_portal calls ss.create_portal_session directly — if the Stripe portal configuration is not yet 'ensured' (see ss.ensure_portal_configuration referenced in files_of_reference), first call can 400 from Stripe. Consider calling ensure_portal_configuration() inside the endpoint (like checkout does with ensure_tax_settings) to be defensive.",
+    "payments_routes.payment_history silently swallows StripeError with logger.error and returns [] — a real API/credentials outage looks identical to 'no invoices' to the client. Consider returning a 502 with an actionable message or a structured {items:[], error:...} shape so the UI can distinguish 'no history' from 'temporarily unavailable'.",
+    "admin_routes.audit_log iterates through unique ids and issues one db.users.find_one() per id. For 100 entries with many distinct actors/targets this can be up to ~200 sequential Mongo queries. Prefer a single db.users.find({'_id':{'$in':[ObjectId(i) for i in ids]}},{'email':1}) then build the emails dict — O(1) round-trip.",
+    "admin_routes._audit stores 'at' as ISO string but audit_log sorts by 'at' -1 assuming lexicographic sort matches chronological. Works for ISO-8601 UTC strings, but Mongo indexes and comparisons would be cleaner if 'at' were a native datetime.",
+    "auth.RegisterInput.activity defaults to '' but doc only stores it when it's a valid TEMPLATE_MAP key. The Register UI sends 'none' when the user doesn't pick — currently mapped to '' in Register.js before submit (good). If any other client sends 'none' verbatim it'll be silently ignored — this is fine but worth documenting in the API schema (add pattern/enum to RegisterInput.activity for OpenAPI clarity).",
+    "server.get_company returns a stub {template_id:...} that does NOT include user_id or other CompanyInput defaults. Settings.js prefills only template_id from it — correct. Just note: this stub is not persisted; users must save Settings for it to stick. Confirmed working in UI as verified."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iter11_features.py",
+    "/app/test_reports/iteration_11.json",
+    "/app/test_reports/pytest/iter11.xml"
+  ],
+  "success_rate": {"backend": "100% (16/16)", "frontend": "100%"},
+  "test_credentials": "admin@fiscalhub.es / admin123. Ephemeral basico users self-registered as TEST_iter11_*@example.com and iter11ui_*@example.com (all password test1234).",
+  "seed_data_creation": "Registered 4 ephemeral basico users (TEST_iter11_elec_*, TEST_iter11_noact_*, TEST_iter11_inv_*, iter11ui_*). Blocked+unblocked one user during audit-log test (state restored). No persistent seed data mutation. Admin plan defaults verified at end: medio 9.99, platino 24.99.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "All new iter11 testids validated: register-activity, tpl-<activity> (e.g. tpl-electricista), manage-subscription (only rendered for medio/platino current plan), payment-history (only rendered when history.length>0), history-row-<id>, audit-log-section, audit-row. GET /company for users without a company doc returns a lightweight {template_id} stub (not persisted). Real Stripe portal + real invoice history NOT exercised (requires an actual completed subscription checkout). The audit list has grown to ~58 entries across iterations — if it exceeds 100 the endpoint currently caps at 100 (to_list(100)) which is fine. Frontend Register.js maps activity 'none' -> '' before calling /auth/register, so backend never sees 'none'.",
+  "rca of the issue": "N/A — no product bugs discovered."
+}

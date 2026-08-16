@@ -24,6 +24,10 @@ class CheckoutReq(BaseModel):
     origin_url: str
 
 
+class PortalReq(BaseModel):
+    return_url: str
+
+
 async def _upgrade_user(user_id: str, plan: str, session_obj):
     if not user_id or plan not in ss.PLAN_LOOKUP:
         return
@@ -62,6 +66,45 @@ async def create_checkout(req: CheckoutReq, user=Depends(get_current_user)):
         "created_at": datetime.now(timezone.utc), "updated_at": datetime.now(timezone.utc),
     })
     return {"checkout_url": session.url, "session_id": session.id}
+
+
+@payments.post("/payments/portal")
+async def customer_portal(req: PortalReq, user=Depends(get_current_user)):
+    u = await db.users.find_one({"_id": ObjectId(user["id"])})
+    cust = (u or {}).get("stripe_customer_id")
+    if not cust:
+        raise HTTPException(status_code=400, detail="No tienes una suscripción activa que gestionar")
+    try:
+        session = ss.create_portal_session(cust, req.return_url)
+    except stripe.error.StripeError as e:
+        logger.error(f"portal session failed: {e}")
+        raise HTTPException(status_code=502, detail="No pudimos abrir el portal de suscripción. Inténtalo más tarde.")
+    return {"portal_url": session.url}
+
+
+@payments.get("/payments/history")
+async def payment_history(user=Depends(get_current_user)):
+    u = await db.users.find_one({"_id": ObjectId(user["id"])})
+    cust = (u or {}).get("stripe_customer_id")
+    if not cust:
+        return []
+    out = []
+    try:
+        invoices = stripe.Invoice.list(customer=cust, limit=24)
+        for inv in invoices.auto_paging_iter():
+            out.append({
+                "id": inv.get("id"),
+                "date": inv.get("created"),
+                "amount": (inv.get("amount_paid") or inv.get("amount_due") or 0) / 100,
+                "currency": (inv.get("currency") or "eur").upper(),
+                "status": inv.get("status"),
+                "description": (inv.get("lines", {}).get("data", [{}])[0] or {}).get("description", ""),
+                "invoice_url": inv.get("hosted_invoice_url"),
+                "pdf": inv.get("invoice_pdf"),
+            })
+    except stripe.error.StripeError as e:
+        logger.error(f"history failed: {e}")
+    return out
 
 
 @payments.get("/payments/status/{session_id}")
@@ -106,6 +149,13 @@ async def stripe_webhook(request: Request):
         if res.modified_count:
             meta = obj.get("metadata") or {}
             await _upgrade_user(meta.get("user_id"), meta.get("plan"), obj)
+    elif t == "customer.subscription.updated":
+        plan = ss.plan_from_subscription(obj)
+        if plan:
+            await db.users.update_one(
+                {"stripe_customer_id": obj.get("customer")},
+                {"$set": {"plan": plan, "stripe_subscription_id": obj.get("id"),
+                          "plan_updated_at": datetime.now(timezone.utc).isoformat()}})
     elif t == "customer.subscription.deleted":
         sub_id = obj.get("id")
         await db.users.update_one({"stripe_subscription_id": sub_id},

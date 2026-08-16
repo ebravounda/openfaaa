@@ -116,6 +116,33 @@ async def stats(admin_user=Depends(require_admin)):
             "total_invoices": total_invoices, "by_plan": by_plan}
 
 
+@admin.get("/audit")
+async def audit_log(admin_user=Depends(require_admin)):
+    entries = await db.admin_audit.find().sort("at", -1).to_list(100)
+    ids = set()
+    for e in entries:
+        if e.get("actor_id"):
+            ids.add(e["actor_id"])
+        if e.get("target_id"):
+            ids.add(e["target_id"])
+    emails = {}
+    obj_ids = []
+    for i in ids:
+        try:
+            obj_ids.append(ObjectId(i))
+        except Exception:
+            pass
+    if obj_ids:
+        async for u in db.users.find({"_id": {"$in": obj_ids}}, {"email": 1}):
+            emails[str(u["_id"])] = u["email"]
+    return [{
+        "action": e.get("action"),
+        "actor_email": emails.get(e.get("actor_id"), "—"),
+        "target_email": emails.get(e.get("target_id"), "—") if e.get("target_id") else "—",
+        "at": e.get("at"),
+    } for e in entries]
+
+
 @admin.post("/users/{user_id}/block")
 async def block_user(user_id: str, admin_user=Depends(require_admin)):
     target = await db.users.find_one({"_id": ObjectId(user_id)})

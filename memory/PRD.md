@@ -77,6 +77,13 @@ Sistema de facturación para España: crear facturas introduciendo datos (CIF/NI
 - ✅ Personalización por usuario: elegir plantilla, color de acento (con override) y pie de factura. Company: template_id, accent_color, invoice_footer. El PDF aplica el color al encabezado/total y añade el pie.
 - ✅ Panel Conexión muestra el modo real (Simulado/Preproducción).
 
+## Implemented — Iteración 12 (2026-06) Gestión de suscripción + Historial + Auditoría + Plantilla por actividad
+- ✅ Cancelar/gestionar suscripción: portal de cliente de Stripe (POST /api/payments/portal, stripe_service.ensure_portal_configuration/create_portal_session). Webhooks customer.subscription.updated (cambio de plan) y .deleted (baja → básico) sincronizan el plan.
+- ✅ Historial de pagos: GET /api/payments/history (facturas de Stripe del cliente); tabla en /precios (payment-history) con fecha, importe, estado y enlace a factura. Botón "Gestionar / cancelar suscripción" visible solo en planes de pago.
+- ✅ Registro de actividad (admin): db.admin_audit + GET /api/admin/audit (enriquecido con emails vía $in). Sección "Registro de actividad" en /admin (quién bloqueó/personificó/cambió plan/editó plantillas y cuándo).
+- ✅ Plantilla por actividad: selector de sector en /registro; se guarda en el usuario y GET /api/company sugiere template_id según la actividad para usuarios sin empresa creada; Settings lo preselecciona.
+- ✅ Testing iteración 11/12: 16/16 nuevos + frontend 100%, sin bugs.
+
 ## Implemented — Iteración 11 (2026-06) Autoservicio de pago (Stripe) + Aviso al 80%
 - ✅ Suscripciones Stripe (Flow A sandbox reclamable, país ES, EUR): el usuario básico mejora a Medio (9.99€/mes) o Platino (24.99€/mes) desde /precios; checkout en modo suscripción, cobro mensual automático. stripe_service.py (sync catálogo por lookup_key, sesión con SMP + fallback automatic_tax + sin impuestos), payments_routes.py (/api/payments/checkout, /api/payments/status/{id}, /api/stripe/webhook).
 - ✅ Sincronización de plan automática: al pagar (webhook checkout.session.completed y/o polling de status) se sube el plan del usuario en MongoDB; customer.subscription.deleted lo baja a básico. PUT /api/admin/plans re-sincroniza precios en Stripe.

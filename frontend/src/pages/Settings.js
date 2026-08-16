@@ -26,7 +26,7 @@ export default function Settings() {
 
   useEffect(() => {
     api.get("/company").then((r) => {
-      if (r.data && r.data.name) setForm((f) => ({ ...f, ...r.data }));
+      if (r.data && (r.data.name || r.data.template_id)) setForm((f) => ({ ...f, ...r.data }));
     }).finally(() => setLoading(false));
     api.get("/verifactu/certificate").then((r) => setCert(r.data && r.data.meta ? r.data : null));
     api.get("/templates").then((r) => setTemplates(r.data));

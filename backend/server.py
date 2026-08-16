@@ -209,7 +209,9 @@ async def public_global_goroky(user=Depends(get_current_user)):
 @api.get("/company")
 async def get_company(user=Depends(get_current_user)):
     doc = await db.companies.find_one({"user_id": user["id"]}, {"_id": 0})
-    return doc or {}
+    if not doc:
+        return {"template_id": user.get("activity") or "clasico"}
+    return doc
 
 
 @api.put("/company")

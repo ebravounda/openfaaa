@@ -72,6 +72,54 @@ def get_price_id(lookup: str):
     return d[0].id if d else None
 
 
+def _portal_config_id():
+    for c in stripe.billing_portal.Configuration.list(limit=100).auto_paging_iter():
+        if c.get("metadata", {}).get("managed_by") == "emergent":
+            return c.id
+    return None
+
+
+def ensure_portal_configuration():
+    products = []
+    for lookup in PLAN_LOOKUP.values():
+        pid = get_price_id(lookup)
+        if pid:
+            pr = stripe.Price.retrieve(pid)
+            products.append({"product": pr.product, "prices": [pid]})
+    features = {
+        "customer_update": {"enabled": True, "allowed_updates": ["email", "address", "name"]},
+        "invoice_history": {"enabled": True},
+        "payment_method_update": {"enabled": True},
+        "subscription_cancel": {"enabled": True, "mode": "at_period_end"},
+    }
+    if products:
+        features["subscription_update"] = {
+            "enabled": True, "default_allowed_updates": ["price"],
+            "products": products, "proration_behavior": "create_prorations",
+        }
+    cid = _portal_config_id()
+    if cid:
+        return stripe.billing_portal.Configuration.modify(cid, features=features).id
+    return stripe.billing_portal.Configuration.create(
+        features=features, metadata={"managed_by": "emergent"},
+        business_profile={"headline": "FiscalHub España"}).id
+
+
+def create_portal_session(customer_id: str, return_url: str):
+    cfg = ensure_portal_configuration()
+    return stripe.billing_portal.Session.create(
+        customer=customer_id, return_url=return_url, configuration=cfg)
+
+
+def plan_from_subscription(sub_obj) -> str:
+    try:
+        items = sub_obj["items"]["data"]
+        lookup = items[0]["price"].get("lookup_key")
+        return LOOKUP_PLAN.get(lookup)
+    except Exception:
+        return None
+
+
 def create_subscription_session(price_id: str, origin_url: str, metadata: dict):
     kwargs = dict(
         line_items=[{"price": price_id, "quantity": 1}],

@@ -6,7 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Progress } from "@/components/ui/progress";
-import { Check, X, Sparkles, AlertTriangle, Infinity as InfinityIcon, ArrowUpCircle, Loader2 } from "lucide-react";
+import { Check, X, Sparkles, AlertTriangle, Infinity as InfinityIcon, ArrowUpCircle, Loader2, Settings2, Receipt } from "lucide-react";
 
 const FEATURES = [
   { key: "email", label: "Envío de facturas por email" },
@@ -24,6 +24,8 @@ export default function Pricing() {
   const [usage, setUsage] = useState(null);
   const [loading, setLoading] = useState(true);
   const [upgrading, setUpgrading] = useState(null);
+  const [history, setHistory] = useState([]);
+  const [portalLoading, setPortalLoading] = useState(false);
 
   useEffect(() => {
     Promise.all([api.get("/plans"), api.get("/plan")])
@@ -33,6 +35,7 @@ export default function Pricing() {
         setUsage(mine.data.usage);
       })
       .finally(() => setLoading(false));
+    api.get("/payments/history").then((r) => setHistory(r.data)).catch(() => {});
   }, []);
 
   const upgrade = async (planId) => {
@@ -43,6 +46,17 @@ export default function Pricing() {
     } catch (e) {
       toast.error(formatApiErrorDetail(e.response?.data?.detail));
       setUpgrading(null);
+    }
+  };
+
+  const manageSubscription = async () => {
+    setPortalLoading(true);
+    try {
+      const { data } = await api.post("/payments/portal", { return_url: window.location.origin + "/precios" });
+      window.location.href = data.portal_url;
+    } catch (e) {
+      toast.error(formatApiErrorDetail(e.response?.data?.detail));
+      setPortalLoading(false);
     }
   };
 
@@ -60,9 +74,17 @@ export default function Pricing() {
 
   return (
     <Layout>
-      <div className="mb-6">
-        <h1 className="font-display text-[28px] font-semibold tracking-tight text-slate-900">Planes y precios</h1>
-        <p className="text-sm text-slate-500 mt-0.5">Elige el plan que mejor se adapta a tu negocio</p>
+      <div className="mb-6 flex items-start justify-between gap-4 flex-wrap">
+        <div>
+          <h1 className="font-display text-[28px] font-semibold tracking-tight text-slate-900">Planes y precios</h1>
+          <p className="text-sm text-slate-500 mt-0.5">Elige el plan que mejor se adapta a tu negocio</p>
+        </div>
+        {(current?.id === "medio" || current?.id === "platino") && (
+          <Button onClick={manageSubscription} disabled={portalLoading} variant="outline" className="border-slate-200" data-testid="manage-subscription">
+            {portalLoading ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Settings2 className="w-4 h-4 mr-2" strokeWidth={1.5} />}
+            Gestionar / cancelar suscripción
+          </Button>
+        )}
       </div>
 
       {loading ? (
@@ -165,6 +187,41 @@ export default function Pricing() {
               );
             })}
           </div>
+
+          {history.length > 0 && (
+            <div className="mt-10 bg-white border border-slate-200 rounded-lg shadow-sm overflow-hidden max-w-3xl" data-testid="payment-history">
+              <div className="px-5 py-4 border-b border-slate-100 flex items-center gap-2">
+                <Receipt className="w-4 h-4 text-[#0052FF]" strokeWidth={1.5} />
+                <div className="font-medium text-slate-900">Historial de pagos</div>
+              </div>
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="text-left text-slate-500 border-b border-slate-100">
+                    <th className="px-5 py-2.5 font-medium">Fecha</th>
+                    <th className="px-5 py-2.5 font-medium">Concepto</th>
+                    <th className="px-5 py-2.5 font-medium text-right">Importe</th>
+                    <th className="px-5 py-2.5 font-medium">Estado</th>
+                    <th className="px-5 py-2.5 font-medium text-right">Factura</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {history.map((h) => (
+                    <tr key={h.id} className="border-b border-slate-50 last:border-0" data-testid={`history-row-${h.id}`}>
+                      <td className="px-5 py-2.5 text-slate-600">{h.date ? new Date(h.date * 1000).toLocaleDateString("es-ES") : "—"}</td>
+                      <td className="px-5 py-2.5 text-slate-700">{h.description || "Suscripción"}</td>
+                      <td className="px-5 py-2.5 text-right tabular text-slate-900">{Number(h.amount).toFixed(2)} {h.currency}</td>
+                      <td className="px-5 py-2.5">
+                        <Badge className={`rounded-full ${h.status === "paid" ? "bg-emerald-100 text-emerald-700 hover:bg-emerald-100" : "bg-slate-100 text-slate-600 hover:bg-slate-100"}`}>{h.status === "paid" ? "Pagada" : h.status}</Badge>
+                      </td>
+                      <td className="px-5 py-2.5 text-right">
+                        {h.pdf || h.invoice_url ? <a href={h.pdf || h.invoice_url} target="_blank" rel="noreferrer" className="text-[#0052FF] hover:underline">Ver</a> : "—"}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
         </>
       )}
     </Layout>

@@ -6,6 +6,25 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Loader2, Sparkles, User, Building2 } from "lucide-react";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+
+const ACTIVITIES = [
+  { v: "none", label: "Otro / General" },
+  { v: "electricista", label: "Electricista" },
+  { v: "fontanero", label: "Fontanero" },
+  { v: "fotografo", label: "Fotógrafo" },
+  { v: "chef", label: "Chef / Catering" },
+  { v: "transportista", label: "Transportista" },
+  { v: "informatico", label: "Informático" },
+  { v: "telecomunicaciones", label: "Telecomunicaciones" },
+  { v: "medico", label: "Médico" },
+  { v: "dentista", label: "Dentista" },
+  { v: "inmobiliaria", label: "Inmobiliaria" },
+  { v: "restaurante", label: "Restaurante" },
+  { v: "gasolina", label: "Gasolinera" },
+  { v: "peluqueria", label: "Peluquería" },
+  { v: "abogado", label: "Abogado / Asesoría" },
+];
 
 export default function Register() {
   const { register } = useAuth();
@@ -14,6 +33,7 @@ export default function Register() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [taxType, setTaxType] = useState("autonomo");
+  const [activity, setActivity] = useState("none");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
@@ -22,7 +42,7 @@ export default function Register() {
     setError("");
     setLoading(true);
     try {
-      await register(name, email, password, taxType);
+      await register(name, email, password, taxType, activity === "none" ? "" : activity);
       navigate("/configuracion");
     } catch (err) {
       setError(formatApiErrorDetail(err.response?.data?.detail) || err.message);
@@ -86,6 +106,15 @@ export default function Register() {
         <div className="space-y-2">
           <Label htmlFor="password">Contraseña</Label>
           <Input id="password" type="password" value={password} onChange={(e) => setPassword(e.target.value)} required data-testid="register-password" />
+        </div>
+        <div className="space-y-2">
+          <Label>Tipo de actividad (para sugerir tu plantilla)</Label>
+          <Select value={activity} onValueChange={setActivity}>
+            <SelectTrigger data-testid="register-activity"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              {ACTIVITIES.map((a) => <SelectItem key={a.v} value={a.v}>{a.label}</SelectItem>)}
+            </SelectContent>
+          </Select>
         </div>
         <Button type="submit" disabled={loading} data-testid="register-submit" className="w-full bg-[#0052FF] hover:bg-[#0040CC] text-white">
           {loading && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}

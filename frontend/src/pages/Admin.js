@@ -17,9 +17,17 @@ import {
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
-import { Users, ShieldOff, FileText, Search, UserCog, Ban, CheckCircle2, Loader2, Save, CreditCard } from "lucide-react";
+import { Users, ShieldOff, FileText, Search, UserCog, Ban, CheckCircle2, Loader2, Save, CreditCard, History } from "lucide-react";
 
 const PLAN_LABEL = { basico: "Básico", medio: "Medio", platino: "Platino" };
+const actionLabel = (a) => {
+  if (!a) return "—";
+  if (a.startsWith("plan:")) return `Cambió plan a ${PLAN_LABEL[a.split(":")[1]] || a.split(":")[1]}`;
+  return {
+    block: "Bloqueó usuario", unblock: "Desbloqueó usuario", impersonate: "Personificó usuario",
+    edit_plans: "Editó los planes", "edit_global_template:goroky": "Editó plantilla global GoRoky",
+  }[a] || a;
+};
 const PLAN_BADGE = {
   basico: "bg-slate-100 text-slate-700",
   medio: "bg-blue-100 text-blue-700",
@@ -38,6 +46,7 @@ export default function Admin() {
   const [savingGk, setSavingGk] = useState(false);
   const [plans, setPlans] = useState([]);
   const [savingPlans, setSavingPlans] = useState(false);
+  const [audit, setAudit] = useState([]);
 
   const load = (query = "") => {
     setLoading(true);
@@ -54,6 +63,7 @@ export default function Admin() {
     load();
     api.get("/admin/global-templates/goroky").then((r) => setGk(r.data)).catch(() => {});
     api.get("/admin/plans").then((r) => setPlans(r.data)).catch(() => {});
+    api.get("/admin/audit").then((r) => setAudit(r.data)).catch(() => {});
   }, []);
 
   if (user && (user.role !== "admin" || user.is_impersonating)) return <Navigate to="/" replace />;
@@ -297,6 +307,37 @@ export default function Admin() {
             )}
           </div>
         </div>
+      </div>
+
+      <div className="bg-white border border-slate-200 rounded-lg shadow-sm max-w-4xl overflow-hidden mt-8" data-testid="audit-log-section">
+        <div className="px-5 py-4 border-b border-slate-100 flex items-center gap-2">
+          <History className="w-4 h-4 text-[#0052FF]" strokeWidth={1.5} />
+          <div className="font-medium text-slate-900">Registro de actividad</div>
+        </div>
+        {audit.length === 0 ? (
+          <div className="p-5 text-sm text-slate-400">Aún no hay actividad registrada.</div>
+        ) : (
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="text-left text-slate-500 border-b border-slate-100">
+                <th className="px-5 py-2.5 font-medium">Acción</th>
+                <th className="px-5 py-2.5 font-medium">Administrador</th>
+                <th className="px-5 py-2.5 font-medium">Usuario afectado</th>
+                <th className="px-5 py-2.5 font-medium text-right">Fecha</th>
+              </tr>
+            </thead>
+            <tbody>
+              {audit.map((e, i) => (
+                <tr key={i} className="border-b border-slate-50 last:border-0" data-testid="audit-row">
+                  <td className="px-5 py-2.5 text-slate-700">{actionLabel(e.action)}</td>
+                  <td className="px-5 py-2.5 text-slate-600">{e.actor_email}</td>
+                  <td className="px-5 py-2.5 text-slate-600">{e.target_email}</td>
+                  <td className="px-5 py-2.5 text-right text-slate-500">{e.at ? new Date(e.at).toLocaleString("es-ES") : "—"}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
       </div>
     </Layout>
   );
