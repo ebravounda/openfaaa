@@ -18,6 +18,7 @@ from starlette.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
 from database import db, client
+from bson import ObjectId
 from auth import router as auth_router, get_current_user, seed_admin
 from pdf_service import build_invoice_pdf
 from email_service import send_email, build_invoice_email_html
@@ -85,6 +86,7 @@ class CompanyInput(BaseModel):
     invoice_prefix: str = ""
     rectify_prefix: str = "R"
     verifactu_enabled: bool = False
+    verifactu_mode: str = "simulado"
 
 
 class StatusInput(BaseModel):
@@ -294,12 +296,13 @@ async def verifactu_submit(invoice_id: str, user=Depends(get_current_user)):
 
     # Firma con el certificado del usuario (si existe)
     signature, signed, signer = None, False, None
+    cert_bytes, cert_pwd = None, None
     cert_doc = await db.certificates.find_one({"user_id": user["id"]})
     if cert_doc:
         try:
-            data = cert_service.decrypt(cert_doc["data"].encode())
-            pwd = cert_service.decrypt(cert_doc["password"].encode()).decode()
-            key, cert, _ = cert_service.parse_pfx(data, pwd)
+            cert_bytes = cert_service.decrypt(cert_doc["data"].encode())
+            cert_pwd = cert_service.decrypt(cert_doc["password"].encode()).decode()
+            key, cert, _ = cert_service.parse_pfx(cert_bytes, cert_pwd)
             signature = cert_service.sign_data(key, registro_xml.encode("utf-8"))
             signed = True
             signer = cert_service.cert_metadata(cert).get("subject_cn")
@@ -307,32 +310,50 @@ async def verifactu_submit(invoice_id: str, user=Depends(get_current_user)):
             logger.error(f"Cert signing failed: {e}")
 
     soap_request = vf.build_soap_request(registro_xml, nif, signature)
-
-    # NOTA: transmisión a la AEAT SIMULADA (requiere certificado + servicio web oficial)
     resp_ts = datetime.now(timezone.utc).isoformat()
-    csv_code = vfd.get("csv") or ("VF-" + secrets.token_hex(8).upper())
-    aeat_response = vf.simulate_aeat_response(nif, inv["number"], csv_code, resp_ts)
+    mode = company.get("verifactu_mode", "simulado")
+
+    if mode == "preproduccion" and cert_bytes:
+        real = await vf.send_to_aeat(cert_bytes, cert_pwd, soap_request)
+        simulated, endpoint, http_status = False, real["url"], real["status"]
+        if real["ok"]:
+            estado, estado_reg, submitted = "Correcto", "Aceptado", True
+            aeat_response = real["response"]
+            csv_code = vfd.get("csv") or ("VF-" + secrets.token_hex(8).upper())
+            status_msg = "Aceptado por la AEAT (preproducción)"
+        else:
+            estado, estado_reg, submitted = "Error", "Rechazado", False
+            aeat_response = real["response"] or f"ERROR DE CONEXIÓN CON LA AEAT (preproducción):\n{real['error']}"
+            csv_code = vfd.get("csv")
+            status_msg = "Error de comunicación con la AEAT (preproducción)"
+    else:
+        simulated, http_status = True, 200
+        endpoint = "https://prewww1.aeat.es/wlpl/TIKE-CONT/ws/SistemaFacturacion/VerifactuSOAP (SIMULADO)"
+        estado, estado_reg, submitted = "Correcto", "Aceptado", True
+        csv_code = vfd.get("csv") or ("VF-" + secrets.token_hex(8).upper())
+        aeat_response = vf.simulate_aeat_response(nif, inv["number"], csv_code, resp_ts)
+        status_msg = "Aceptado por la AEAT (simulado)"
 
     await db.invoices.update_one(
         {"id": invoice_id, "user_id": user["id"]},
-        {"$set": {"verifactu.submitted": True,
-                  "verifactu.status": "Aceptado por la AEAT (simulado)",
+        {"$set": {"verifactu.submitted": submitted, "verifactu.status": status_msg,
                   "verifactu.submitted_at": resp_ts, "verifactu.csv": csv_code,
-                  "verifactu.signed": signed}})
+                  "verifactu.signed": signed, "verifactu.mode": mode}})
 
     entry = {
         "id": str(uuid.uuid4()), "user_id": user["id"], "invoice_id": invoice_id,
-        "invoice_number": inv["number"], "created_at": resp_ts,
-        "endpoint": "https://www1.agenciatributaria.gob.es/wlpl/TIKE-CONT/RegFactuSistemaFacturacion (SIMULADO)",
-        "estado": "Correcto", "estado_registro": "Aceptado", "csv": csv_code,
-        "signed": signed, "signer": signer, "huella": vfd["huella"], "simulated": True,
+        "invoice_number": inv["number"], "created_at": resp_ts, "endpoint": endpoint,
+        "estado": estado, "estado_registro": estado_reg, "csv": csv_code,
+        "signed": signed, "signer": signer, "huella": vfd["huella"],
+        "simulated": simulated, "mode": mode, "http_status": http_status,
         "request_xml": soap_request, "response_xml": aeat_response,
     }
     await db.verifactu_log.insert_one(entry)
 
-    return {"status": "Aceptado por la AEAT (simulado)", "csv": csv_code, "signed": signed,
-            "simulated": True,
-            "note": "Transmisión SIMULADA. El envío real requiere el certificado del contribuyente y el servicio web oficial de la AEAT."}
+    return {"status": status_msg, "csv": csv_code, "signed": signed,
+            "simulated": simulated, "mode": mode,
+            "note": ("Transmisión SIMULADA. El envío real requiere el servicio web oficial de la AEAT."
+                     if simulated else "Intento real contra el entorno de PREPRODUCCIÓN de la AEAT (mTLS con tu certificado).")}
 
 
 # ---------- VeriFactu: certificado y log de conexión ----------
@@ -370,6 +391,65 @@ async def delete_certificate(user=Depends(get_current_user)):
 @api.get("/verifactu/connection-log")
 async def connection_log(user=Depends(get_current_user)):
     return await db.verifactu_log.find({"user_id": user["id"]}, {"_id": 0}).sort("created_at", -1).to_list(500)
+
+
+@api.get("/invoices/{invoice_id}/verifactu/xml")
+async def verifactu_xml(invoice_id: str, user=Depends(get_current_user)):
+    inv = await db.invoices.find_one({"id": invoice_id, "user_id": user["id"]}, {"_id": 0})
+    if not inv or not inv.get("verifactu"):
+        raise HTTPException(status_code=404, detail="Factura sin registro VeriFactu")
+    entry = await db.verifactu_log.find_one(
+        {"invoice_id": invoice_id, "user_id": user["id"]}, sort=[("created_at", -1)])
+    if entry and entry.get("request_xml"):
+        xml = entry["request_xml"]
+    else:
+        company = await db.companies.find_one({"user_id": user["id"]}, {"_id": 0}) or {}
+        vfd = inv["verifactu"]
+        registro = vf.build_registro_alta_xml(company, inv, "", vfd.get("huella_anterior", ""),
+                                              vfd["timestamp"], vfd["huella"])
+        xml = vf.build_soap_request(registro, company.get("nif", ""), None)
+    return Response(content=xml, media_type="application/xml",
+                    headers={"Content-Disposition": f'attachment; filename="verifactu-{inv["number"]}.xml"'})
+
+
+@api.get("/lookup/nif")
+async def lookup_nif(nif: str, user=Depends(get_current_user)):
+    import httpx
+
+    def _norm(v):
+        return (v or "").strip().upper().replace(" ", "").replace("-", "").replace(".", "").removeprefix("ES")
+
+    num = _norm(nif)
+    if not num:
+        raise HTTPException(status_code=400, detail="Introduce un NIF/CIF")
+
+    # 1) Contactos guardados del usuario (gratis, datos completos)
+    contacts = await db.contacts.find({"user_id": user["id"]}, {"_id": 0}).to_list(2000)
+    for c in contacts:
+        if _norm(c.get("nif", "")) == num:
+            return {"valid": True, "name": c.get("name", ""), "address": c.get("address", ""),
+                    "email": c.get("email", ""), "phone": c.get("phone", ""),
+                    "nif": num, "source": "Contactos guardados"}
+
+    # 2) VIES (valida y, para no-ES, suele devolver nombre/dirección)
+    try:
+        async with httpx.AsyncClient(timeout=12) as http_client:
+            r = await http_client.post(
+                "https://ec.europa.eu/taxation_customs/vies/rest-api/check-vat-number",
+                json={"countryCode": "ES", "vatNumber": num})
+        r.raise_for_status()
+        d = r.json()
+    except Exception as e:
+        logger.error(f"VIES lookup failed: {e}")
+        raise HTTPException(status_code=502, detail="No se pudo consultar el NIF en VIES. Inténtalo más tarde.")
+    name = (d.get("name") or "").strip()
+    address = (d.get("address") or "").strip()
+    if name in ("---", "MS_UNAVAILABLE"):
+        name = ""
+    if address in ("---",):
+        address = ""
+    return {"valid": bool(d.get("valid")), "name": name, "address": address, "email": "",
+            "phone": "", "nif": num, "source": "VIES (Comisión Europea)"}
 
 
 @api.post("/invoices/{invoice_id}/send-email")
@@ -711,6 +791,60 @@ async def purge_verifactu_log(request: Request, background: BackgroundTasks):
         logger.info(f"VeriFactu log purged: {res.deleted_count} entradas")
 
     background.add_task(_purge)
+    return {"status": "accepted"}
+
+
+@app.post("/api/cron/check-cert-expiry")
+async def check_cert_expiry(request: Request, background: BackgroundTasks):
+    token = request.headers.get("Authorization", "")
+    expected = "Bearer " + os.environ.get("WEBHOOK_CRON_SECRET", "")
+    if not hmac.compare_digest(token, expected):
+        raise HTTPException(status_code=401, detail="No autorizado")
+
+    async def _check():
+        from datetime import timedelta
+        soon = datetime.now(timezone.utc) + timedelta(days=30)
+        certs = await db.certificates.find({}).to_list(10000)
+        for c in certs:
+            meta = c.get("meta", {})
+            valid_to_raw = meta.get("valid_to")
+            if not valid_to_raw:
+                continue
+            try:
+                valid_to = datetime.fromisoformat(valid_to_raw)
+            except Exception:
+                continue
+            if valid_to > soon:
+                continue
+            if c.get("expiry_notified_for") == valid_to_raw:
+                continue
+            try:
+                u = await db.users.find_one({"_id": ObjectId(c["user_id"])})
+            except Exception:
+                u = None
+            if not u or not u.get("email"):
+                continue
+            days = (valid_to - datetime.now(timezone.utc)).days
+            estado = "ha caducado" if days < 0 else f"caduca en {days} días"
+            html = (
+                f'<div style="font-family:Arial,sans-serif;max-width:560px;margin:0 auto">'
+                f'<h2 style="color:#0F172A">Tu certificado digital {estado}</h2>'
+                f'<p style="color:#475569;font-size:14px">El certificado <b>{meta.get("subject_cn","")}</b> '
+                f'(NIF {meta.get("nif","")}) usado para VeriFactu es válido hasta '
+                f'<b>{valid_to.strftime("%d/%m/%Y")}</b>.</p>'
+                f'<p style="color:#475569;font-size:14px">Renueva tu certificado y vuelve a subirlo en FiscalHub '
+                f'para seguir enviando tus facturas a la AEAT sin interrupciones.</p>'
+                f'<p style="color:#94a3b8;font-size:12px">Nunca te pediremos tu contraseña ni datos bancarios por email.</p>'
+                f'</div>'
+            )
+            try:
+                await send_email(to=u["email"], subject="Tu certificado digital está a punto de caducar", html=html)
+                await db.certificates.update_one({"_id": c["_id"]},
+                                                 {"$set": {"expiry_notified_for": valid_to_raw}})
+            except Exception as e:
+                logger.error(f"Cert expiry email failed: {e}")
+
+    background.add_task(_check)
     return {"status": "accepted"}
 
 app.add_middleware(

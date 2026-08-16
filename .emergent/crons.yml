@@ -4,5 +4,10 @@ crons:
     cron: "0 3 3 * *"
     endpoint: "{{BASE_URL}}/api/cron/purge-verifactu-log"
     method: POST
-    # Cron endpoints must ack 2xx immediately; enqueue/background the actual work.
+    enabled: true
+  - name: check-cert-expiry
+    description: "Avisa por email a los usuarios cuyo certificado caduca en 30 días (diario 08:00)"
+    cron: "0 8 * * *"
+    endpoint: "{{BASE_URL}}/api/cron/check-cert-expiry"
+    method: POST
     enabled: true

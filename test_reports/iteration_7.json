@@ -1,0 +1,40 @@
+{
+  "summary": "Iteration 7 tested end-to-end: VIES NIF lookup, VeriFactu simulado + preproduccion modes, signed XML download, cert-expiry cron, and idempotency regression. Created /app/backend/tests/test_iter7.py with 13 tests covering all iter7 endpoints. Ran full regression: 52/52 backend tests pass (test_iter7.py + backend_test.py + test_new_features.py + test_rectificativa.py + test_verifactu.py + test_verifactu_cert.py). Frontend UI verified: verifactu-mode selector saves both Simulado/Preproducción, lookup-nif button in Nueva Factura dialog calls /lookup/nif and toast shows 'VIES no facilita el nombre para este contribuyente; complétalo a mano.' for valid ES CIF with empty name, and Conexión log shows Simulado/Preprod badge + expandable request/response XML + 'Descargar XML firmado' button per entry.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Conexión - Estado del servicio card", "issues": ["The static text 'Simulado (preproducción)' with amber pulse is misleading when the company mode is 'preproduccion' with a real cert - it always reads Simulado regardless of user's actual verifactu_mode. Consider reading verifactu_mode from /api/company and showing 'Preproducción (mTLS)' when preproduccion is selected."]}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iter7.py",
+    "/app/test_reports/pytest/iter7.xml",
+    "/app/test_reports/pytest/iter7_all.xml"
+  ],
+  "action_items": [
+    "(Optional/minor) Reflect actual company.verifactu_mode in the Conexión 'Estado del servicio' card instead of the hardcoded 'Simulado (preproducción)' label."
+  ],
+  "critical_code_review_comments": [
+    "server.py verifactu_submit correctly captures AEAT connection errors from send_to_aeat and stores them in response_xml as 'ERROR DE CONEXIÓN CON LA AEAT...' - preproduccion attempts do not 500 the API, verified.",
+    "verifactu_service.send_to_aeat correctly wraps httpx.AsyncClient with mTLS via temp PEM files and cleans them up in finally; timeout=20s prevents hanging.",
+    "lookup_nif normalizes NIF (strip, upper, remove spaces/dashes, drop leading ES) and gracefully returns 502 on VIES outage; empty NIF returns 400 as expected.",
+    "check_cert_expiry cron authenticates via hmac.compare_digest and offloads work to background task; idempotent per user (guarded by expiry_notified_for = valid_to_raw).",
+    "server.py has grown to 869 lines; splitting VeriFactu (submit, cert, log, xml, cron) into a router module would improve maintainability.",
+    "Idempotency of verifactu_submit (fixed in iter6) is now confirmed: second call short-circuits with already:true and does NOT insert a duplicate log entry."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iter7.py"
+  ],
+  "success_rate": {"backend": "100% (52/52)", "frontend": "100%"},
+  "test_credentials": "admin@fiscalhub.es / admin123; WEBHOOK_CRON_SECRET read from /app/backend/.env at test time",
+  "seed_data_creation": "Ephemeral self-signed .pfx (TEST_ITER7_CN) generated in-test via cryptography.pkcs12 for preproduccion mTLS attempt. Test invoices are cleaned up in fixture teardown.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "All iter7 backend endpoints (VIES /lookup/nif, PUT /company verifactu_mode, POST /invoices/{id}/verifactu/submit in simulado & preproduccion, GET /invoices/{id}/verifactu/xml, POST /cron/check-cert-expiry) verified. Regression covers full 52 tests. To run: `REACT_APP_BACKEND_URL=<url> pytest backend/tests/ -n 0`. Note pytest.ini forces `-n 2 --dist loadscope`; parallel workers can race on the shared admin company (verifactu_mode toggling between tests) — use `-n 0` for iter7 file. UI selectors verified: lookup-nif, verifactu-mode, save-company, connection-log, log-entry-{number}, download-xml-{number}. Preproduccion mode from this env cannot reach prewww1.aeat.es (as expected); the error is captured in log.response_xml and the API returns 200 with mode='preproduccion', simulated=false, estado='Error'.",
+  "rca of the issue": "N/A - no bugs found in iteration 7."
+}

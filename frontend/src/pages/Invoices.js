@@ -19,7 +19,7 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import {
-  Plus, Trash2, FileText, Mail, Download, CheckCircle2, Loader2, Pencil, Undo2, ShieldCheck, ShieldAlert,
+  Plus, Trash2, FileText, Mail, Download, CheckCircle2, Loader2, Pencil, Undo2, ShieldCheck, ShieldAlert, Search,
 } from "lucide-react";
 
 const IVA_OPTIONS = [
@@ -59,6 +59,35 @@ export default function Invoices() {
   const [form, setForm] = useState(emptyForm());
   const [saving, setSaving] = useState(false);
   const [sendingId, setSendingId] = useState(null);
+  const [lookingUp, setLookingUp] = useState(false);
+
+  const lookupNif = async () => {
+    const nif = form.client.nif.trim();
+    if (!nif) return toast.error("Introduce el NIF/CIF a buscar");
+    setLookingUp(true);
+    try {
+      const { data } = await api.get(`/lookup/nif?nif=${encodeURIComponent(nif)}`);
+      if (!data.valid) return toast.error("NIF/CIF no válido según VIES");
+      if (data.name) {
+        setForm((f) => ({
+          ...f,
+          client: {
+            ...f.client,
+            name: data.name,
+            address: data.address || f.client.address,
+            email: data.email || f.client.email,
+          },
+        }));
+        toast.success(data.source === "Contactos guardados" ? `Datos cargados de tus contactos: ${data.name}` : `Encontrado: ${data.name}`);
+      } else {
+        toast.success("NIF/CIF válido. VIES no facilita el nombre para este contribuyente; complétalo a mano.");
+      }
+    } catch (e) {
+      toast.error(formatApiErrorDetail(e.response?.data?.detail));
+    } finally {
+      setLookingUp(false);
+    }
+  };
 
   const load = () => {
     setLoading(true);
@@ -316,7 +345,14 @@ export default function Invoices() {
               <div className="text-[11px] font-semibold uppercase tracking-wider text-slate-500">Datos del cliente</div>
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2"><Label>Nombre / Razón social</Label><Input value={form.client.name} onChange={(e) => setForm({ ...form, client: { ...form.client, name: e.target.value } })} data-testid="client-name" /></div>
-                <div className="space-y-2"><Label>NIF / CIF</Label><Input value={form.client.nif} onChange={(e) => setForm({ ...form, client: { ...form.client, nif: e.target.value } })} placeholder="B12345678" data-testid="client-nif" /></div>
+                <div className="space-y-2"><Label>NIF / CIF</Label>
+                  <div className="flex gap-2">
+                    <Input value={form.client.nif} onChange={(e) => setForm({ ...form, client: { ...form.client, nif: e.target.value } })} placeholder="B12345678" data-testid="client-nif" />
+                    <Button type="button" variant="outline" onClick={lookupNif} disabled={lookingUp} className="border-slate-200 shrink-0" data-testid="lookup-nif" title="Buscar datos por NIF/CIF (VIES)">
+                      {lookingUp ? <Loader2 className="w-4 h-4 animate-spin" /> : <Search className="w-4 h-4" strokeWidth={1.5} />}
+                    </Button>
+                  </div>
+                </div>
                 <div className="space-y-2"><Label>Email</Label><Input type="email" value={form.client.email} onChange={(e) => setForm({ ...form, client: { ...form.client, email: e.target.value } })} data-testid="client-email" /></div>
                 <div className="space-y-2"><Label>Dirección</Label><Input value={form.client.address} onChange={(e) => setForm({ ...form, client: { ...form.client, address: e.target.value } })} data-testid="client-address" /></div>
               </div>

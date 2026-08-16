@@ -144,3 +144,42 @@ def simulate_aeat_response(nif: str, numserie: str, csv: str, ts: str) -> str:
         '  </soapenv:Body>\n'
         '</soapenv:Envelope>'
     )
+
+
+AEAT_PREPROD_URL = "https://prewww1.aeat.es/wlpl/TIKE-CONT/ws/SistemaFacturacion/VerifactuSOAP"
+AEAT_PREPROD_SEAL_URL = "https://prewww10.aeat.es/wlpl/TIKE-CONT/ws/SistemaFacturacion/VerifactuSOAP"
+
+
+def pfx_to_pem(pfx_bytes: bytes, password: str):
+    from cryptography.hazmat.primitives.serialization import (
+        pkcs12, Encoding, PrivateFormat, NoEncryption)
+    key, cert, _chain = pkcs12.load_key_and_certificates(
+        pfx_bytes, password.encode() if password else None)
+    cert_pem = cert.public_bytes(Encoding.PEM)
+    key_pem = key.private_bytes(Encoding.PEM, PrivateFormat.TraditionalOpenSSL, NoEncryption())
+    return cert_pem, key_pem
+
+
+async def send_to_aeat(pfx_bytes: bytes, password: str, soap_xml: str, seal: bool = False, timeout: int = 20) -> dict:
+    """Envío real (mTLS) al entorno de PREPRODUCCIÓN de la AEAT usando el certificado del usuario."""
+    import httpx, tempfile, os
+    url = AEAT_PREPROD_SEAL_URL if seal else AEAT_PREPROD_URL
+    try:
+        cert_pem, key_pem = pfx_to_pem(pfx_bytes, password)
+    except Exception as e:
+        return {"ok": False, "status": None, "response": None, "url": url, "error": f"Certificado inválido: {e}"}
+    cf = tempfile.NamedTemporaryFile(delete=False, suffix=".pem"); cf.write(cert_pem); cf.close()
+    kf = tempfile.NamedTemporaryFile(delete=False, suffix=".pem"); kf.write(key_pem); kf.close()
+    try:
+        async with httpx.AsyncClient(cert=(cf.name, kf.name), timeout=timeout, verify=True) as client:
+            r = await client.post(url, content=soap_xml.encode("utf-8"),
+                                  headers={"Content-Type": "text/xml; charset=utf-8", "SOAPAction": ""})
+        return {"ok": r.status_code == 200, "status": r.status_code, "response": r.text[:8000], "url": url, "error": None}
+    except Exception as e:
+        return {"ok": False, "status": None, "response": None, "url": url, "error": f"{type(e).__name__}: {e}"}
+    finally:
+        for f in (cf.name, kf.name):
+            try:
+                os.unlink(f)
+            except Exception:
+                pass

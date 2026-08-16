@@ -13,7 +13,7 @@ import { Loader2, Building2, ShieldCheck, KeyRound, Upload, Trash2, CheckCircle2
 import { Switch } from "@/components/ui/switch";
 
 export default function Settings() {
-  const [form, setForm] = useState({ name: "", nif: "", address: "", email: "", phone: "", tax_type: "autonomo", invoice_prefix: "", verifactu_enabled: false });
+  const [form, setForm] = useState({ name: "", nif: "", address: "", email: "", phone: "", tax_type: "autonomo", invoice_prefix: "", verifactu_enabled: false, verifactu_mode: "simulado" });
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [cert, setCert] = useState(null);
@@ -132,7 +132,18 @@ export default function Settings() {
 
             {form.verifactu_enabled && (
               <div className="border border-slate-200 rounded-lg p-4 space-y-3" data-testid="certificate-section">
-                <div className="flex items-center gap-2 font-medium text-slate-900">
+                <div className="space-y-2">
+                  <Label>Modo de envío a la AEAT</Label>
+                  <Select value={form.verifactu_mode} onValueChange={(v) => setForm({ ...form, verifactu_mode: v })}>
+                    <SelectTrigger data-testid="verifactu-mode"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="simulado">Simulado (pruebas locales)</SelectItem>
+                      <SelectItem value="preproduccion">Preproducción AEAT (envío real con tu certificado)</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <p className="text-[11px] text-slate-400">En "Preproducción" el sistema intenta enviar realmente a los servidores de pruebas de la AEAT usando tu certificado.</p>
+                </div>
+                <div className="flex items-center gap-2 font-medium text-slate-900 pt-1">
                   <KeyRound className="w-4 h-4 text-[#0052FF]" strokeWidth={1.5} /> Certificado digital
                 </div>
                 {cert ? (
