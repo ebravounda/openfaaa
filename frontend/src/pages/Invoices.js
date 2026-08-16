@@ -19,7 +19,7 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import {
-  Plus, Trash2, FileText, Mail, Download, CheckCircle2, Loader2, Pencil,
+  Plus, Trash2, FileText, Mail, Download, CheckCircle2, Loader2, Pencil, Undo2,
 } from "lucide-react";
 
 const IVA_OPTIONS = [
@@ -42,6 +42,9 @@ const emptyForm = () => ({
   irpf_rate: "0",
   notes: "",
   series: "",
+  invoice_type: "normal",
+  rectifies: "",
+  rectifies_number: "",
   save_client: false,
 });
 
@@ -49,6 +52,7 @@ export default function Invoices() {
   const [invoices, setInvoices] = useState([]);
   const [clients, setClients] = useState([]);
   const [prefix, setPrefix] = useState("");
+  const [rectifyPrefix, setRectifyPrefix] = useState("R");
   const [loading, setLoading] = useState(true);
   const [open, setOpen] = useState(false);
   const [editingId, setEditingId] = useState(null);
@@ -63,7 +67,10 @@ export default function Invoices() {
   const loadClients = () => api.get("/contacts?kind=client").then((r) => setClients(r.data));
   useEffect(() => {
     load(); loadClients();
-    api.get("/company").then((r) => setPrefix(r.data?.invoice_prefix || ""));
+    api.get("/company").then((r) => {
+      setPrefix(r.data?.invoice_prefix || "");
+      setRectifyPrefix(r.data?.rectify_prefix || "R");
+    });
   }, []);
 
   const base = form.line_items.reduce((s, i) => s + (Number(i.quantity) || 0) * (Number(i.unit_price) || 0), 0);
@@ -85,6 +92,24 @@ export default function Invoices() {
   };
 
   const openNew = () => { setEditingId(null); setForm({ ...emptyForm(), series: prefix }); setOpen(true); };
+  const openRectify = (inv) => {
+    setEditingId(null);
+    setForm({
+      issue_date: new Date().toISOString().slice(0, 10),
+      client: { name: inv.client?.name || "", nif: inv.client?.nif || "", address: inv.client?.address || "", email: inv.client?.email || "" },
+      line_items: (inv.line_items?.length ? inv.line_items : [{ description: "", quantity: 1, unit_price: 0 }])
+        .map((i) => ({ description: i.description, quantity: i.quantity, unit_price: -Math.abs(i.unit_price) })),
+      iva_rate: String(inv.iva_rate),
+      irpf_rate: String(inv.irpf_rate || 0),
+      notes: `Rectifica a la factura ${inv.number}`,
+      series: rectifyPrefix,
+      invoice_type: "rectificativa",
+      rectifies: inv.id,
+      rectifies_number: inv.number,
+      save_client: false,
+    });
+    setOpen(true);
+  };
   const openEdit = (inv) => {
     setEditingId(inv.id);
     setForm({
@@ -112,6 +137,9 @@ export default function Invoices() {
       irpf_rate: Number(form.irpf_rate),
       notes: form.notes,
       series: form.series,
+      invoice_type: form.invoice_type,
+      rectifies: form.rectifies,
+      rectifies_number: form.rectifies_number,
     };
     try {
       if (editingId) {
@@ -200,7 +228,14 @@ export default function Invoices() {
             <TableBody>
               {invoices.map((inv) => (
                 <TableRow key={inv.id} data-testid={`invoice-row-${inv.number}`}>
-                  <TableCell className="font-mono text-sm font-medium text-slate-900">{inv.number}</TableCell>
+                  <TableCell className="font-mono text-sm font-medium text-slate-900">
+                    <div className="flex items-center gap-2">
+                      {inv.number}
+                      {inv.invoice_type === "rectificativa" && (
+                        <Badge className="bg-purple-100 text-purple-700 hover:bg-purple-100 rounded-full text-[10px] px-2">Rectificativa</Badge>
+                      )}
+                    </div>
+                  </TableCell>
                   <TableCell className="text-sm text-slate-600 tabular">{inv.issue_date}</TableCell>
                   <TableCell className="text-sm font-medium text-slate-900">{inv.client?.name}</TableCell>
                   <TableCell className="text-right text-sm tabular">{eur(inv.base)}</TableCell>
@@ -213,6 +248,9 @@ export default function Invoices() {
                   </TableCell>
                   <TableCell className="text-right">
                     <div className="flex items-center justify-end gap-0.5">
+                      {inv.invoice_type !== "rectificativa" && (
+                        <Button variant="ghost" size="icon" title="Crear rectificativa (abono)" onClick={() => openRectify(inv)} data-testid={`invoice-rectify-${inv.number}`} className="h-8 w-8 text-slate-500 hover:text-purple-600"><Undo2 className="w-4 h-4" strokeWidth={1.5} /></Button>
+                      )}
                       <Button variant="ghost" size="icon" title="Editar" onClick={() => openEdit(inv)} data-testid={`invoice-edit-${inv.number}`} className="h-8 w-8 text-slate-500 hover:text-[#0052FF]"><Pencil className="w-4 h-4" strokeWidth={1.5} /></Button>
                       <Button variant="ghost" size="icon" title="Ver PDF" onClick={() => openPdf(inv)} data-testid={`invoice-pdf-${inv.number}`} className="h-8 w-8 text-slate-500 hover:text-slate-900"><Download className="w-4 h-4" strokeWidth={1.5} /></Button>
                       <Button variant="ghost" size="icon" title="Enviar por email" onClick={() => sendEmail(inv)} disabled={sendingId === inv.id} data-testid={`invoice-email-${inv.number}`} className="h-8 w-8 text-slate-500 hover:text-[#0052FF]">
@@ -231,7 +269,13 @@ export default function Invoices() {
 
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto" data-testid="invoice-dialog">
-          <DialogHeader><DialogTitle className="font-display">{editingId ? "Editar factura" : "Nueva factura"}</DialogTitle></DialogHeader>
+          <DialogHeader><DialogTitle className="font-display">{editingId ? "Editar factura" : form.invoice_type === "rectificativa" ? "Nueva factura rectificativa" : "Nueva factura"}</DialogTitle></DialogHeader>
+          {form.invoice_type === "rectificativa" && (
+            <div className="flex items-center gap-2 text-sm text-purple-700 bg-purple-50 border border-purple-100 rounded-lg px-3 py-2" data-testid="rectify-banner">
+              <Undo2 className="w-4 h-4" strokeWidth={1.5} />
+              Abono que rectifica a la factura <strong>{form.rectifies_number}</strong>. Los importes negativos restan del total original.
+            </div>
+          )}
           <div className="space-y-5">
             <div className="grid grid-cols-3 gap-4">
               <div className="space-y-2"><Label>Fecha de emisión</Label><Input type="date" value={form.issue_date} onChange={(e) => setForm({ ...form, issue_date: e.target.value })} data-testid="invoice-date" /></div>

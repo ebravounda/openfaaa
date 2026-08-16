@@ -55,6 +55,9 @@ class InvoiceInput(BaseModel):
     status: str = "pending"
     notes: str = ""
     series: str = ""
+    invoice_type: str = "normal"  # "normal" or "rectificativa"
+    rectifies: str = ""
+    rectifies_number: str = ""
 
 
 class ExpenseInput(BaseModel):
@@ -76,6 +79,7 @@ class CompanyInput(BaseModel):
     phone: str = ""
     tax_type: str = "autonomo"
     invoice_prefix: str = ""
+    rectify_prefix: str = "R"
 
 
 class StatusInput(BaseModel):
@@ -159,7 +163,10 @@ async def list_invoices(user=Depends(get_current_user)):
 async def create_invoice(data: InvoiceInput, user=Depends(get_current_user)):
     year = data.issue_date[:4]
     company = await db.companies.find_one({"user_id": user["id"]}, {"_id": 0}) or {}
-    series = (data.series or company.get("invoice_prefix", "") or "").strip()
+    if data.invoice_type == "rectificativa":
+        series = (data.series or company.get("rectify_prefix", "") or "R").strip()
+    else:
+        series = (data.series or company.get("invoice_prefix", "") or "").strip()
     prefix = f"{series}-" if series else ""
     pat = f"^{re.escape(prefix)}{year}-"
     seq = await db.invoices.count_documents({"user_id": user["id"], "number": {"$regex": pat}}) + 1

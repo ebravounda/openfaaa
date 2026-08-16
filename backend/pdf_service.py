@@ -39,14 +39,20 @@ def build_invoice_pdf(invoice: dict, company: dict) -> bytes:
         Paragraph(f"{comp.get('address','')}", small),
         Paragraph(f"{comp.get('email','')} {comp.get('phone','')}", small),
     ]
+    is_rect = invoice.get("invoice_type") == "rectificativa"
     header_right = [
-        Paragraph("FACTURA", ParagraphStyle("t", parent=styles["Normal"],
-                  fontName="Helvetica-Bold", fontSize=22, textColor=DARK, alignment=2)),
+        Paragraph("FACTURA RECTIFICATIVA" if is_rect else "FACTURA",
+                  ParagraphStyle("t", parent=styles["Normal"], fontName="Helvetica-Bold",
+                                 fontSize=16 if is_rect else 22, textColor=DARK, alignment=2, leading=19)),
         Paragraph(f"Nº {invoice['number']}", ParagraphStyle("n", parent=styles["Normal"],
                   fontSize=11, textColor=DARK, alignment=2, leading=16)),
         Paragraph(f"Fecha: {invoice['issue_date']}", ParagraphStyle("d", parent=styles["Normal"],
                   fontSize=9, textColor=MUTED, alignment=2, leading=14)),
     ]
+    if is_rect and invoice.get("rectifies_number"):
+        header_right.append(Paragraph(f"Rectifica a: {invoice['rectifies_number']}",
+                            ParagraphStyle("r", parent=styles["Normal"], fontSize=9,
+                                           textColor=MUTED, alignment=2, leading=13)))
     ht = Table([[header_left, header_right]], colWidths=[100 * mm, 74 * mm])
     ht.setStyle(TableStyle([("VALIGN", (0, 0), (-1, -1), "TOP")]))
     story.append(ht)

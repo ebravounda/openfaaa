@@ -1,0 +1,33 @@
+{
+  "summary": "Iteration 4 (Facturas rectificativas) fully validated. Backend 10/10 pytest passing (3 new rectificativa tests + 7 regression from test_new_features). Frontend UI flow confirmed via Playwright: normal invoice creation still works (series 'FAC' preloaded, preview + total live), 'invoice-rectify-{number}' button visible only on non-rectificativa rows, clicking opens dialog 'Nueva factura rectificativa' with rectify-banner naming original invoice, series 'R' preloaded, client precargado, and line prices auto-negated (-100/-2450 -> total -2597,00 €). After save, R-2026-XXXX row appears with purple 'Rectificativa' badge and negative totals; the R row has NO 'Crear rectificativa' button rendered. Backend verified: independent R sequence (R-2026-0001..0004), invoice_type/rectifies/rectifies_number persisted, rectify_prefix from /api/company respected (custom 'ABN' also worked -> ABN-2026-0001), PDF endpoint returns %PDF for rectificativas, dashboard aggregates negatives correctly (numeric quarters).",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "All invoice/expense dialogs", "issues": ["Radix DialogContent missing aria-describedby (a11y console warning, non-blocking, existing from prior iterations)"]}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_rectificativa.py",
+    "/app/backend/tests/test_new_features.py",
+    "/app/test_reports/pytest/rectificativa.xml",
+    "/app/test_reports/pytest/regression_iter4.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "server.create_invoice: series resolution correctly branches by invoice_type; sequence uses count_documents by series+year prefix regex which is O(n) but fine for MVP volume (index on user_id exists).",
+    "server.update_invoice: preserves number/series on PUT — correct. Note it also strips series from incoming payload so a rectificativa cannot be reclassified via edit (good).",
+    "Invoices.js openRectify negates unit_price via -Math.abs — safe against already-negative inputs. However, dashboard aggregation relies on inv.base being negative; verified via backend compute_invoice.",
+    "server.py has grown ~547 lines; consider extracting invoice/expense routes into routers/ modules in a future refactor (non-blocking).",
+    "InvoiceInput.rectifies is a free-form string with no server-side validation that it references an existing invoice of the same user; a malicious/erroneous POST could store an orphan reference. Low priority for MVP but worth adding a check."
+  ],
+  "updated_files": ["/app/backend/tests/test_rectificativa.py", "/app/test_reports/pytest/rectificativa.xml", "/app/test_reports/pytest/regression_iter4.xml"],
+  "success_rate": {"backend": "100% (10/10 pytest)", "frontend": "100% (rectify flow + regression)"},
+  "test_credentials": "admin@fiscalhub.es / admin123",
+  "seed_data_creation": "Backend tests created TEST_ITER4_Cliente/TEST_ITER4_CLI2 invoices and R-/ABN- rectificativas (harmless residuals). Frontend test created TEST_ITER4_UI_Cliente FAC-2026-0007 and R-2026-0004.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "All iteration 4 features (rectificativa creation, independent R series, rectify_prefix in company, PDF header for rectificativas, badge in list, hiding rectify button on rectificativa rows) verified end-to-end. Selectors used: invoice-rectify-{number}, rectify-banner, invoice-series (preloaded 'R'), invoice-row-R-{...}. No open issues.",
+  "rca of the issue": "N/A - no issues found."
+}
