@@ -13,7 +13,8 @@ import { Loader2, Building2, ShieldCheck, KeyRound, Upload, Trash2, CheckCircle2
 import { Switch } from "@/components/ui/switch";
 
 export default function Settings() {
-  const [form, setForm] = useState({ name: "", nif: "", address: "", email: "", phone: "", tax_type: "autonomo", invoice_prefix: "", verifactu_enabled: false, verifactu_mode: "simulado" });
+  const [form, setForm] = useState({ name: "", nif: "", address: "", email: "", phone: "", tax_type: "autonomo", invoice_prefix: "", verifactu_enabled: false, verifactu_mode: "simulado", template_id: "clasico", accent_color: "", invoice_footer: "" });
+  const [templates, setTemplates] = useState([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [cert, setCert] = useState(null);
@@ -26,6 +27,7 @@ export default function Settings() {
       if (r.data && r.data.name) setForm((f) => ({ ...f, ...r.data }));
     }).finally(() => setLoading(false));
     api.get("/verifactu/certificate").then((r) => setCert(r.data && r.data.meta ? r.data : null));
+    api.get("/templates").then((r) => setTemplates(r.data));
   }, []);
 
   const uploadCert = async (e) => {
@@ -117,6 +119,33 @@ export default function Settings() {
                 </p>
               </div>
             </div>
+            <div className="border border-slate-200 rounded-lg p-4 space-y-3" data-testid="template-section">
+              <div className="font-medium text-slate-900">Plantilla de factura</div>
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                {templates.map((t) => (
+                  <button type="button" key={t.id} onClick={() => setForm({ ...form, template_id: t.id, accent_color: "" })} data-testid={`tpl-${t.id}`}
+                    className={`text-left p-2.5 rounded-lg border transition-colors duration-200 ${form.template_id === t.id ? "border-[#0052FF] ring-1 ring-[#0052FF]" : "border-slate-200 hover:border-slate-300"}`}>
+                    <span className="w-full h-1.5 rounded-full block mb-2" style={{ background: (form.template_id === t.id && form.accent_color) || t.accent }} />
+                    <div className="text-sm font-medium text-slate-900">{t.name}</div>
+                    <div className="text-[11px] text-slate-400 leading-tight">{t.tagline}</div>
+                  </button>
+                ))}
+              </div>
+              <div className="flex flex-wrap items-end gap-4 pt-1">
+                <div className="space-y-2">
+                  <Label>Color personalizado</Label>
+                  <div className="flex items-center gap-2">
+                    <input type="color" value={form.accent_color || (templates.find((t) => t.id === form.template_id)?.accent || "#0A0A0A")} onChange={(e) => setForm({ ...form, accent_color: e.target.value })} className="h-9 w-12 rounded border border-slate-200 cursor-pointer" data-testid="accent-color" />
+                    {form.accent_color && <Button type="button" variant="outline" size="sm" className="border-slate-200" onClick={() => setForm({ ...form, accent_color: "" })}>Color de la plantilla</Button>}
+                  </div>
+                </div>
+                <div className="space-y-2 flex-1 min-w-[220px]">
+                  <Label>Pie de factura</Label>
+                  <Input value={form.invoice_footer} onChange={(e) => setForm({ ...form, invoice_footer: e.target.value })} placeholder="Forma de pago, IBAN, condiciones…" data-testid="invoice-footer" />
+                </div>
+              </div>
+            </div>
+
             <div className="border border-slate-200 rounded-lg p-4 flex items-start justify-between gap-4">
               <div>
                 <div className="flex items-center gap-2 font-medium text-slate-900">

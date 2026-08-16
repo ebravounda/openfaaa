@@ -87,6 +87,9 @@ class CompanyInput(BaseModel):
     rectify_prefix: str = "R"
     verifactu_enabled: bool = False
     verifactu_mode: str = "simulado"
+    template_id: str = "clasico"
+    accent_color: str = ""
+    invoice_footer: str = ""
 
 
 class StatusInput(BaseModel):
@@ -157,6 +160,12 @@ async def upsert_company(data: CompanyInput, user=Depends(get_current_user)):
     doc["user_id"] = user["id"]
     await db.companies.update_one({"user_id": user["id"]}, {"$set": doc}, upsert=True)
     return doc
+
+
+@api.get("/templates")
+async def list_templates(user=Depends(get_current_user)):
+    from templates import TEMPLATES
+    return TEMPLATES
 
 
 # ---------- Invoices ----------

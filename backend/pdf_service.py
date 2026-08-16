@@ -7,6 +7,7 @@ from reportlab.platypus import (
     SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer, HRFlowable, Image
 )
 from io import BytesIO as _BytesIO
+from templates import TEMPLATE_MAP
 
 DARK = colors.HexColor("#0A0A0A")
 MUTED = colors.HexColor("#666666")
@@ -34,6 +35,11 @@ def build_invoice_pdf(invoice: dict, company: dict, qr_png: bytes = None, verifa
 
     # Header
     comp = company or {}
+    try:
+        accent = colors.HexColor(comp.get("accent_color") or
+                                 TEMPLATE_MAP.get(comp.get("template_id", "clasico"), {}).get("accent", "#0A0A0A"))
+    except Exception:
+        accent = DARK
     header_left = [
         Paragraph(comp.get("name", "Mi Empresa"), h_name),
         Paragraph(f"{comp.get('nif','')}", small),
@@ -87,7 +93,7 @@ def build_invoice_pdf(invoice: dict, company: dict, qr_png: bytes = None, verifa
         ])
     tbl = Table(data, colWidths=[95 * mm, 20 * mm, 30 * mm, 29 * mm])
     tbl.setStyle(TableStyle([
-        ("BACKGROUND", (0, 0), (-1, 0), DARK),
+        ("BACKGROUND", (0, 0), (-1, 0), accent),
         ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
         ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
         ("FONTSIZE", (0, 0), (-1, 0), 9),
@@ -114,10 +120,10 @@ def build_invoice_pdf(invoice: dict, company: dict, qr_png: bytes = None, verifa
         ("ALIGN", (0, 0), (-1, -1), "RIGHT"),
         ("FONTSIZE", (0, 0), (-1, -1), 10),
         ("TEXTCOLOR", (0, 0), (-1, -2), MUTED),
-        ("LINEABOVE", (0, -1), (-1, -1), 1, DARK),
+        ("LINEABOVE", (0, -1), (-1, -1), 1, accent),
         ("FONTNAME", (0, -1), (-1, -1), "Helvetica-Bold"),
         ("FONTSIZE", (0, -1), (-1, -1), 12),
-        ("TEXTCOLOR", (0, -1), (-1, -1), DARK),
+        ("TEXTCOLOR", (0, -1), (-1, -1), accent),
         ("TOPPADDING", (0, 0), (-1, -1), 5),
         ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
     ]))
@@ -128,6 +134,12 @@ def build_invoice_pdf(invoice: dict, company: dict, qr_png: bytes = None, verifa
         story.append(Paragraph("NOTAS", label))
         story.append(Spacer(1, 2 * mm))
         story.append(Paragraph(invoice["notes"], small))
+
+    if comp.get("invoice_footer"):
+        story.append(Spacer(1, 6 * mm))
+        story.append(HRFlowable(width="100%", thickness=0.5, color=BORDER))
+        story.append(Spacer(1, 2 * mm))
+        story.append(Paragraph(comp["invoice_footer"], small))
 
     # VeriFactu: QR + leyenda
     if qr_png and verifactu:

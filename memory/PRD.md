@@ -71,6 +71,12 @@ Sistema de facturación para España: crear facturas introduciendo datos (CIF/NI
 - ✅ Log de conexión se borra automáticamente el día 3 de cada mes vía cron (.emergent/crons.yml → POST /api/cron/purge-verifactu-log, auth Bearer WEBHOOK_CRON_SECRET).
 - ✅ Testing iteración 6: 10/10 nuevas + regresión; idempotencia corregida.
 
+## Implemented — Iteración 8 (2026-06) Plantillas + búsqueda CIF
+- ✅ Búsqueda por CIF/NIF al crear factura: autocompleta desde Contactos guardados (normaliza formato: puntos/guiones/prefijo ES) y valida con VIES (GET /api/lookup/nif). Nota: España no expone nombre/dirección por CIF de forma gratuita (limitación legal); para datos completos automáticos hace falta proveedor de pago (eInforma/Axesor) con API key.
+- ✅ 15 plantillas de factura por sector (electricista, fontanero, fotógrafo, chef, transportista, informático, telecomunicaciones, médico, dentista, inmobiliaria, restaurante, gasolinera, peluquería, abogado, clásico). templates.py + GET /api/templates.
+- ✅ Personalización por usuario: elegir plantilla, color de acento (con override) y pie de factura. Company: template_id, accent_color, invoice_footer. El PDF aplica el color al encabezado/total y añade el pie.
+- ✅ Panel Conexión muestra el modo real (Simulado/Preproducción).
+
 ## Backlog (prioritized)
 - P1: Adjuntar PDF binario al email (bloqueado: la integración gestionada de Resend no soporta adjuntos actualmente).
 - P2: Facturas rectificativas; múltiples series simultáneas gestionadas.
