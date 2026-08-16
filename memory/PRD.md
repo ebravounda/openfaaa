@@ -77,9 +77,20 @@ Sistema de facturación para España: crear facturas introduciendo datos (CIF/NI
 - ✅ Personalización por usuario: elegir plantilla, color de acento (con override) y pie de factura. Company: template_id, accent_color, invoice_footer. El PDF aplica el color al encabezado/total y añade el pie.
 - ✅ Panel Conexión muestra el modo real (Simulado/Preproducción).
 
+## Implemented — Iteración 9 (2026-06) Plantilla GoRoky + Super Admin + Planes
+- ✅ Plantilla "goroky": PDF de 2 páginas (factura + Aviso Legal) idéntico al ejemplo del cliente, con logo GoRoky embebido (/app/backend/assets/goroky_logo.png), cabecera+pie en cada página, tabla Concepto/Detalle/Precio y bloque de importes. pdf_service.build_goroky_invoice_pdf. templates.py: GOROKY_DEFAULT_LEGAL/FOOTER.
+- ✅ Campos nuevos de factura (opcionales, usados por GoRoky): due_date (Vencimiento), period (Periodo), payment_method (Método), iban, concept_label (Concepto). Formulario en Invoices.js (sección "Datos de pago y periodo").
+- ✅ Textos de plantilla editables: globales por el super admin (todos los usuarios los ven) Y sobrescribibles por cada usuario en Configuración. Cascada: usuario > global > por defecto. _merge_global_goroky en el endpoint PDF.
+- ✅ Super Admin (rol admin, admin@fiscalhub.es): panel /admin (Admin.js). Gestión de usuarios (listar/buscar/uso), estadísticas, bloquear/desbloquear (login bloqueado → 403 "Tu cuenta ha sido bloqueada, contacta a soporte"), personificación (impersonate/stop-impersonate con claim JWT `imp`, banner ámbar "Volver a admin"), edición de textos globales GoRoky. admin_routes.py.
+- ✅ Planes de suscripción (plans.py): basico (10 fact/mes, 10 contactos, sin email/verifactu/OCR), medio (100/100, email+OCR), platino (ilimitado, todo). Admin sin límites. Gating aplicado en create_invoice, create_contact, send-email, verifactu/submit, expenses/scan. GET /api/plan devuelve plan + uso.
+- ✅ Auth: create_access_token/refresh_token soportan claim `imp`; get_current_user rechaza usuarios bloqueados y expone is_impersonating; require_admin (bloquea a impersonadores). refresh conserva `imp`.
+- ✅ Testing iteración 8/9: 18/18 nuevos + 70/70 regresión backend, frontend 100%, sin bugs.
+
 ## Backlog (prioritized)
 - P1: Adjuntar PDF binario al email (bloqueado: la integración gestionada de Resend no soporta adjuntos actualmente).
-- P2: Facturas rectificativas; múltiples series simultáneas gestionadas.
-- P2: Escaneo también de facturas de venta.
-- P2: Resumen anual (Modelo 390/100); exportar en formato de la AEAT.
-- P3: Añadir DialogDescription (aria-describedby) para eliminar warning de accesibilidad en modales.
+- P2: Búsqueda por CIF también al registrar Gastos (autocompletar proveedor).
+- P2: Editar los límites/precios de los planes desde el panel admin (ahora son fijos en plans.py).
+- P2: Registro de actividad/logs de admin visible en UI (ya se guarda en db.admin_audit).
+- P2: Sugerir plantilla por defecto según tipo de actividad al registrarse.
+- P3: Refactor server.py (960+ líneas) en routers (verifactu, invoices, contacts).
+- P3: Validación defensiva de ObjectId en admin_routes (evitar 500 con id malformado).

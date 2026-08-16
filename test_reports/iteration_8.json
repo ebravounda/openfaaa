@@ -1,0 +1,26 @@
+{
+  "summary": "Iteration 8: Verified Super Admin panel, plan gating, impersonation, block/unblock, global GoRoky template texts, and GoRoky 2-page PDF end-to-end. Created /app/backend/tests/test_iter8_admin.py with 18 tests covering all iter8 endpoints (admin/users, admin/stats, plan assignment + limits for invoices/contacts/email/verifactu/OCR, block/unblock incl. admin-protection, impersonate/stop-impersonate incl. impersonated user 403 on admin/*, PUT+GET global-templates/goroky as admin AND public GET as user, GoRoky PDF 2-page). All 18/18 iter8 tests pass. Full regression 70/70 backend tests pass across all iterations. Frontend verified via Playwright: admin sees Administración nav, admin page renders stats + user table with plan-select-* / impersonate-* / block-* action buttons and the global GoRoky editor (global-legal-notice, global-footer-message, save-global-templates). Impersonation shows amber banner 'Estás viendo como TEST Auto User' with stop-impersonate-button; nav-admin hidden while impersonating (0 count) and restored (1) after Volver a admin. Configuración shows tpl-goroky card; selecting it reveals goroky-texts section with footer+legal textareas whose placeholders correctly reflect the previously-saved GLOBAL values ('PIE GLOBAL ITER8' / 'AVISO GLOBAL ITER8'), confirming the global→user cascade. Nueva Factura modal exposes all 5 new fields: invoice-due-date, invoice-period, invoice-payment-method, invoice-iban, invoice-concept.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": [
+    "/app/backend/tests/test_iter8_admin.py",
+    "/app/test_reports/pytest/iter8.xml",
+    "/app/test_reports/pytest/iter8_all.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "admin_routes.py correctly uses ObjectId(user_id) — will 500 (invalid ObjectId) if a malformed id is passed to /block/unblock/plan/impersonate. Consider try/except with 400 for defensive validation.",
+    "auth.py refresh_token endpoint should preserve the 'imp' claim across refresh so that a long-running impersonated session doesn't silently drop back to admin identity on refresh — please verify (not covered by tests).",
+    "server.py plan gating on send-email, verifactu/submit and expenses/scan uses the same _plan_denied 403 message pattern — good and consistent.",
+    "_merge_global_goroky only substitutes when the user's field is empty — matches the product decision 'global editable by admin AND overridable per-user'.",
+    "server.py has grown past 960 lines; splitting into routers (admin already extracted; consider verifactu, invoices, contacts) would improve maintainability."
+  ],
+  "updated_files": ["/app/backend/tests/test_iter8_admin.py"],
+  "success_rate": {"backend": "100% (18/18 iter8, 70/70 regression)", "frontend": "100%"},
+  "test_credentials": "admin@fiscalhub.es / admin123; regular users self-registered via /api/auth/register with @example.com TLD (backend rejects .local as reserved TLD in Pydantic EmailStr — not a bug, just note for future tests)",
+  "seed_data_creation": "Ephemeral regular user iter8_*@example.com created per module fixture; 10 invoices + 10 contacts created under 'basico' plan to verify limits. Global GoRoky texts set to 'AVISO GLOBAL ITER8'/'PIE GLOBAL ITER8'. Invoice created & deleted by admin under template 'goroky' to verify 2-page PDF.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Iter8 test file uses -n 0 (serial) because it manipulates shared admin company template between tests. To run all: `REACT_APP_BACKEND_URL=<url> pytest backend/tests/ -n 0`. Note pytest.ini forces `-n 2 --dist loadscope`; iter8_admin can also run under that if kept in one class-scope worker. Register endpoint rejects TLDs like .local/.test — use @example.com. New data-testids used: nav-admin, impersonation-banner, stop-impersonate-button, admin-search, plan-select-{email}, impersonate-{email}, block-{email}, global-legal-notice, global-footer-message, save-global-templates, tpl-goroky, goroky-texts, invoice-due-date, invoice-period, invoice-payment-method, invoice-iban, invoice-concept.",
+  "rca of the issue": "N/A — no bugs found."
+}

@@ -27,22 +27,26 @@ def verify_password(plain: str, hashed: str) -> bool:
     return bcrypt.checkpw(plain.encode("utf-8"), hashed.encode("utf-8"))
 
 
-def create_access_token(user_id: str, email: str) -> str:
+def create_access_token(user_id: str, email: str, imp: str = None) -> str:
     payload = {
         "sub": user_id,
         "email": email,
         "exp": datetime.now(timezone.utc) + timedelta(minutes=15),
         "type": "access",
     }
+    if imp:
+        payload["imp"] = imp
     return jwt.encode(payload, get_jwt_secret(), algorithm=JWT_ALGORITHM)
 
 
-def create_refresh_token(user_id: str) -> str:
+def create_refresh_token(user_id: str, imp: str = None) -> str:
     payload = {
         "sub": user_id,
         "exp": datetime.now(timezone.utc) + timedelta(days=7),
         "type": "refresh",
     }
+    if imp:
+        payload["imp"] = imp
     return jwt.encode(payload, get_jwt_secret(), algorithm=JWT_ALGORITHM)
 
 
@@ -72,7 +76,12 @@ def _public_user(user: dict) -> dict:
         "email": user["email"],
         "role": user.get("role", "user"),
         "tax_type": user.get("tax_type", "autonomo"),
+        "plan": user.get("plan", "basico"),
+        "is_blocked": bool(user.get("is_blocked", False)),
     }
+
+
+BLOCKED_MSG = "Tu cuenta ha sido bloqueada, contacta a soporte"
 
 
 async def get_current_user(request: Request) -> dict:
@@ -90,11 +99,24 @@ async def get_current_user(request: Request) -> dict:
         user = await db.users.find_one({"_id": ObjectId(payload["sub"])})
         if not user:
             raise HTTPException(status_code=401, detail="Usuario no encontrado")
-        return _public_user(user)
+        imp = payload.get("imp")
+        if user.get("is_blocked") and not imp:
+            raise HTTPException(status_code=403, detail=BLOCKED_MSG)
+        pu = _public_user(user)
+        if imp:
+            pu["is_impersonating"] = True
+            pu["impersonator_id"] = imp
+        return pu
     except jwt.ExpiredSignatureError:
         raise HTTPException(status_code=401, detail="Token expirado")
     except jwt.InvalidTokenError:
         raise HTTPException(status_code=401, detail="Token inválido")
+
+
+async def require_admin(user=Depends(get_current_user)) -> dict:
+    if user.get("role") != "admin" or user.get("is_impersonating"):
+        raise HTTPException(status_code=403, detail="Acceso restringido al administrador")
+    return user
 
 
 async def _check_lockout(identifier: str):
@@ -124,6 +146,8 @@ async def register(data: RegisterInput, response: Response):
         "email": email,
         "password_hash": hash_password(data.password),
         "role": "user",
+        "plan": "basico",
+        "is_blocked": False,
         "tax_type": data.tax_type if data.tax_type in ("autonomo", "empresa") else "autonomo",
         "created_at": datetime.now(timezone.utc).isoformat(),
     }
@@ -144,6 +168,8 @@ async def login(data: LoginInput, request: Request, response: Response):
     if not user or not verify_password(data.password, user["password_hash"]):
         await _register_failed(identifier)
         raise HTTPException(status_code=401, detail="Email o contraseña incorrectos")
+    if user.get("is_blocked"):
+        raise HTTPException(status_code=403, detail=BLOCKED_MSG)
     await db.login_attempts.delete_one({"identifier": identifier})
     uid = str(user["_id"])
     _set_cookies(response, create_access_token(uid, email), create_refresh_token(uid))
@@ -174,7 +200,10 @@ async def refresh(request: Request, response: Response):
         user = await db.users.find_one({"_id": ObjectId(payload["sub"])})
         if not user:
             raise HTTPException(status_code=401, detail="Usuario no encontrado")
-        access = create_access_token(str(user["_id"]), user["email"])
+        imp = payload.get("imp")
+        if user.get("is_blocked") and not imp:
+            raise HTTPException(status_code=403, detail=BLOCKED_MSG)
+        access = create_access_token(str(user["_id"]), user["email"], imp=imp)
         response.set_cookie("access_token", access, httponly=True, secure=True,
                             samesite="none", max_age=900, path="/")
         return {"status": "ok"}

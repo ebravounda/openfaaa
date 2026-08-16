@@ -11,15 +11,17 @@ import {
 } from "@/components/ui/select";
 import { Loader2, Building2, ShieldCheck, KeyRound, Upload, Trash2, CheckCircle2, AlertTriangle } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
+import { Textarea } from "@/components/ui/textarea";
 
 export default function Settings() {
-  const [form, setForm] = useState({ name: "", nif: "", address: "", email: "", phone: "", tax_type: "autonomo", invoice_prefix: "", verifactu_enabled: false, verifactu_mode: "simulado", template_id: "clasico", accent_color: "", invoice_footer: "" });
+  const [form, setForm] = useState({ name: "", nif: "", address: "", email: "", phone: "", tax_type: "autonomo", invoice_prefix: "", verifactu_enabled: false, verifactu_mode: "simulado", template_id: "clasico", accent_color: "", invoice_footer: "", legal_name: "", legal_notice: "", footer_message: "" });
   const [templates, setTemplates] = useState([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [cert, setCert] = useState(null);
   const [certPwd, setCertPwd] = useState("");
   const [uploadingCert, setUploadingCert] = useState(false);
+  const [gkGlobal, setGkGlobal] = useState({ legal_notice: "", footer_message: "" });
   const certRef = useRef(null);
 
   useEffect(() => {
@@ -28,6 +30,7 @@ export default function Settings() {
     }).finally(() => setLoading(false));
     api.get("/verifactu/certificate").then((r) => setCert(r.data && r.data.meta ? r.data : null));
     api.get("/templates").then((r) => setTemplates(r.data));
+    api.get("/global-templates/goroky").then((r) => setGkGlobal(r.data)).catch(() => {});
   }, []);
 
   const uploadCert = async (e) => {
@@ -96,6 +99,7 @@ export default function Settings() {
               <div className="space-y-2"><Label>NIF / CIF</Label><Input value={form.nif} onChange={(e) => setForm({ ...form, nif: e.target.value })} placeholder="B12345678 / 12345678Z" data-testid="company-nif" /></div>
             </div>
             <div className="space-y-2"><Label>Dirección fiscal</Label><Input value={form.address} onChange={(e) => setForm({ ...form, address: e.target.value })} data-testid="company-address" /></div>
+            <div className="space-y-2"><Label>Nombre legal (2ª línea, opcional)</Label><Input value={form.legal_name} onChange={(e) => setForm({ ...form, legal_name: e.target.value })} placeholder="TRAMILEX GLOBAL SERVICE SL" data-testid="company-legal-name" /></div>
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2"><Label>Email</Label><Input type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} data-testid="company-email" /></div>
               <div className="space-y-2"><Label>Teléfono</Label><Input value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} data-testid="company-phone" /></div>
@@ -144,6 +148,20 @@ export default function Settings() {
                   <Input value={form.invoice_footer} onChange={(e) => setForm({ ...form, invoice_footer: e.target.value })} placeholder="Forma de pago, IBAN, condiciones…" data-testid="invoice-footer" />
                 </div>
               </div>
+              {form.template_id === "goroky" && (
+                <div className="border-t border-slate-100 pt-4 mt-2 space-y-4" data-testid="goroky-texts">
+                  <div className="text-[11px] font-semibold uppercase tracking-wider text-slate-500">Textos de la plantilla GoRoky</div>
+                  <p className="text-xs text-slate-400 -mt-2">Déjalos en blanco para usar el texto global por defecto. Lo que escribas aquí sobrescribe solo tus facturas.</p>
+                  <div className="space-y-2">
+                    <Label>Mensaje del pie (central)</Label>
+                    <Input value={form.footer_message} onChange={(e) => setForm({ ...form, footer_message: e.target.value })} placeholder={gkGlobal.footer_message || "Documento generado automáticamente. Gracias por confiar en GoRoky."} data-testid="goroky-footer-message" />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Aviso Legal (2ª página)</Label>
+                    <Textarea value={form.legal_notice} onChange={(e) => setForm({ ...form, legal_notice: e.target.value })} rows={8} placeholder={gkGlobal.legal_notice || "Usa '## Título' para encabezados, '- ' para viñetas y **negrita**."} className="font-mono text-xs" data-testid="goroky-legal-notice" />
+                  </div>
+                </div>
+              )}
             </div>
 
             <div className="border border-slate-200 rounded-lg p-4 flex items-start justify-between gap-4">

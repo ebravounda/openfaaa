@@ -1,0 +1,228 @@
+import { useEffect, useState } from "react";
+import { useNavigate, Navigate } from "react-router-dom";
+import { toast } from "sonner";
+import api, { formatApiErrorDetail } from "@/lib/api";
+import { useAuth } from "@/context/AuthContext";
+import Layout from "@/components/Layout";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import { Badge } from "@/components/ui/badge";
+import { Skeleton } from "@/components/ui/skeleton";
+import {
+  Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
+} from "@/components/ui/table";
+import {
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from "@/components/ui/select";
+import { Users, ShieldOff, FileText, Search, UserCog, Ban, CheckCircle2, Loader2, Save } from "lucide-react";
+
+const PLAN_LABEL = { basico: "Básico", medio: "Medio", platino: "Platino" };
+const PLAN_BADGE = {
+  basico: "bg-slate-100 text-slate-700",
+  medio: "bg-blue-100 text-blue-700",
+  platino: "bg-amber-100 text-amber-700",
+};
+
+export default function Admin() {
+  const { user, setUser } = useAuth();
+  const navigate = useNavigate();
+  const [users, setUsers] = useState([]);
+  const [stats, setStats] = useState(null);
+  const [q, setQ] = useState("");
+  const [loading, setLoading] = useState(true);
+  const [busyId, setBusyId] = useState(null);
+  const [gk, setGk] = useState({ legal_notice: "", footer_message: "", defaults: {} });
+  const [savingGk, setSavingGk] = useState(false);
+
+  const load = (query = "") => {
+    setLoading(true);
+    Promise.all([
+      api.get(`/admin/users${query ? `?q=${encodeURIComponent(query)}` : ""}`),
+      api.get("/admin/stats"),
+    ])
+      .then(([u, s]) => { setUsers(u.data); setStats(s.data); })
+      .catch((e) => toast.error(formatApiErrorDetail(e.response?.data?.detail)))
+      .finally(() => setLoading(false));
+  };
+
+  useEffect(() => {
+    load();
+    api.get("/admin/global-templates/goroky").then((r) => setGk(r.data)).catch(() => {});
+  }, []);
+
+  if (user && (user.role !== "admin" || user.is_impersonating)) return <Navigate to="/" replace />;
+
+  const search = (e) => { e.preventDefault(); load(q); };
+
+  const setPlan = async (u, plan) => {
+    setBusyId(u.id);
+    try {
+      await api.post(`/admin/users/${u.id}/plan`, { plan });
+      setUsers((list) => list.map((x) => (x.id === u.id ? { ...x, plan } : x)));
+      toast.success(`Plan de ${u.email} → ${PLAN_LABEL[plan]}`);
+    } catch (e) {
+      toast.error(formatApiErrorDetail(e.response?.data?.detail));
+    } finally { setBusyId(null); }
+  };
+
+  const toggleBlock = async (u) => {
+    setBusyId(u.id);
+    try {
+      const path = u.is_blocked ? "unblock" : "block";
+      const { data } = await api.post(`/admin/users/${u.id}/${path}`);
+      setUsers((list) => list.map((x) => (x.id === u.id ? { ...x, is_blocked: data.is_blocked } : x)));
+      toast.success(data.is_blocked ? `${u.email} bloqueado` : `${u.email} desbloqueado`);
+    } catch (e) {
+      toast.error(formatApiErrorDetail(e.response?.data?.detail));
+    } finally { setBusyId(null); }
+  };
+
+  const impersonate = async (u) => {
+    setBusyId(u.id);
+    try {
+      const { data } = await api.post(`/admin/impersonate/${u.id}`);
+      setUser(data);
+      toast.success(`Ahora estás viendo como ${u.name || u.email}`);
+      navigate("/");
+    } catch (e) {
+      toast.error(formatApiErrorDetail(e.response?.data?.detail));
+    } finally { setBusyId(null); }
+  };
+
+  const saveGk = async () => {
+    setSavingGk(true);
+    try {
+      await api.put("/admin/global-templates/goroky", { legal_notice: gk.legal_notice, footer_message: gk.footer_message });
+      toast.success("Textos globales de GoRoky guardados");
+    } catch (e) {
+      toast.error(formatApiErrorDetail(e.response?.data?.detail));
+    } finally { setSavingGk(false); }
+  };
+
+  const statCards = [
+    { label: "Usuarios", value: stats?.total_users, icon: Users, color: "text-[#0052FF] bg-[#0052FF]/10" },
+    { label: "Bloqueados", value: stats?.blocked, icon: ShieldOff, color: "text-red-600 bg-red-50" },
+    { label: "Facturas totales", value: stats?.total_invoices, icon: FileText, color: "text-emerald-600 bg-emerald-50" },
+  ];
+
+  return (
+    <Layout>
+      <div className="mb-6">
+        <h1 className="font-display text-[28px] font-semibold tracking-tight text-slate-900">Administración</h1>
+        <p className="text-sm text-slate-500 mt-0.5">Gestiona usuarios, planes y plantillas globales</p>
+      </div>
+
+      <div className="grid grid-cols-3 gap-4 mb-6">
+        {statCards.map((c) => (
+          <div key={c.label} className="bg-white border border-slate-200 rounded-lg shadow-sm p-4 flex items-center gap-3" data-testid={`stat-${c.label}`}>
+            <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${c.color}`}><c.icon className="w-5 h-5" strokeWidth={1.5} /></div>
+            <div>
+              <div className="text-2xl font-semibold text-slate-900 tabular">{c.value ?? "—"}</div>
+              <div className="text-xs text-slate-500">{c.label}</div>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      <div className="bg-white border border-slate-200 rounded-lg shadow-sm overflow-hidden mb-8">
+        <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between gap-4 flex-wrap">
+          <div className="font-medium text-slate-900">Usuarios</div>
+          <form onSubmit={search} className="flex items-center gap-2">
+            <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Buscar por email o nombre…" className="w-64" data-testid="admin-search" />
+            <Button type="submit" variant="outline" className="border-slate-200" data-testid="admin-search-btn"><Search className="w-4 h-4" strokeWidth={1.5} /></Button>
+          </form>
+        </div>
+        {loading ? (
+          <div className="p-5 space-y-3">{[0, 1, 2, 3].map((i) => <Skeleton key={i} className="h-12 rounded-md" />)}</div>
+        ) : (
+          <Table>
+            <TableHeader>
+              <TableRow className="hover:bg-transparent">
+                <TableHead>Usuario</TableHead>
+                <TableHead>Plan</TableHead>
+                <TableHead className="text-right">Uso (mes)</TableHead>
+                <TableHead>Estado</TableHead>
+                <TableHead className="text-right">Acciones</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {users.map((u) => (
+                <TableRow key={u.id} data-testid={`admin-user-${u.email}`}>
+                  <TableCell>
+                    <div className="text-sm font-medium text-slate-900">{u.name || "—"}</div>
+                    <div className="text-xs text-slate-500">{u.email}{u.role === "admin" && <Badge className="ml-2 bg-[#0052FF]/10 text-[#0052FF] hover:bg-[#0052FF]/10 rounded-full text-[10px]">admin</Badge>}</div>
+                  </TableCell>
+                  <TableCell>
+                    {u.role === "admin" ? (
+                      <span className="text-xs text-slate-400">—</span>
+                    ) : (
+                      <Select value={u.plan} onValueChange={(v) => setPlan(u, v)} disabled={busyId === u.id}>
+                        <SelectTrigger className="w-32 h-8" data-testid={`plan-select-${u.email}`}><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="basico">Básico</SelectItem>
+                          <SelectItem value="medio">Medio</SelectItem>
+                          <SelectItem value="platino">Platino</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    )}
+                  </TableCell>
+                  <TableCell className="text-right text-sm text-slate-600 tabular">
+                    {u.usage?.invoices_month ?? 0} fact · {u.usage?.contacts ?? 0} cont
+                  </TableCell>
+                  <TableCell>
+                    {u.is_blocked
+                      ? <Badge className="bg-red-100 text-red-700 hover:bg-red-100 rounded-full">Bloqueado</Badge>
+                      : <Badge className="bg-emerald-100 text-emerald-700 hover:bg-emerald-100 rounded-full">Activo</Badge>}
+                  </TableCell>
+                  <TableCell className="text-right">
+                    {u.role !== "admin" && (
+                      <div className="flex items-center justify-end gap-1">
+                        <Button variant="ghost" size="sm" onClick={() => impersonate(u)} disabled={busyId === u.id} title="Entrar como este usuario" data-testid={`impersonate-${u.email}`} className="h-8 text-slate-600 hover:text-[#0052FF]">
+                          <UserCog className="w-4 h-4 mr-1" strokeWidth={1.5} /> Entrar
+                        </Button>
+                        <Button variant="ghost" size="sm" onClick={() => toggleBlock(u)} disabled={busyId === u.id} title={u.is_blocked ? "Desbloquear" : "Bloquear"} data-testid={`block-${u.email}`} className={`h-8 ${u.is_blocked ? "text-emerald-600" : "text-red-600"}`}>
+                          {u.is_blocked ? <CheckCircle2 className="w-4 h-4 mr-1" strokeWidth={1.5} /> : <Ban className="w-4 h-4 mr-1" strokeWidth={1.5} />}
+                          {u.is_blocked ? "Desbloquear" : "Bloquear"}
+                        </Button>
+                      </div>
+                    )}
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        )}
+      </div>
+
+      <div className="bg-white border border-slate-200 rounded-lg shadow-sm max-w-3xl overflow-hidden" data-testid="global-templates-section">
+        <div className="px-5 py-4 border-b border-slate-100">
+          <div className="font-medium text-slate-900">Plantilla global: GoRoky</div>
+          <div className="text-sm text-slate-500">Estos textos los ven todos los usuarios. Cada usuario puede sobrescribirlos en su Configuración.</div>
+        </div>
+        <div className="p-5 space-y-4">
+          <div className="space-y-2">
+            <Label>Mensaje del pie (central)</Label>
+            <Input value={gk.footer_message} onChange={(e) => setGk({ ...gk, footer_message: e.target.value })} data-testid="global-footer-message" />
+          </div>
+          <div className="space-y-2">
+            <Label>Aviso Legal (2ª página)</Label>
+            <Textarea value={gk.legal_notice} onChange={(e) => setGk({ ...gk, legal_notice: e.target.value })} rows={12} className="font-mono text-xs" data-testid="global-legal-notice" />
+            <p className="text-xs text-slate-400">Usa '## Título' para encabezados, '- ' para viñetas y **negrita**.</p>
+          </div>
+          <div className="flex items-center gap-3">
+            <Button onClick={saveGk} disabled={savingGk} className="bg-[#0052FF] hover:bg-[#0040CC] text-white" data-testid="save-global-templates">
+              {savingGk ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Save className="w-4 h-4 mr-2" strokeWidth={1.5} />}Guardar textos globales
+            </Button>
+            {gk.defaults?.legal_notice && (
+              <Button variant="outline" className="border-slate-200" onClick={() => setGk({ ...gk, legal_notice: gk.defaults.legal_notice, footer_message: gk.defaults.footer_message })} data-testid="reset-global-templates">
+                Restaurar texto por defecto
+              </Button>
+            )}
+          </div>
+        </div>
+      </div>
+    </Layout>
+  );
+}

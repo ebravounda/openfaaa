@@ -20,6 +20,9 @@ from pydantic import BaseModel, Field
 from database import db, client
 from bson import ObjectId
 from auth import router as auth_router, get_current_user, seed_admin
+from admin_routes import admin as admin_router
+from plans import plan_for_user
+from templates import TEMPLATE_MAP
 from pdf_service import build_invoice_pdf
 from email_service import send_email, build_invoice_email_html
 import storage_service
@@ -63,6 +66,11 @@ class InvoiceInput(BaseModel):
     invoice_type: str = "normal"  # "normal" or "rectificativa"
     rectifies: str = ""
     rectifies_number: str = ""
+    due_date: str = ""
+    period: str = ""
+    payment_method: str = ""
+    iban: str = ""
+    concept_label: str = ""
 
 
 class ExpenseInput(BaseModel):
@@ -90,6 +98,9 @@ class CompanyInput(BaseModel):
     template_id: str = "clasico"
     accent_color: str = ""
     invoice_footer: str = ""
+    legal_name: str = ""
+    legal_notice: str = ""
+    footer_message: str = ""
 
 
 class StatusInput(BaseModel):
@@ -147,6 +158,48 @@ def deadline_date(year: int, q: int) -> date:
     return date(y, m, d)
 
 
+# ---------- Plan gating & global template helpers ----------
+def _month_prefix() -> str:
+    now = datetime.now(timezone.utc)
+    return f"{now.year:04d}-{now.month:02d}"
+
+
+def _plan_denied(plan, feature):
+    return HTTPException(status_code=403,
+                         detail=f"Tu plan {plan['name']} no incluye esta función. Mejora tu plan para activarla.")
+
+
+async def _merge_global_goroky(company: dict) -> dict:
+    if TEMPLATE_MAP.get(company.get("template_id", ""), {}).get("layout") != "goroky":
+        return company
+    g = await db.global_settings.find_one({"_id": "goroky_texts"}) or {}
+    c = dict(company)
+    if not (c.get("legal_notice") or "").strip() and (g.get("legal_notice") or "").strip():
+        c["legal_notice"] = g["legal_notice"]
+    if not (c.get("footer_message") or "").strip() and (g.get("footer_message") or "").strip():
+        c["footer_message"] = g["footer_message"]
+    return c
+
+
+@api.get("/plan")
+async def my_plan(user=Depends(get_current_user)):
+    plan = plan_for_user(user)
+    mp = _month_prefix()
+    inv_month = await db.invoices.count_documents({"user_id": user["id"], "issue_date": {"$regex": f"^{mp}"}})
+    contacts = await db.contacts.count_documents({"user_id": user["id"]})
+    return {"plan": plan, "usage": {"invoices_month": inv_month, "contacts": contacts}}
+
+
+@api.get("/global-templates/goroky")
+async def public_global_goroky(user=Depends(get_current_user)):
+    from templates import GOROKY_DEFAULT_LEGAL, GOROKY_DEFAULT_FOOTER
+    g = await db.global_settings.find_one({"_id": "goroky_texts"}) or {}
+    return {
+        "legal_notice": g.get("legal_notice") or GOROKY_DEFAULT_LEGAL,
+        "footer_message": g.get("footer_message") or GOROKY_DEFAULT_FOOTER,
+    }
+
+
 # ---------- Company ----------
 @api.get("/company")
 async def get_company(user=Depends(get_current_user)):
@@ -177,6 +230,13 @@ async def list_invoices(user=Depends(get_current_user)):
 
 @api.post("/invoices")
 async def create_invoice(data: InvoiceInput, user=Depends(get_current_user)):
+    plan = plan_for_user(user)
+    if plan["max_invoices"] is not None:
+        cnt = await db.invoices.count_documents(
+            {"user_id": user["id"], "issue_date": {"$regex": f"^{_month_prefix()}"}})
+        if cnt >= plan["max_invoices"]:
+            raise HTTPException(status_code=403,
+                detail=f"Has alcanzado el límite de {plan['max_invoices']} facturas al mes de tu plan {plan['name']}. Mejora tu plan para emitir más.")
     year = data.issue_date[:4]
     company = await db.companies.find_one({"user_id": user["id"]}, {"_id": 0}) or {}
     if data.invoice_type == "rectificativa":
@@ -266,6 +326,7 @@ async def invoice_pdf(invoice_id: str, user=Depends(get_current_user)):
     if not inv:
         raise HTTPException(status_code=404, detail="Factura no encontrada")
     company = await db.companies.find_one({"user_id": user["id"]}, {"_id": 0}) or {}
+    company = await _merge_global_goroky(company)
     qr_png = None
     vfd = inv.get("verifactu")
     if vfd and vfd.get("qr_url"):
@@ -280,6 +341,9 @@ async def invoice_pdf(invoice_id: str, user=Depends(get_current_user)):
 
 @api.post("/invoices/{invoice_id}/verifactu/submit")
 async def verifactu_submit(invoice_id: str, user=Depends(get_current_user)):
+    plan = plan_for_user(user)
+    if not plan["features"].get("verifactu"):
+        raise _plan_denied(plan, "verifactu")
     inv = await db.invoices.find_one({"id": invoice_id, "user_id": user["id"]}, {"_id": 0})
     if not inv:
         raise HTTPException(status_code=404, detail="Factura no encontrada")
@@ -463,6 +527,9 @@ async def lookup_nif(nif: str, user=Depends(get_current_user)):
 
 @api.post("/invoices/{invoice_id}/send-email")
 async def send_invoice_email(invoice_id: str, user=Depends(get_current_user)):
+    plan = plan_for_user(user)
+    if not plan["features"].get("email"):
+        raise _plan_denied(plan, "email")
     inv = await db.invoices.find_one({"id": invoice_id, "user_id": user["id"]}, {"_id": 0})
     if not inv:
         raise HTTPException(status_code=404, detail="Factura no encontrada")
@@ -708,6 +775,12 @@ async def list_contacts(kind: Optional[str] = None, user=Depends(get_current_use
 
 @api.post("/contacts")
 async def create_contact(data: ContactInput, user=Depends(get_current_user)):
+    plan = plan_for_user(user)
+    if plan["max_contacts"] is not None:
+        cnt = await db.contacts.count_documents({"user_id": user["id"]})
+        if cnt >= plan["max_contacts"]:
+            raise HTTPException(status_code=403,
+                detail=f"Has alcanzado el límite de {plan['max_contacts']} contactos de tu plan {plan['name']}. Mejora tu plan para guardar más.")
     doc = data.model_dump()
     doc.update({"id": str(uuid.uuid4()), "user_id": user["id"],
                 "created_at": datetime.now(timezone.utc).isoformat()})
@@ -727,6 +800,9 @@ async def delete_contact(contact_id: str, user=Depends(get_current_user)):
 # ---------- Expense document scan (OCR) ----------
 @api.post("/expenses/scan")
 async def scan_expense(file: UploadFile = File(...), user=Depends(get_current_user)):
+    plan = plan_for_user(user)
+    if not plan["features"].get("ocr"):
+        raise _plan_denied(plan, "ocr")
     data = await file.read()
     if not data:
         raise HTTPException(status_code=400, detail="Archivo vacío")
@@ -784,6 +860,7 @@ async def download_file(path: str, user=Depends(get_current_user)):
 
 
 app.include_router(auth_router)
+app.include_router(admin_router)
 app.include_router(api)
 
 

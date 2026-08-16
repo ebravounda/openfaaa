@@ -46,6 +46,11 @@ const emptyForm = () => ({
   rectifies: "",
   rectifies_number: "",
   save_client: false,
+  due_date: "",
+  period: "",
+  payment_method: "",
+  iban: "",
+  concept_label: "",
 });
 
 export default function Invoices() {
@@ -150,6 +155,11 @@ export default function Invoices() {
       notes: inv.notes || "",
       series: inv.series || "",
       save_client: false,
+      due_date: inv.due_date || "",
+      period: inv.period || "",
+      payment_method: inv.payment_method || "",
+      iban: inv.iban || "",
+      concept_label: inv.concept_label || "",
     });
     setOpen(true);
   };
@@ -169,6 +179,11 @@ export default function Invoices() {
       invoice_type: form.invoice_type,
       rectifies: form.rectifies,
       rectifies_number: form.rectifies_number,
+      due_date: form.due_date,
+      period: form.period,
+      payment_method: form.payment_method,
+      iban: form.iban,
+      concept_label: form.concept_label,
     };
     try {
       if (editingId) {
@@ -397,6 +412,30 @@ export default function Invoices() {
             </div>
 
             <div className="space-y-2"><Label>Notas</Label><Textarea value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} rows={2} data-testid="invoice-notes" /></div>
+
+            <div className="border border-slate-200 rounded-lg p-4 space-y-4" data-testid="payment-section">
+              <div className="text-[11px] font-semibold uppercase tracking-wider text-slate-500">Datos de pago y periodo (opcional · plantilla GoRoky)</div>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2"><Label>Vencimiento</Label><Input type="date" value={form.due_date} onChange={(e) => setForm({ ...form, due_date: e.target.value })} data-testid="invoice-due-date" /></div>
+                <div className="space-y-2"><Label>Periodo</Label><Input value={form.period} onChange={(e) => setForm({ ...form, period: e.target.value })} placeholder="agosto 2026" data-testid="invoice-period" /></div>
+                <div className="space-y-2"><Label>Concepto</Label><Input value={form.concept_label} onChange={(e) => setForm({ ...form, concept_label: e.target.value })} placeholder="PAGO" data-testid="invoice-concept" /></div>
+                <div className="space-y-2">
+                  <Label>Método de pago</Label>
+                  <Select value={form.payment_method || "none"} onValueChange={(v) => setForm({ ...form, payment_method: v === "none" ? "" : v })}>
+                    <SelectTrigger data-testid="invoice-payment-method"><SelectValue placeholder="Seleccionar…" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">Sin especificar</SelectItem>
+                      <SelectItem value="CARD">CARD</SelectItem>
+                      <SelectItem value="TRANSFERENCIA">TRANSFERENCIA</SelectItem>
+                      <SelectItem value="EFECTIVO">EFECTIVO</SelectItem>
+                      <SelectItem value="DOMICILIACION">DOMICILIACIÓN</SelectItem>
+                      <SelectItem value="BIZUM">BIZUM</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2 col-span-2"><Label>IBAN</Label><Input value={form.iban} onChange={(e) => setForm({ ...form, iban: e.target.value })} placeholder="ES46 1583 0001 1290 8062 6801" data-testid="invoice-iban" /></div>
+              </div>
+            </div>
 
             <div className="bg-slate-50 border border-slate-200 rounded-lg p-4 space-y-1.5 text-sm">
               <div className="flex justify-between text-slate-500"><span>Base imponible</span><span className="tabular" data-testid="summary-base">{eur(base)}</span></div>

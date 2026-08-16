@@ -1,4 +1,6 @@
 import { NavLink, useNavigate } from "react-router-dom";
+import { toast } from "sonner";
+import api from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
 import {
   LayoutDashboard,
@@ -10,9 +12,12 @@ import {
   LogOut,
   Sparkles,
   Activity,
+  Shield,
+  UserCog,
+  ArrowLeft,
 } from "lucide-react";
 
-const nav = [
+const baseNav = [
   { to: "/", label: "Panel", icon: LayoutDashboard, end: true, testid: "nav-dashboard" },
   { to: "/facturas", label: "Facturas", icon: FileText, testid: "nav-invoices" },
   { to: "/gastos", label: "Gastos", icon: Receipt, testid: "nav-expenses" },
@@ -22,22 +27,49 @@ const nav = [
   { to: "/configuracion", label: "Configuración", icon: Settings, testid: "nav-settings" },
 ];
 
+const PLAN_LABEL = { basico: "Básico", medio: "Medio", platino: "Platino" };
+
 function initials(name = "") {
   return name.split(" ").filter(Boolean).slice(0, 2).map((w) => w[0]?.toUpperCase()).join("") || "U";
 }
 
 export default function Layout({ children }) {
-  const { user, logout } = useAuth();
+  const { user, logout, setUser } = useAuth();
   const navigate = useNavigate();
+
+  const isAdmin = user?.role === "admin" && !user?.is_impersonating;
+  const nav = isAdmin
+    ? [...baseNav, { to: "/admin", label: "Administración", icon: Shield, testid: "nav-admin" }]
+    : baseNav;
 
   const handleLogout = async () => {
     await logout();
     navigate("/login");
   };
 
+  const stopImpersonate = async () => {
+    try {
+      const { data } = await api.post("/admin/stop-impersonate");
+      setUser(data);
+      toast.success("Has vuelto a tu cuenta de administrador");
+      navigate("/admin");
+    } catch (e) {
+      toast.error("No se pudo volver a la cuenta de administrador");
+    }
+  };
+
   return (
     <div className="min-h-screen flex bg-[#F8FAFC]">
-      <aside className="w-[248px] shrink-0 bg-white border-r border-slate-200 flex flex-col fixed h-screen z-20">
+      {user?.is_impersonating && (
+        <div className="fixed top-0 left-0 right-0 z-50 bg-amber-500 text-white text-sm px-5 py-2 flex items-center justify-center gap-3" data-testid="impersonation-banner">
+          <UserCog className="w-4 h-4" strokeWidth={1.5} />
+          <span>Estás viendo como <strong>{user?.name || user?.email}</strong></span>
+          <button onClick={stopImpersonate} data-testid="stop-impersonate-button" className="ml-2 inline-flex items-center gap-1 bg-white/20 hover:bg-white/30 rounded-full px-3 py-1 font-medium transition-colors">
+            <ArrowLeft className="w-3.5 h-3.5" strokeWidth={2} /> Volver a admin
+          </button>
+        </div>
+      )}
+      <aside className={`w-[248px] shrink-0 bg-white border-r border-slate-200 flex flex-col fixed h-screen z-20 ${user?.is_impersonating ? "pt-9" : ""}`}>
         <div className="px-5 py-5 flex items-center gap-2.5">
           <div className="w-9 h-9 rounded-lg bg-[#0052FF] flex items-center justify-center">
             <Sparkles className="w-5 h-5 text-white" strokeWidth={1.5} />
@@ -84,7 +116,11 @@ export default function Layout({ children }) {
             </div>
             <div className="min-w-0 flex-1">
               <div className="text-sm font-medium text-slate-900 truncate">{user?.name}</div>
-              <div className="text-xs text-slate-500 truncate capitalize">{user?.tax_type === "empresa" ? "Empresa" : "Autónomo"}</div>
+              <div className="text-xs text-slate-500 truncate">
+                {user?.role === "admin" && !user?.is_impersonating
+                  ? "Administrador"
+                  : (PLAN_LABEL[user?.plan] ? `Plan ${PLAN_LABEL[user?.plan]}` : (user?.tax_type === "empresa" ? "Empresa" : "Autónomo"))}
+              </div>
             </div>
             <button
               onClick={handleLogout}
@@ -98,7 +134,7 @@ export default function Layout({ children }) {
         </div>
       </aside>
 
-      <main className="flex-1 ml-[248px] min-h-screen">
+      <main className={`flex-1 ml-[248px] min-h-screen ${user?.is_impersonating ? "pt-9" : ""}`}>
         <div className="px-6 sm:px-8 lg:px-10 py-8 max-w-[1360px]">{children}</div>
       </main>
     </div>
