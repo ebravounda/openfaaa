@@ -14,6 +14,8 @@ import Connection from "@/pages/Connection";
 import Settings from "@/pages/Settings";
 import Admin from "@/pages/Admin";
 import Pricing from "@/pages/Pricing";
+import PaymentSuccess from "@/pages/PaymentSuccess";
+import PaymentCancel from "@/pages/PaymentCancel";
 
 function App() {
   return (
@@ -31,6 +33,8 @@ function App() {
           <Route path="/conexion" element={<ProtectedRoute><Connection /></ProtectedRoute>} />
           <Route path="/configuracion" element={<ProtectedRoute><Settings /></ProtectedRoute>} />
           <Route path="/precios" element={<ProtectedRoute><Pricing /></ProtectedRoute>} />
+          <Route path="/payment/success" element={<ProtectedRoute><PaymentSuccess /></ProtectedRoute>} />
+          <Route path="/payment/cancel" element={<ProtectedRoute><PaymentCancel /></ProtectedRoute>} />
           <Route path="/admin" element={<ProtectedRoute><Admin /></ProtectedRoute>} />
         </Routes>
       </BrowserRouter>

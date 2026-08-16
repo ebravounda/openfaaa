@@ -83,7 +83,13 @@ async def update_plans(data: PlansUpdateInput, admin_user=Depends(require_admin)
         }
     await db.global_settings.update_one({"_id": "plans"}, {"$set": {"plans": clean}}, upsert=True)
     await _audit(admin_user["id"], "edit_plans", None)
-    return await plans_list()
+    result = await plans_list()
+    try:
+        import stripe_service as ss
+        ss.sync_catalog({p["id"]: p for p in result})
+    except Exception:
+        pass
+    return result
 
 
 @admin.get("/users")

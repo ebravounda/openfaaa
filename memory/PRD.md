@@ -77,6 +77,13 @@ Sistema de facturación para España: crear facturas introduciendo datos (CIF/NI
 - ✅ Personalización por usuario: elegir plantilla, color de acento (con override) y pie de factura. Company: template_id, accent_color, invoice_footer. El PDF aplica el color al encabezado/total y añade el pie.
 - ✅ Panel Conexión muestra el modo real (Simulado/Preproducción).
 
+## Implemented — Iteración 11 (2026-06) Autoservicio de pago (Stripe) + Aviso al 80%
+- ✅ Suscripciones Stripe (Flow A sandbox reclamable, país ES, EUR): el usuario básico mejora a Medio (9.99€/mes) o Platino (24.99€/mes) desde /precios; checkout en modo suscripción, cobro mensual automático. stripe_service.py (sync catálogo por lookup_key, sesión con SMP + fallback automatic_tax + sin impuestos), payments_routes.py (/api/payments/checkout, /api/payments/status/{id}, /api/stripe/webhook).
+- ✅ Sincronización de plan automática: al pagar (webhook checkout.session.completed y/o polling de status) se sube el plan del usuario en MongoDB; customer.subscription.deleted lo baja a básico. PUT /api/admin/plans re-sincroniza precios en Stripe.
+- ✅ Páginas /payment/success (poll + activa plan) y /payment/cancel. tax_mode = "full" (Stripe gestiona impuestos y cumplimiento, +3.5%/transacción) por ser ES + SaaS digital.
+- ✅ Aviso al 80%: banner global en Layout (usage-warning-banner) + aviso ámbar/rojo y barras en /precios cuando el uso llega al 80% (ámbar) o 100% (rojo).
+- ✅ Testing iteración 10/11: 11/11 nuevos + frontend 100%, sin bugs de producto (pago hosted de Stripe no automatizado, best-effort).
+
 ## Implemented — Iteración 10 (2026-06) CIF en Gastos + Planes editables + Página de Precios
 - ✅ Búsqueda CIF/NIF al registrar Gastos: botón junto al NIF del proveedor (Expenses.js lookupVendorNif) reutiliza GET /api/lookup/nif; autocompleta proveedor desde contactos guardados + validación VIES.
 - ✅ Planes editables por el admin: db.global_settings _id="plans" guarda overrides que se fusionan sobre DEFAULT_PLANS (plans.py load_plans/_merge_one). Endpoints GET/PUT /api/admin/plans. Editor en Admin.js (nombre, precio, facturas/mes, contactos, toggles email/ocr/verifactu). plan_for_user ahora es async y lee de BD; gating actualizado en server.py.

@@ -1,10 +1,12 @@
 import { useEffect, useState } from "react";
-import api from "@/lib/api";
+import { toast } from "sonner";
+import api, { formatApiErrorDetail } from "@/lib/api";
 import Layout from "@/components/Layout";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Progress } from "@/components/ui/progress";
-import { Check, X, Sparkles, AlertTriangle, Infinity as InfinityIcon } from "lucide-react";
+import { Check, X, Sparkles, AlertTriangle, Infinity as InfinityIcon, ArrowUpCircle, Loader2 } from "lucide-react";
 
 const FEATURES = [
   { key: "email", label: "Envío de facturas por email" },
@@ -21,6 +23,7 @@ export default function Pricing() {
   const [current, setCurrent] = useState(null);
   const [usage, setUsage] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [upgrading, setUpgrading] = useState(null);
 
   useEffect(() => {
     Promise.all([api.get("/plans"), api.get("/plan")])
@@ -32,11 +35,28 @@ export default function Pricing() {
       .finally(() => setLoading(false));
   }, []);
 
+  const upgrade = async (planId) => {
+    setUpgrading(planId);
+    try {
+      const { data } = await api.post("/payments/checkout", { plan: planId, origin_url: window.location.origin });
+      window.location.href = data.checkout_url;
+    } catch (e) {
+      toast.error(formatApiErrorDetail(e.response?.data?.detail));
+      setUpgrading(null);
+    }
+  };
+
   const isAdmin = current?.id === "admin";
   const invLimit = current?.max_invoices;
   const conLimit = current?.max_contacts;
+  const invPct = invLimit != null ? (usage?.invoices_month ?? 0) / invLimit : 0;
+  const conPct = conLimit != null ? (usage?.contacts ?? 0) / conLimit : 0;
   const invReached = invLimit != null && (usage?.invoices_month ?? 0) >= invLimit;
   const conReached = conLimit != null && (usage?.contacts ?? 0) >= conLimit;
+  const invNear = invPct >= 0.8 && !invReached;
+  const conNear = conPct >= 0.8 && !conReached;
+  const showWarn = invReached || conReached || invNear || conNear;
+  const critical = invReached || conReached;
 
   return (
     <Layout>
@@ -49,14 +69,21 @@ export default function Pricing() {
         <div className="grid grid-cols-3 gap-4">{[0, 1, 2].map((i) => <Skeleton key={i} className="h-80 rounded-lg" />)}</div>
       ) : (
         <>
-          {(invReached || conReached) && (
-            <div className="mb-6 flex items-start gap-3 bg-amber-50 border border-amber-200 rounded-lg p-4" data-testid="limit-warning">
-              <AlertTriangle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" strokeWidth={1.5} />
-              <div className="text-sm text-amber-800">
-                <strong>Has alcanzado el límite de tu plan {current?.name}.</strong>{" "}
-                {invReached && `Facturas este mes: ${usage.invoices_month}/${invLimit}. `}
-                {conReached && `Contactos: ${usage.contacts}/${conLimit}. `}
-                Mejora tu plan para seguir emitiendo sin límites.
+          {showWarn && (
+            <div className={`mb-6 flex items-start gap-3 rounded-lg p-4 border ${critical ? "bg-red-50 border-red-200" : "bg-amber-50 border-amber-200"}`} data-testid="limit-warning">
+              <AlertTriangle className={`w-5 h-5 shrink-0 mt-0.5 ${critical ? "text-red-600" : "text-amber-600"}`} strokeWidth={1.5} />
+              <div className={`text-sm ${critical ? "text-red-800" : "text-amber-800"}`}>
+                {critical ? (
+                  <><strong>Has alcanzado el límite de tu plan {current?.name}.</strong>{" "}
+                  {invReached && `Facturas este mes: ${usage.invoices_month}/${invLimit}. `}
+                  {conReached && `Contactos: ${usage.contacts}/${conLimit}. `}
+                  Mejora tu plan para seguir sin límites.</>
+                ) : (
+                  <><strong>Estás cerca del límite de tu plan {current?.name}.</strong>{" "}
+                  {invNear && `Llevas ${usage.invoices_month} de ${invLimit} facturas este mes. `}
+                  {conNear && `Llevas ${usage.contacts} de ${conLimit} contactos. `}
+                  Considera mejorar tu plan antes de quedarte sin margen.</>
+                )}
               </div>
             </div>
           )}
@@ -68,14 +95,14 @@ export default function Pricing() {
                   <span className="text-slate-500">Facturas este mes</span>
                   <span className="font-medium tabular">{usage.invoices_month} / {limitText(invLimit)}</span>
                 </div>
-                <Progress value={invLimit ? Math.min(100, (usage.invoices_month / invLimit) * 100) : 8} className={invReached ? "[&>div]:bg-amber-500" : ""} />
+                <Progress value={invLimit ? Math.min(100, invPct * 100) : 8} className={invReached ? "[&>div]:bg-red-500" : invNear ? "[&>div]:bg-amber-500" : ""} />
               </div>
               <div className="bg-white border border-slate-200 rounded-lg p-4">
                 <div className="flex justify-between text-sm mb-2">
                   <span className="text-slate-500">Contactos</span>
                   <span className="font-medium tabular">{usage.contacts} / {limitText(conLimit)}</span>
                 </div>
-                <Progress value={conLimit ? Math.min(100, (usage.contacts / conLimit) * 100) : 8} className={conReached ? "[&>div]:bg-amber-500" : ""} />
+                <Progress value={conLimit ? Math.min(100, conPct * 100) : 8} className={conReached ? "[&>div]:bg-red-500" : conNear ? "[&>div]:bg-amber-500" : ""} />
               </div>
             </div>
           )}
@@ -121,12 +148,17 @@ export default function Pricing() {
                   </div>
 
                   <div className="mt-6">
-                    {isCurrent ? (
+                    {isAdmin ? (
+                      <div className="text-center text-sm text-slate-500 py-2.5 border border-dashed border-slate-200 rounded-lg">Sin límites (admin)</div>
+                    ) : isCurrent ? (
                       <div className="text-center text-sm text-[#0052FF] font-medium py-2.5 bg-[#0052FF]/5 rounded-lg" data-testid={`current-badge-${p.id}`}>Plan activo</div>
+                    ) : p.id === "basico" ? (
+                      <div className="text-center text-sm text-slate-400 py-2.5 border border-dashed border-slate-200 rounded-lg" data-testid={`free-note-${p.id}`}>Plan gratuito</div>
                     ) : (
-                      <div className="text-center text-sm text-slate-500 py-2.5 border border-dashed border-slate-200 rounded-lg" data-testid={`upgrade-note-${p.id}`}>
-                        Contacta con soporte para cambiar de plan
-                      </div>
+                      <Button onClick={() => upgrade(p.id)} disabled={!!upgrading} className="w-full bg-[#0052FF] hover:bg-[#0040CC] text-white" data-testid={`upgrade-${p.id}`}>
+                        {upgrading === p.id ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <ArrowUpCircle className="w-4 h-4 mr-2" strokeWidth={1.5} />}
+                        Mejorar a {p.name}
+                      </Button>
                     )}
                   </div>
                 </div>

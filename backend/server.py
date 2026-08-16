@@ -866,6 +866,8 @@ async def download_file(path: str, user=Depends(get_current_user)):
 
 app.include_router(auth_router)
 app.include_router(admin_router)
+from payments_routes import payments as payments_router
+app.include_router(payments_router)
 app.include_router(api)
 
 

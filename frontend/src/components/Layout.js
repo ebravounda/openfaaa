@@ -1,4 +1,5 @@
 import { NavLink, useNavigate } from "react-router-dom";
+import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import api from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
@@ -43,6 +44,25 @@ export default function Layout({ children }) {
   const nav = isAdmin
     ? [...baseNav, { to: "/admin", label: "Administración", icon: Shield, testid: "nav-admin" }]
     : baseNav;
+
+  const [usageWarn, setUsageWarn] = useState(null);
+  useEffect(() => {
+    if (!user || user.role === "admin") { setUsageWarn(null); return; }
+    api.get("/plan").then(({ data }) => {
+      const pl = data.plan, u = data.usage;
+      const iPct = pl.max_invoices != null ? u.invoices_month / pl.max_invoices : 0;
+      const cPct = pl.max_contacts != null ? u.contacts / pl.max_contacts : 0;
+      if (iPct >= 0.8 || cPct >= 0.8) {
+        const over = iPct >= 1 || cPct >= 1;
+        setUsageWarn({
+          over,
+          text: over
+            ? `Has alcanzado el límite de tu plan ${pl.name}.`
+            : `Estás al ${Math.round(Math.max(iPct, cPct) * 100)}% del límite de tu plan ${pl.name}.`,
+        });
+      } else setUsageWarn(null);
+    }).catch(() => {});
+  }, [user]);
 
   const handleLogout = async () => {
     await logout();
@@ -137,6 +157,12 @@ export default function Layout({ children }) {
       </aside>
 
       <main className={`flex-1 ml-[248px] min-h-screen ${user?.is_impersonating ? "pt-9" : ""}`}>
+        {usageWarn && (
+          <div className={`px-6 sm:px-8 lg:px-10 py-2.5 flex items-center gap-3 text-sm border-b ${usageWarn.over ? "bg-red-50 border-red-100 text-red-800" : "bg-amber-50 border-amber-100 text-amber-800"}`} data-testid="usage-warning-banner">
+            <span>{usageWarn.text} Mejora tu plan para seguir sin límites.</span>
+            <NavLink to="/precios" className="ml-auto shrink-0 font-medium underline underline-offset-2 hover:opacity-80" data-testid="usage-warning-upgrade">Ver planes</NavLink>
+          </div>
+        )}
         <div className="px-6 sm:px-8 lg:px-10 py-8 max-w-[1360px]">{children}</div>
       </main>
     </div>
