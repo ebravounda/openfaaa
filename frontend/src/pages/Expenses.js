@@ -17,7 +17,7 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import {
-  Plus, Trash2, Receipt, Loader2, ScanLine, FileText, Sparkles, Paperclip,
+  Plus, Trash2, Receipt, Loader2, ScanLine, FileText, Sparkles, Paperclip, Pencil,
 } from "lucide-react";
 
 const IVA_OPTIONS = ["21", "10", "4", "0"];
@@ -34,6 +34,7 @@ export default function Expenses() {
   const [providers, setProviders] = useState([]);
   const [loading, setLoading] = useState(true);
   const [open, setOpen] = useState(false);
+  const [editingId, setEditingId] = useState(null);
   const [form, setForm] = useState(emptyForm());
   const [saving, setSaving] = useState(false);
   const [scanning, setScanning] = useState(false);
@@ -64,7 +65,19 @@ export default function Expenses() {
     } catch (e) {}
   };
 
-  const openManual = () => { clearPreview(); setForm(emptyForm()); setOpen(true); };
+  const openManual = () => { clearPreview(); setEditingId(null); setForm(emptyForm()); setOpen(true); };
+  const openEdit = (exp) => {
+    clearPreview();
+    setEditingId(exp.id);
+    setForm({
+      date: exp.date, vendor_name: exp.vendor_name || "", vendor_nif: exp.vendor_nif || "",
+      description: exp.description || "", category: CATEGORIES.includes(exp.category) ? exp.category : "General",
+      base_amount: String(exp.base ?? exp.base_amount ?? ""), iva_rate: String(exp.iva_rate),
+      attachment_path: exp.attachment_path || "", save_provider: false,
+    });
+    if (exp.attachment_path) loadPreview(exp.attachment_path);
+    setOpen(true);
+  };
 
   const onScanFile = async (e) => {
     const file = e.target.files?.[0];
@@ -77,6 +90,7 @@ export default function Expenses() {
       const { data } = await api.post("/expenses/scan", fd, { headers: { "Content-Type": "multipart/form-data" } });
       const ex = data.extracted || {};
       clearPreview();
+      setEditingId(null);
       setForm({
         date: ex.date || new Date().toISOString().slice(0, 10),
         vendor_name: ex.vendor_name || "",
@@ -107,17 +121,21 @@ export default function Expenses() {
     if (!form.vendor_name.trim()) return toast.error("Introduce el proveedor");
     if (!base) return toast.error("Introduce el importe base");
     setSaving(true);
+    const payload = {
+      date: form.date, vendor_name: form.vendor_name, vendor_nif: form.vendor_nif,
+      description: form.description, category: form.category,
+      base_amount: base, iva_rate: Number(form.iva_rate), attachment_path: form.attachment_path,
+    };
     try {
-      await api.post("/expenses", {
-        date: form.date, vendor_name: form.vendor_name, vendor_nif: form.vendor_nif,
-        description: form.description, category: form.category,
-        base_amount: base, iva_rate: Number(form.iva_rate), attachment_path: form.attachment_path,
-      });
-      if (form.save_provider) {
-        try { await api.post("/contacts", { name: form.vendor_name, nif: form.vendor_nif, kind: "provider" }); loadProviders(); } catch (e) {}
+      if (editingId) {
+        await api.put(`/expenses/${editingId}`, payload);
+        toast.success("Gasto actualizado");
+      } else {
+        await api.post("/expenses", payload);
+        if (form.save_provider) { try { await api.post("/contacts", { name: form.vendor_name, nif: form.vendor_nif, kind: "provider" }); loadProviders(); } catch (e) {} }
+        toast.success("Gasto registrado");
       }
-      toast.success("Gasto registrado");
-      setOpen(false); clearPreview(); setForm(emptyForm()); load();
+      setOpen(false); clearPreview(); setEditingId(null); setForm(emptyForm()); load();
     } catch (e) {
       toast.error(formatApiErrorDetail(e.response?.data?.detail));
     } finally {
@@ -184,7 +202,7 @@ export default function Expenses() {
                 <TableHead className="text-right">Base</TableHead>
                 <TableHead className="text-right">IVA</TableHead>
                 <TableHead className="text-right">Total</TableHead>
-                <TableHead></TableHead>
+                <TableHead className="text-right">Acciones</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -203,7 +221,10 @@ export default function Expenses() {
                   <TableCell className="text-right text-sm text-[#0052FF] tabular">{eur(exp.iva_amount)} <span className="text-slate-400">({exp.iva_rate}%)</span></TableCell>
                   <TableCell className="text-right text-sm font-semibold tabular">{eur(exp.total)}</TableCell>
                   <TableCell className="text-right">
-                    <Button variant="ghost" size="icon" onClick={() => remove(exp)} className="h-8 w-8 text-slate-400 hover:text-red-600" data-testid={`expense-delete-${i}`}><Trash2 className="w-4 h-4" strokeWidth={1.5} /></Button>
+                    <div className="flex items-center justify-end gap-0.5">
+                      <Button variant="ghost" size="icon" title="Editar" onClick={() => openEdit(exp)} className="h-8 w-8 text-slate-500 hover:text-[#0052FF]" data-testid={`expense-edit-${i}`}><Pencil className="w-4 h-4" strokeWidth={1.5} /></Button>
+                      <Button variant="ghost" size="icon" title="Eliminar" onClick={() => remove(exp)} className="h-8 w-8 text-slate-400 hover:text-red-600" data-testid={`expense-delete-${i}`}><Trash2 className="w-4 h-4" strokeWidth={1.5} /></Button>
+                    </div>
                   </TableCell>
                 </TableRow>
               ))}
@@ -216,8 +237,8 @@ export default function Expenses() {
         <DialogContent className={hasPreview ? "max-w-3xl max-h-[92vh] overflow-y-auto" : "max-w-lg"} data-testid="expense-dialog">
           <DialogHeader>
             <DialogTitle className="font-display flex items-center gap-2">
-              {hasPreview && <Sparkles className="w-4 h-4 text-[#0052FF]" strokeWidth={1.5} />}
-              {hasPreview ? "Revisar gasto escaneado" : "Nuevo gasto"}
+              {hasPreview && !editingId && <Sparkles className="w-4 h-4 text-[#0052FF]" strokeWidth={1.5} />}
+              {editingId ? "Editar gasto" : hasPreview ? "Revisar gasto escaneado" : "Nuevo gasto"}
             </DialogTitle>
           </DialogHeader>
 
@@ -246,7 +267,7 @@ export default function Expenses() {
                 </div>
               </div>
 
-              {providers.length > 0 && (
+              {providers.length > 0 && !editingId && (
                 <div className="space-y-2">
                   <Label>Proveedor guardado</Label>
                   <Select onValueChange={pickProvider}>
@@ -271,10 +292,12 @@ export default function Expenses() {
                   </Select>
                 </div>
               </div>
-              <div className="flex items-center gap-2">
-                <Checkbox id="save_provider" checked={form.save_provider} onCheckedChange={(v) => setForm({ ...form, save_provider: !!v })} data-testid="save-provider-checkbox" />
-                <label htmlFor="save_provider" className="text-sm text-slate-600 cursor-pointer">Guardar como proveedor</label>
-              </div>
+              {!editingId && (
+                <div className="flex items-center gap-2">
+                  <Checkbox id="save_provider" checked={form.save_provider} onCheckedChange={(v) => setForm({ ...form, save_provider: !!v })} data-testid="save-provider-checkbox" />
+                  <label htmlFor="save_provider" className="text-sm text-slate-600 cursor-pointer">Guardar como proveedor</label>
+                </div>
+              )}
               <div className="bg-slate-50 border border-slate-200 rounded-lg p-3 flex justify-between text-sm">
                 <span className="text-slate-500">IVA soportado: <strong className="text-[#0052FF] tabular">{eur(ivaAmount)}</strong></span>
                 <span className="font-display font-semibold text-slate-900 tabular">Total {eur(base + ivaAmount)}</span>
@@ -285,7 +308,7 @@ export default function Expenses() {
           <DialogFooter>
             <Button variant="outline" onClick={() => { setOpen(false); clearPreview(); }} className="border-slate-200">Cancelar</Button>
             <Button onClick={save} disabled={saving} className="bg-[#0052FF] hover:bg-[#0040CC] text-white" data-testid="save-expense">
-              {saving && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}Guardar gasto
+              {saving && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}{editingId ? "Guardar cambios" : "Guardar gasto"}
             </Button>
           </DialogFooter>
         </DialogContent>

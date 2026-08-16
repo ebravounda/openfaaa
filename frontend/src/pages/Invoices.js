@@ -19,7 +19,7 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import {
-  Plus, Trash2, FileText, Mail, Download, CheckCircle2, Loader2,
+  Plus, Trash2, FileText, Mail, Download, CheckCircle2, Loader2, Pencil,
 } from "lucide-react";
 
 const IVA_OPTIONS = [
@@ -41,14 +41,17 @@ const emptyForm = () => ({
   iva_rate: "21",
   irpf_rate: "0",
   notes: "",
+  series: "",
   save_client: false,
 });
 
 export default function Invoices() {
   const [invoices, setInvoices] = useState([]);
   const [clients, setClients] = useState([]);
+  const [prefix, setPrefix] = useState("");
   const [loading, setLoading] = useState(true);
   const [open, setOpen] = useState(false);
+  const [editingId, setEditingId] = useState(null);
   const [form, setForm] = useState(emptyForm());
   const [saving, setSaving] = useState(false);
   const [sendingId, setSendingId] = useState(null);
@@ -58,7 +61,10 @@ export default function Invoices() {
     api.get("/invoices").then((r) => setInvoices(r.data)).finally(() => setLoading(false));
   };
   const loadClients = () => api.get("/contacts?kind=client").then((r) => setClients(r.data));
-  useEffect(() => { load(); loadClients(); }, []);
+  useEffect(() => {
+    load(); loadClients();
+    api.get("/company").then((r) => setPrefix(r.data?.invoice_prefix || ""));
+  }, []);
 
   const base = form.line_items.reduce((s, i) => s + (Number(i.quantity) || 0) * (Number(i.unit_price) || 0), 0);
   const ivaAmount = (base * Number(form.iva_rate)) / 100;
@@ -78,25 +84,47 @@ export default function Invoices() {
     if (c) setForm((f) => ({ ...f, client: { name: c.name, nif: c.nif, address: c.address, email: c.email } }));
   };
 
+  const openNew = () => { setEditingId(null); setForm({ ...emptyForm(), series: prefix }); setOpen(true); };
+  const openEdit = (inv) => {
+    setEditingId(inv.id);
+    setForm({
+      issue_date: inv.issue_date,
+      client: { name: inv.client?.name || "", nif: inv.client?.nif || "", address: inv.client?.address || "", email: inv.client?.email || "" },
+      line_items: inv.line_items?.length ? inv.line_items.map((i) => ({ ...i })) : [{ description: "", quantity: 1, unit_price: 0 }],
+      iva_rate: String(inv.iva_rate),
+      irpf_rate: String(inv.irpf_rate || 0),
+      notes: inv.notes || "",
+      series: inv.series || "",
+      save_client: false,
+    });
+    setOpen(true);
+  };
+
   const save = async () => {
     if (!form.client.name.trim()) return toast.error("Introduce el nombre del cliente");
     if (form.line_items.some((i) => !i.description.trim())) return toast.error("Todas las líneas necesitan descripción");
     setSaving(true);
+    const payload = {
+      issue_date: form.issue_date,
+      client: form.client,
+      line_items: form.line_items.map((i) => ({ description: i.description, quantity: Number(i.quantity), unit_price: Number(i.unit_price) })),
+      iva_rate: Number(form.iva_rate),
+      irpf_rate: Number(form.irpf_rate),
+      notes: form.notes,
+      series: form.series,
+    };
     try {
-      await api.post("/invoices", {
-        issue_date: form.issue_date,
-        client: form.client,
-        line_items: form.line_items.map((i) => ({ description: i.description, quantity: Number(i.quantity), unit_price: Number(i.unit_price) })),
-        iva_rate: Number(form.iva_rate),
-        irpf_rate: Number(form.irpf_rate),
-        notes: form.notes,
-      });
-      if (form.save_client) {
-        try { await api.post("/contacts", { ...form.client, kind: "client" }); loadClients(); } catch (e) {}
+      if (editingId) {
+        await api.put(`/invoices/${editingId}`, payload);
+        toast.success("Factura actualizada");
+      } else {
+        await api.post("/invoices", payload);
+        if (form.save_client) { try { await api.post("/contacts", { ...form.client, kind: "client" }); loadClients(); } catch (e) {} }
+        toast.success("Factura emitida");
       }
-      toast.success("Factura emitida");
       setOpen(false);
       setForm(emptyForm());
+      setEditingId(null);
       load();
     } catch (e) {
       toast.error(formatApiErrorDetail(e.response?.data?.detail));
@@ -133,6 +161,8 @@ export default function Invoices() {
     load();
   };
 
+  const nextPreview = `${form.series ? form.series + "-" : ""}${form.issue_date.slice(0, 4)}-XXXX`;
+
   return (
     <Layout>
       <div className="flex items-center justify-between mb-6 gap-4 flex-wrap">
@@ -140,7 +170,7 @@ export default function Invoices() {
           <h1 className="font-display text-[28px] font-semibold tracking-tight text-slate-900">Facturas</h1>
           <p className="text-sm text-slate-500 mt-0.5">Emite y gestiona tus facturas de venta</p>
         </div>
-        <Button onClick={() => { setForm(emptyForm()); setOpen(true); }} className="bg-[#0052FF] hover:bg-[#0040CC] text-white" data-testid="new-invoice-button">
+        <Button onClick={openNew} className="bg-[#0052FF] hover:bg-[#0040CC] text-white" data-testid="new-invoice-button">
           <Plus className="w-4 h-4 mr-2" strokeWidth={1.5} /> Nueva factura
         </Button>
       </div>
@@ -183,6 +213,7 @@ export default function Invoices() {
                   </TableCell>
                   <TableCell className="text-right">
                     <div className="flex items-center justify-end gap-0.5">
+                      <Button variant="ghost" size="icon" title="Editar" onClick={() => openEdit(inv)} data-testid={`invoice-edit-${inv.number}`} className="h-8 w-8 text-slate-500 hover:text-[#0052FF]"><Pencil className="w-4 h-4" strokeWidth={1.5} /></Button>
                       <Button variant="ghost" size="icon" title="Ver PDF" onClick={() => openPdf(inv)} data-testid={`invoice-pdf-${inv.number}`} className="h-8 w-8 text-slate-500 hover:text-slate-900"><Download className="w-4 h-4" strokeWidth={1.5} /></Button>
                       <Button variant="ghost" size="icon" title="Enviar por email" onClick={() => sendEmail(inv)} disabled={sendingId === inv.id} data-testid={`invoice-email-${inv.number}`} className="h-8 w-8 text-slate-500 hover:text-[#0052FF]">
                         {sendingId === inv.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <Mail className="w-4 h-4" strokeWidth={1.5} />}
@@ -200,10 +231,16 @@ export default function Invoices() {
 
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto" data-testid="invoice-dialog">
-          <DialogHeader><DialogTitle className="font-display">Nueva factura</DialogTitle></DialogHeader>
+          <DialogHeader><DialogTitle className="font-display">{editingId ? "Editar factura" : "Nueva factura"}</DialogTitle></DialogHeader>
           <div className="space-y-5">
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-3 gap-4">
               <div className="space-y-2"><Label>Fecha de emisión</Label><Input type="date" value={form.issue_date} onChange={(e) => setForm({ ...form, issue_date: e.target.value })} data-testid="invoice-date" /></div>
+              {!editingId && (
+                <div className="space-y-2">
+                  <Label>Serie</Label>
+                  <Input value={form.series} onChange={(e) => setForm({ ...form, series: e.target.value })} placeholder="FAC" data-testid="invoice-series" />
+                </div>
+              )}
               {clients.length > 0 && (
                 <div className="space-y-2">
                   <Label>Cliente guardado</Label>
@@ -214,6 +251,7 @@ export default function Invoices() {
                 </div>
               )}
             </div>
+            {!editingId && <p className="text-xs text-slate-400 -mt-2">Nº que se generará: <span className="font-mono text-slate-600">{nextPreview}</span></p>}
 
             <div className="border border-slate-200 rounded-lg p-4 space-y-4">
               <div className="text-[11px] font-semibold uppercase tracking-wider text-slate-500">Datos del cliente</div>
@@ -223,10 +261,12 @@ export default function Invoices() {
                 <div className="space-y-2"><Label>Email</Label><Input type="email" value={form.client.email} onChange={(e) => setForm({ ...form, client: { ...form.client, email: e.target.value } })} data-testid="client-email" /></div>
                 <div className="space-y-2"><Label>Dirección</Label><Input value={form.client.address} onChange={(e) => setForm({ ...form, client: { ...form.client, address: e.target.value } })} data-testid="client-address" /></div>
               </div>
-              <div className="flex items-center gap-2">
-                <Checkbox id="save_client" checked={form.save_client} onCheckedChange={(v) => setForm({ ...form, save_client: !!v })} data-testid="save-client-checkbox" />
-                <label htmlFor="save_client" className="text-sm text-slate-600 cursor-pointer">Guardar como cliente para reutilizar</label>
-              </div>
+              {!editingId && (
+                <div className="flex items-center gap-2">
+                  <Checkbox id="save_client" checked={form.save_client} onCheckedChange={(v) => setForm({ ...form, save_client: !!v })} data-testid="save-client-checkbox" />
+                  <label htmlFor="save_client" className="text-sm text-slate-600 cursor-pointer">Guardar como cliente para reutilizar</label>
+                </div>
+              )}
             </div>
 
             <div className="space-y-3">
@@ -273,7 +313,7 @@ export default function Invoices() {
           <DialogFooter>
             <Button variant="outline" onClick={() => setOpen(false)} className="border-slate-200">Cancelar</Button>
             <Button onClick={save} disabled={saving} className="bg-[#0052FF] hover:bg-[#0040CC] text-white" data-testid="save-invoice">
-              {saving && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}Emitir factura
+              {saving && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}{editingId ? "Guardar cambios" : "Emitir factura"}
             </Button>
           </DialogFooter>
         </DialogContent>

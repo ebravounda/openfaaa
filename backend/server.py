@@ -6,6 +6,7 @@ load_dotenv(Path(__file__).parent / ".env")
 import logging
 import uuid
 import base64
+import re
 from datetime import datetime, timezone, date
 from typing import List, Optional
 
@@ -21,6 +22,7 @@ from email_service import send_email, build_invoice_email_html
 import storage_service
 from storage_service import put_object, get_object, MIME_TYPES, APP_NAME
 from ocr_service import extract_expense
+from export_service import build_libros_xlsx, build_libros_csv
 
 logging.basicConfig(level=logging.INFO,
                     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
@@ -52,6 +54,7 @@ class InvoiceInput(BaseModel):
     irpf_rate: float = 0
     status: str = "pending"
     notes: str = ""
+    series: str = ""
 
 
 class ExpenseInput(BaseModel):
@@ -72,6 +75,7 @@ class CompanyInput(BaseModel):
     email: str = ""
     phone: str = ""
     tax_type: str = "autonomo"
+    invoice_prefix: str = ""
 
 
 class StatusInput(BaseModel):
@@ -154,9 +158,14 @@ async def list_invoices(user=Depends(get_current_user)):
 @api.post("/invoices")
 async def create_invoice(data: InvoiceInput, user=Depends(get_current_user)):
     year = data.issue_date[:4]
-    count = await db.invoices.count_documents({"user_id": user["id"], "number": {"$regex": f"^{year}-"}})
-    number = f"{year}-{count + 1:04d}"
+    company = await db.companies.find_one({"user_id": user["id"]}, {"_id": 0}) or {}
+    series = (data.series or company.get("invoice_prefix", "") or "").strip()
+    prefix = f"{series}-" if series else ""
+    pat = f"^{re.escape(prefix)}{year}-"
+    seq = await db.invoices.count_documents({"user_id": user["id"], "number": {"$regex": pat}}) + 1
+    number = f"{prefix}{year}-{seq:04d}"
     doc = data.model_dump()
+    doc["series"] = series
     doc.update({
         "id": str(uuid.uuid4()),
         "user_id": user["id"],
@@ -174,6 +183,24 @@ async def get_invoice(invoice_id: str, user=Depends(get_current_user)):
     doc = await db.invoices.find_one({"id": invoice_id, "user_id": user["id"]}, {"_id": 0})
     if not doc:
         raise HTTPException(status_code=404, detail="Factura no encontrada")
+    return doc
+
+
+@api.put("/invoices/{invoice_id}")
+async def update_invoice(invoice_id: str, data: InvoiceInput, user=Depends(get_current_user)):
+    existing = await db.invoices.find_one({"id": invoice_id, "user_id": user["id"]}, {"_id": 0})
+    if not existing:
+        raise HTTPException(status_code=404, detail="Factura no encontrada")
+    doc = data.model_dump()
+    doc.pop("series", None)
+    doc.update({
+        "id": invoice_id, "user_id": user["id"],
+        "number": existing["number"], "series": existing.get("series", ""),
+        "created_at": existing.get("created_at"),
+        "updated_at": datetime.now(timezone.utc).isoformat(),
+    })
+    compute_invoice(doc)
+    await db.invoices.update_one({"id": invoice_id, "user_id": user["id"]}, {"$set": doc})
     return doc
 
 
@@ -243,12 +270,48 @@ async def create_expense(data: ExpenseInput, user=Depends(get_current_user)):
     return doc
 
 
+@api.put("/expenses/{expense_id}")
+async def update_expense(expense_id: str, data: ExpenseInput, user=Depends(get_current_user)):
+    existing = await db.expenses.find_one({"id": expense_id, "user_id": user["id"]}, {"_id": 0})
+    if not existing:
+        raise HTTPException(status_code=404, detail="Gasto no encontrado")
+    doc = data.model_dump()
+    doc.update({
+        "id": expense_id, "user_id": user["id"],
+        "created_at": existing.get("created_at"),
+        "updated_at": datetime.now(timezone.utc).isoformat(),
+    })
+    compute_expense(doc)
+    await db.expenses.update_one({"id": expense_id, "user_id": user["id"]}, {"$set": doc})
+    return doc
+
+
 @api.delete("/expenses/{expense_id}")
 async def delete_expense(expense_id: str, user=Depends(get_current_user)):
     res = await db.expenses.delete_one({"id": expense_id, "user_id": user["id"]})
     if res.deleted_count == 0:
         raise HTTPException(status_code=404, detail="Gasto no encontrado")
     return {"status": "ok"}
+
+
+# ---------- Export (libros fiscales) ----------
+@api.get("/export/libros")
+async def export_libros(year: int, format: str = "xlsx", user=Depends(get_current_user)):
+    ys = str(year)
+    invoices = await db.invoices.find(
+        {"user_id": user["id"], "issue_date": {"$regex": f"^{ys}"}}, {"_id": 0}).sort("issue_date", 1).to_list(10000)
+    expenses = await db.expenses.find(
+        {"user_id": user["id"], "date": {"$regex": f"^{ys}"}}, {"_id": 0}).sort("date", 1).to_list(10000)
+    company = await db.companies.find_one({"user_id": user["id"]}, {"_id": 0}) or {}
+    if format == "csv":
+        content = build_libros_csv(invoices, expenses, year)
+        return Response(content=content, media_type="text/csv; charset=utf-8",
+                        headers={"Content-Disposition": f'attachment; filename="libros-fiscales-{year}.csv"'})
+    data = build_libros_xlsx(company, invoices, expenses, year)
+    return Response(
+        content=data,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": f'attachment; filename="libros-fiscales-{year}.xlsx"'})
 
 
 # ---------- Dashboard ----------

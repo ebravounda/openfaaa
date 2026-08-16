@@ -1,16 +1,17 @@
 import { useEffect, useState } from "react";
 import { useAuth } from "@/context/AuthContext";
-import api, { eur } from "@/lib/api";
+import api, { API, eur } from "@/lib/api";
 import Layout from "@/components/Layout";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
-import { Info } from "lucide-react";
+import { Info, FileSpreadsheet, FileText } from "lucide-react";
 
 const fmtDate = (d) => new Date(d).toLocaleDateString("es-ES", { day: "numeric", month: "long", year: "numeric" });
 
@@ -25,6 +26,7 @@ export default function Taxes() {
 
   const isAutonomo = (data?.tax_type || user?.tax_type) === "autonomo";
   const nextQ = data?.next_deadline?.quarter;
+  const exportLibros = (format) => window.open(`${API}/export/libros?year=${year}&format=${format}`, "_blank");
 
   return (
     <Layout>
@@ -33,10 +35,18 @@ export default function Taxes() {
           <h1 className="font-display text-[28px] font-semibold tracking-tight text-slate-900">Impuestos</h1>
           <p className="text-sm text-slate-500 mt-0.5">Liquidaciones trimestrales según el calendario de Hacienda</p>
         </div>
-        <Select value={String(year)} onValueChange={(v) => setYear(Number(v))}>
-          <SelectTrigger className="w-[130px] bg-white" data-testid="tax-year-select"><SelectValue /></SelectTrigger>
-          <SelectContent>{years.map((y) => <SelectItem key={y} value={String(y)}>Ejercicio {y}</SelectItem>)}</SelectContent>
-        </Select>
+        <div className="flex items-center gap-2">
+          <Button variant="outline" onClick={() => exportLibros("xlsx")} className="border-slate-200 text-slate-700" data-testid="export-xlsx">
+            <FileSpreadsheet className="w-4 h-4 mr-2 text-emerald-600" strokeWidth={1.5} /> Excel
+          </Button>
+          <Button variant="outline" onClick={() => exportLibros("csv")} className="border-slate-200 text-slate-700" data-testid="export-csv">
+            <FileText className="w-4 h-4 mr-2 text-slate-500" strokeWidth={1.5} /> CSV
+          </Button>
+          <Select value={String(year)} onValueChange={(v) => setYear(Number(v))}>
+            <SelectTrigger className="w-[130px] bg-white" data-testid="tax-year-select"><SelectValue /></SelectTrigger>
+            <SelectContent>{years.map((y) => <SelectItem key={y} value={String(y)}>Ejercicio {y}</SelectItem>)}</SelectContent>
+          </Select>
+        </div>
       </div>
 
       {!data ? (

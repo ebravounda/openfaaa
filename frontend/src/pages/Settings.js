@@ -12,7 +12,7 @@ import {
 import { Loader2, Building2 } from "lucide-react";
 
 export default function Settings() {
-  const [form, setForm] = useState({ name: "", nif: "", address: "", email: "", phone: "", tax_type: "autonomo" });
+  const [form, setForm] = useState({ name: "", nif: "", address: "", email: "", phone: "", tax_type: "autonomo", invoice_prefix: "" });
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
 
@@ -65,15 +65,24 @@ export default function Settings() {
               <div className="space-y-2"><Label>Email</Label><Input type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} data-testid="company-email" /></div>
               <div className="space-y-2"><Label>Teléfono</Label><Input value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} data-testid="company-phone" /></div>
             </div>
-            <div className="space-y-2">
-              <Label>Tipo de actividad</Label>
-              <Select value={form.tax_type} onValueChange={(v) => setForm({ ...form, tax_type: v })}>
-                <SelectTrigger data-testid="company-tax-type"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="autonomo">Autónomo</SelectItem>
-                  <SelectItem value="empresa">Empresa / Sociedad</SelectItem>
-                </SelectContent>
-              </Select>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label>Tipo de actividad</Label>
+                <Select value={form.tax_type} onValueChange={(v) => setForm({ ...form, tax_type: v })}>
+                  <SelectTrigger data-testid="company-tax-type"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="autonomo">Autónomo</SelectItem>
+                    <SelectItem value="empresa">Empresa / Sociedad</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label>Serie de facturación</Label>
+                <Input value={form.invoice_prefix} onChange={(e) => setForm({ ...form, invoice_prefix: e.target.value })} placeholder="FAC" data-testid="company-invoice-prefix" />
+                <p className="text-xs text-slate-400">
+                  Ejemplo: <span className="font-mono text-slate-600">{`${form.invoice_prefix ? form.invoice_prefix + "-" : ""}${new Date().getFullYear()}-0001`}</span>
+                </p>
+              </div>
             </div>
             <Button onClick={save} disabled={saving} className="bg-[#0052FF] hover:bg-[#0040CC] text-white" data-testid="save-company">
               {saving && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}Guardar datos

@@ -1,0 +1,33 @@
+{
+  "summary": "Iteration 3 frontend validated end-to-end on top of main agent's curl-verified backend. Confirmed: (1) Settings company-invoice-prefix saved as 'FAC' and preview 'FAC-2026-0001' displays; value persists after reload. (2) Facturas 'Nueva factura' preloads series 'FAC' (from company prefix), preview 'FAC-2026-XXXX' shown, and creating an invoice results in row data-testid invoice-row-FAC-2026-0002 (sequence per prefix+year). Summary total live-computed 605,00 € (500 base + 21% IVA). (3) invoice-edit-FAC-2026-0002 opens dialog titled 'Editar factura' with fields preloaded; invoice-series input is NOT rendered in edit mode (count=0); changing price to 800 recalculates total to 968,00 € live; saving keeps same number (row still present) — PUT flow OK. (4) Expenses: created a manual gasto then expense-edit-0 opens 'Editar gasto' with base preloaded 100; changed to 250 and saved (PUT). (5) Impuestos: export-xlsx and export-csv buttons visible; xlsx button opens popup targeted at /api/export/libros?format=xlsx (window.open, uses same-site cookies). Backend export endpoints already verified by main agent (xlsx 7355 bytes PK header, CSV with BOM). Regression: invoice-pdf-{n} and invoice-email-{n} buttons still wired (untested this round; iter 2 covered).",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "All modals (invoice/expense dialogs)", "issues": ["Radix DialogContent missing aria-describedby / Description — a11y warning in console (non-blocking)"]}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/backend_test.py",
+    "/app/backend/tests/test_new_features.py",
+    "/app/test_reports/pytest/new_features.xml",
+    "/app/test_reports/pytest/regression.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "Invoices.js: on openNew the series defaults to the fetched company prefix — good. Consider disabling the series field visually to indicate the format, but not blocking.",
+    "Expenses.js: base_amount fallback uses (exp.base ?? exp.base_amount ?? '') — correct given backend returns 'base'.",
+    "Taxes.js: exportLibros uses window.open with cookies (same-site); works as expected. If any user has strict tracking prevention, popup may be blocked — acceptable for MVP.",
+    "server.py is approaching ~500+ lines with new PUT/export endpoints; consider extracting export routes to routers/export.py in a future refactor.",
+    "InvoiceInput.series is optional; recomputing base/IVA/IRPF/total on PUT correctly preserves number and series (verified via UI same-row check)."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "100% (main-agent curl + prior 19/19 pytest)", "frontend": "100% (all iteration-3 flows)"},
+  "test_credentials": "admin@fiscalhub.es / admin123",
+  "seed_data_creation": "Created TEST_ITER3_Client invoice FAC-2026-0002 (edited: total 968 €) and TEST_ITER3_Vendor expense (edited base 250 €). Small residual test data in DB — harmless.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Iteration 3 (invoice_prefix series, invoice edit, expense edit, xlsx/csv export) fully validated. Backend endpoints PUT /api/invoices/{id}, PUT /api/expenses/{id}, PUT /api/company (invoice_prefix), GET /api/export/libros?format=xlsx|csv all working. Frontend selectors used: company-invoice-prefix, invoice-series, invoice-edit-{number}, expense-edit-{index}, export-xlsx, export-csv, save-invoice, save-expense. Note: Radix Dialog a11y warning about missing aria-describedby present in all dialogs (non-blocking).",
+  "rca of the issue": "N/A - no issues found."
+}

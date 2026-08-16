@@ -43,9 +43,15 @@ Sistema de facturación para España: crear facturas introduciendo datos (CIF/NI
 - ✅ Modelo 130 (IRPF pagos fraccionados) junto al 303, solo autónomos.
 - ✅ Testing iteración 2: 19/19 backend + frontend 100%.
 
+## Implemented — Iteración 3 (2026-06)
+- ✅ Serie de numeración configurable por usuario (invoice_prefix en Configuración): número = {PREFIJO}-{AÑO}-{NNNN}, secuencia independiente por prefijo+año. Campo Serie y previsualización en el diálogo de factura.
+- ✅ Editar facturas y gastos existentes (PUT /api/invoices/{id}, PUT /api/expenses/{id}): recalcula importes, la factura mantiene su número/serie.
+- ✅ Exportar libros fiscales: GET /api/export/libros?year=&format=xlsx|csv. Excel con 3 hojas (IVA Repercutido, IVA Soportado, Resumen) y CSV. Botones en Impuestos.
+- ✅ Testing iteración 3: backend + frontend 100%.
+
 ## Backlog (prioritized)
 - P1: Adjuntar PDF binario al email (bloqueado: la integración gestionada de Resend no soporta adjuntos actualmente).
-- P2: Series/numeración de factura configurable; facturas rectificativas.
+- P2: Facturas rectificativas; múltiples series simultáneas gestionadas.
 - P2: Escaneo también de facturas de venta.
-- P2: Exportar libros de IVA e IRPF a CSV/Excel; resumen anual (Modelo 390/100).
-- P2: Editar facturas/gastos existentes; multi-línea con IVA por línea.
+- P2: Resumen anual (Modelo 390/100); exportar en formato de la AEAT.
+- P3: Añadir DialogDescription (aria-describedby) para eliminar warning de accesibilidad en modales.
