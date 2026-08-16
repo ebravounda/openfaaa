@@ -13,6 +13,7 @@ import Taxes from "@/pages/Taxes";
 import Connection from "@/pages/Connection";
 import Settings from "@/pages/Settings";
 import Admin from "@/pages/Admin";
+import Pricing from "@/pages/Pricing";
 
 function App() {
   return (
@@ -29,6 +30,7 @@ function App() {
           <Route path="/impuestos" element={<ProtectedRoute><Taxes /></ProtectedRoute>} />
           <Route path="/conexion" element={<ProtectedRoute><Connection /></ProtectedRoute>} />
           <Route path="/configuracion" element={<ProtectedRoute><Settings /></ProtectedRoute>} />
+          <Route path="/precios" element={<ProtectedRoute><Pricing /></ProtectedRoute>} />
           <Route path="/admin" element={<ProtectedRoute><Admin /></ProtectedRoute>} />
         </Routes>
       </BrowserRouter>

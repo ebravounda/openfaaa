@@ -77,6 +77,12 @@ Sistema de facturación para España: crear facturas introduciendo datos (CIF/NI
 - ✅ Personalización por usuario: elegir plantilla, color de acento (con override) y pie de factura. Company: template_id, accent_color, invoice_footer. El PDF aplica el color al encabezado/total y añade el pie.
 - ✅ Panel Conexión muestra el modo real (Simulado/Preproducción).
 
+## Implemented — Iteración 10 (2026-06) CIF en Gastos + Planes editables + Página de Precios
+- ✅ Búsqueda CIF/NIF al registrar Gastos: botón junto al NIF del proveedor (Expenses.js lookupVendorNif) reutiliza GET /api/lookup/nif; autocompleta proveedor desde contactos guardados + validación VIES.
+- ✅ Planes editables por el admin: db.global_settings _id="plans" guarda overrides que se fusionan sobre DEFAULT_PLANS (plans.py load_plans/_merge_one). Endpoints GET/PUT /api/admin/plans. Editor en Admin.js (nombre, precio, facturas/mes, contactos, toggles email/ocr/verifactu). plan_for_user ahora es async y lee de BD; gating actualizado en server.py.
+- ✅ Página de Precios /precios (Pricing.js, nav "Planes"): 3 tarjetas con features ✓/✗, resalta el plan actual, panel de uso con barras y aviso ámbar al alcanzar el límite. GET /api/plans (público autenticado) + GET /api/plan (plan + uso).
+- ✅ Testing iteración 9/10: 12/12 nuevos + 82/82 regresión backend, frontend 100%, sin bugs.
+
 ## Implemented — Iteración 9 (2026-06) Plantilla GoRoky + Super Admin + Planes
 - ✅ Plantilla "goroky": PDF de 2 páginas (factura + Aviso Legal) idéntico al ejemplo del cliente, con logo GoRoky embebido (/app/backend/assets/goroky_logo.png), cabecera+pie en cada página, tabla Concepto/Detalle/Precio y bloque de importes. pdf_service.build_goroky_invoice_pdf. templates.py: GOROKY_DEFAULT_LEGAL/FOOTER.
 - ✅ Campos nuevos de factura (opcionales, usados por GoRoky): due_date (Vencimiento), period (Periodo), payment_method (Método), iban, concept_label (Concepto). Formulario en Invoices.js (sección "Datos de pago y periodo").

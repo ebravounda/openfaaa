@@ -1,0 +1,25 @@
+{
+  "summary": "Iteration 9 fully verified. Backend: created /app/backend/tests/test_iter9_plans.py with 12 tests covering public /plans + /plan (auth required, correct usage payload), admin plans editor (GET/PUT authz, persistence, propagation to /plans + /plan), plan overrides affecting gating (custom max_invoices=2 enforced on 3rd POST /api/invoices with 403 mentioning 'límite'; enabling basico.features.ocr lets basico user pass POST /api/expenses/scan without 403), and Expense NIF lookup (reuses GET /api/lookup/nif returning saved provider name; empty NIF -> 400). All 12/12 iter9 tests pass and full regression 82/82 tests pass. Plans restored to defaults after every mutation (module fixture teardown + explicit test). Frontend: /precios (nav-pricing) shows pricing-card-basico/medio/platino for a fresh basico user with current-badge-basico and usage-panel visible. Expenses manual dialog: entering NIF 'B87654321' + clicking expense-lookup-nif autocompleted expense-vendor with the saved provider name ('TEST Iter9 UI Provider'). /admin shows Planes de suscripción section (plans-editor) with all plan-name/price/invoices/contacts inputs and plan-feat-email/ocr/verifactu switches for every plan; save-plans shows 'Planes actualizados' toast and persists across reload. Admin login, GoRoky PDF, impersonation, block/unblock unaffected (covered by iter8 regression which still passes 18/18).",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": [
+    "/app/backend/tests/test_iter9_plans.py",
+    "/app/test_reports/pytest/iter9.xml",
+    "/app/test_reports/pytest/iter9_all.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "plans.py _merge_one has a slightly awkward condition `if k in override and override[k] is not None or (k in ('max_invoices','max_contacts') and k in override)` (operator precedence) — currently works but should be parenthesised for readability and to make the explicit None-preserving semantics for max_invoices/max_contacts unmistakable.",
+    "GET /api/plans requires auth — that is fine for the current UX (Pricing page is only linked inside the app), but consider exposing it publicly if a marketing/landing page ever needs the plan matrix.",
+    "admin_routes.PUT /api/admin/plans silently accepts unknown plan ids (only PLAN_ORDER are persisted). Consider returning 400 with an explicit error when caller sends an unsupported plan id.",
+    "server.py continues to grow (>970 lines). Splitting invoices/verifactu/expenses routers would improve maintainability (carry-over from iter8)."
+  ],
+  "updated_files": ["/app/backend/tests/test_iter9_plans.py"],
+  "success_rate": {"backend": "100% (12/12 iter9, 82/82 regression)", "frontend": "100%"},
+  "test_credentials": "admin@fiscalhub.es / admin123 (super admin); regular users self-registered via /api/auth/register with @example.com (backend rejects .local/.test TLDs).",
+  "seed_data_creation": "Ephemeral basico user iter9_*@example.com + iter9ui_*@example.com registered. Provider contact 'TEST Iter9 UI Provider' (NIF B87654321) created and reused for lookup. Plan overrides applied during tests were always reverted to defaults (basico 0/10/10 no features, medio 9.99/100/100 email+ocr, platino 24.99/unlimited all) — verified via curl at end.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Iter9 tests use scope='module' fixtures; teardown of admin_client fixture PUTs defaults back to /api/admin/plans so subsequent test files see clean state. When adding new plan-gating tests, always PUT DEFAULTS at teardown. UI selectors validated: nav-pricing, pricing-card-{basico|medio|platino}, current-badge-{id}, usage-panel, limit-warning, plans-editor, plan-name/price/invoices/contacts-{id}, plan-feat-{email|ocr|verifactu}-{id}, save-plans, expense-vendor-nif, expense-lookup-nif, expense-vendor. Contacts page: use tab-providers before new-contact-button to open the provider dialog.",
+  "rca of the issue": "N/A — no bugs found."
+}

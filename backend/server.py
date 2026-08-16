@@ -21,7 +21,7 @@ from database import db, client
 from bson import ObjectId
 from auth import router as auth_router, get_current_user, seed_admin
 from admin_routes import admin as admin_router
-from plans import plan_for_user
+from plans import plan_for_user, plans_list
 from templates import TEMPLATE_MAP
 from pdf_service import build_invoice_pdf
 from email_service import send_email, build_invoice_email_html
@@ -183,11 +183,16 @@ async def _merge_global_goroky(company: dict) -> dict:
 
 @api.get("/plan")
 async def my_plan(user=Depends(get_current_user)):
-    plan = plan_for_user(user)
+    plan = await plan_for_user(user)
     mp = _month_prefix()
     inv_month = await db.invoices.count_documents({"user_id": user["id"], "issue_date": {"$regex": f"^{mp}"}})
     contacts = await db.contacts.count_documents({"user_id": user["id"]})
     return {"plan": plan, "usage": {"invoices_month": inv_month, "contacts": contacts}}
+
+
+@api.get("/plans")
+async def list_public_plans(user=Depends(get_current_user)):
+    return await plans_list()
 
 
 @api.get("/global-templates/goroky")
@@ -230,7 +235,7 @@ async def list_invoices(user=Depends(get_current_user)):
 
 @api.post("/invoices")
 async def create_invoice(data: InvoiceInput, user=Depends(get_current_user)):
-    plan = plan_for_user(user)
+    plan = await plan_for_user(user)
     if plan["max_invoices"] is not None:
         cnt = await db.invoices.count_documents(
             {"user_id": user["id"], "issue_date": {"$regex": f"^{_month_prefix()}"}})
@@ -341,7 +346,7 @@ async def invoice_pdf(invoice_id: str, user=Depends(get_current_user)):
 
 @api.post("/invoices/{invoice_id}/verifactu/submit")
 async def verifactu_submit(invoice_id: str, user=Depends(get_current_user)):
-    plan = plan_for_user(user)
+    plan = await plan_for_user(user)
     if not plan["features"].get("verifactu"):
         raise _plan_denied(plan, "verifactu")
     inv = await db.invoices.find_one({"id": invoice_id, "user_id": user["id"]}, {"_id": 0})
@@ -527,7 +532,7 @@ async def lookup_nif(nif: str, user=Depends(get_current_user)):
 
 @api.post("/invoices/{invoice_id}/send-email")
 async def send_invoice_email(invoice_id: str, user=Depends(get_current_user)):
-    plan = plan_for_user(user)
+    plan = await plan_for_user(user)
     if not plan["features"].get("email"):
         raise _plan_denied(plan, "email")
     inv = await db.invoices.find_one({"id": invoice_id, "user_id": user["id"]}, {"_id": 0})
@@ -775,7 +780,7 @@ async def list_contacts(kind: Optional[str] = None, user=Depends(get_current_use
 
 @api.post("/contacts")
 async def create_contact(data: ContactInput, user=Depends(get_current_user)):
-    plan = plan_for_user(user)
+    plan = await plan_for_user(user)
     if plan["max_contacts"] is not None:
         cnt = await db.contacts.count_documents({"user_id": user["id"]})
         if cnt >= plan["max_contacts"]:
@@ -800,7 +805,7 @@ async def delete_contact(contact_id: str, user=Depends(get_current_user)):
 # ---------- Expense document scan (OCR) ----------
 @api.post("/expenses/scan")
 async def scan_expense(file: UploadFile = File(...), user=Depends(get_current_user)):
-    plan = plan_for_user(user)
+    plan = await plan_for_user(user)
     if not plan["features"].get("ocr"):
         raise _plan_denied(plan, "ocr")
     data = await file.read()

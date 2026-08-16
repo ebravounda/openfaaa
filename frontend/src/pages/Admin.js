@@ -9,6 +9,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
+import { Switch } from "@/components/ui/switch";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
@@ -16,7 +17,7 @@ import {
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
-import { Users, ShieldOff, FileText, Search, UserCog, Ban, CheckCircle2, Loader2, Save } from "lucide-react";
+import { Users, ShieldOff, FileText, Search, UserCog, Ban, CheckCircle2, Loader2, Save, CreditCard } from "lucide-react";
 
 const PLAN_LABEL = { basico: "Básico", medio: "Medio", platino: "Platino" };
 const PLAN_BADGE = {
@@ -35,6 +36,8 @@ export default function Admin() {
   const [busyId, setBusyId] = useState(null);
   const [gk, setGk] = useState({ legal_notice: "", footer_message: "", defaults: {} });
   const [savingGk, setSavingGk] = useState(false);
+  const [plans, setPlans] = useState([]);
+  const [savingPlans, setSavingPlans] = useState(false);
 
   const load = (query = "") => {
     setLoading(true);
@@ -50,6 +53,7 @@ export default function Admin() {
   useEffect(() => {
     load();
     api.get("/admin/global-templates/goroky").then((r) => setGk(r.data)).catch(() => {});
+    api.get("/admin/plans").then((r) => setPlans(r.data)).catch(() => {});
   }, []);
 
   if (user && (user.role !== "admin" || user.is_impersonating)) return <Navigate to="/" replace />;
@@ -99,6 +103,33 @@ export default function Admin() {
     } catch (e) {
       toast.error(formatApiErrorDetail(e.response?.data?.detail));
     } finally { setSavingGk(false); }
+  };
+
+  const patchPlan = (idx, field, value) => {
+    setPlans((list) => list.map((p, i) => (i === idx ? { ...p, [field]: value } : p)));
+  };
+  const patchFeature = (idx, key, value) => {
+    setPlans((list) => list.map((p, i) => (i === idx ? { ...p, features: { ...p.features, [key]: value } } : p)));
+  };
+  const savePlans = async () => {
+    setSavingPlans(true);
+    try {
+      const payload = { plans: {} };
+      plans.forEach((p) => {
+        payload.plans[p.id] = {
+          name: p.name,
+          price: Number(p.price) || 0,
+          max_invoices: p.max_invoices === "" || p.max_invoices === null ? null : Number(p.max_invoices),
+          max_contacts: p.max_contacts === "" || p.max_contacts === null ? null : Number(p.max_contacts),
+          features: { email: !!p.features.email, verifactu: !!p.features.verifactu, ocr: !!p.features.ocr },
+        };
+      });
+      const { data } = await api.put("/admin/plans", payload);
+      setPlans(data);
+      toast.success("Planes actualizados");
+    } catch (e) {
+      toast.error(formatApiErrorDetail(e.response?.data?.detail));
+    } finally { setSavingPlans(false); }
   };
 
   const statCards = [
@@ -194,6 +225,50 @@ export default function Admin() {
             </TableBody>
           </Table>
         )}
+      </div>
+
+      <div className="bg-white border border-slate-200 rounded-lg shadow-sm overflow-hidden mb-8" data-testid="plans-editor">
+        <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between gap-3 flex-wrap">
+          <div className="flex items-center gap-2">
+            <CreditCard className="w-4 h-4 text-[#0052FF]" strokeWidth={1.5} />
+            <div className="font-medium text-slate-900">Planes de suscripción</div>
+          </div>
+          <Button onClick={savePlans} disabled={savingPlans} className="bg-[#0052FF] hover:bg-[#0040CC] text-white" data-testid="save-plans">
+            {savingPlans ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Save className="w-4 h-4 mr-2" strokeWidth={1.5} />}Guardar planes
+          </Button>
+        </div>
+        <div className="p-5 grid grid-cols-1 md:grid-cols-3 gap-4">
+          {plans.map((p, idx) => (
+            <div key={p.id} className="border border-slate-200 rounded-lg p-4 space-y-3" data-testid={`plan-card-${p.id}`}>
+              <div className="space-y-2">
+                <Label className="text-xs">Nombre</Label>
+                <Input value={p.name} onChange={(e) => patchPlan(idx, "name", e.target.value)} data-testid={`plan-name-${p.id}`} />
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                <div className="space-y-2">
+                  <Label className="text-xs">Precio (€/mes)</Label>
+                  <Input type="number" step="0.01" value={p.price} onChange={(e) => patchPlan(idx, "price", e.target.value)} data-testid={`plan-price-${p.id}`} />
+                </div>
+                <div className="space-y-2">
+                  <Label className="text-xs">Facturas/mes</Label>
+                  <Input type="number" placeholder="∞" value={p.max_invoices ?? ""} onChange={(e) => patchPlan(idx, "max_invoices", e.target.value)} data-testid={`plan-invoices-${p.id}`} />
+                </div>
+              </div>
+              <div className="space-y-2">
+                <Label className="text-xs">Contactos (vacío = ilimitado)</Label>
+                <Input type="number" placeholder="∞" value={p.max_contacts ?? ""} onChange={(e) => patchPlan(idx, "max_contacts", e.target.value)} data-testid={`plan-contacts-${p.id}`} />
+              </div>
+              <div className="space-y-2 pt-1">
+                {[["email", "Envío por email"], ["ocr", "Escaneo OCR"], ["verifactu", "VeriFactu AEAT"]].map(([key, lbl]) => (
+                  <div key={key} className="flex items-center justify-between">
+                    <span className="text-sm text-slate-600">{lbl}</span>
+                    <Switch checked={!!p.features?.[key]} onCheckedChange={(v) => patchFeature(idx, key, v)} data-testid={`plan-feat-${key}-${p.id}`} />
+                  </div>
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
       </div>
 
       <div className="bg-white border border-slate-200 rounded-lg shadow-sm max-w-3xl overflow-hidden" data-testid="global-templates-section">

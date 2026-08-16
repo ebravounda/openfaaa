@@ -9,7 +9,7 @@ from auth import (
     require_admin, get_current_user, create_access_token,
     create_refresh_token, _set_cookies, _public_user,
 )
-from plans import PLANS, PLAN_ORDER, get_plan
+from plans import PLANS, PLAN_ORDER, plans_list, load_plans
 from templates import GOROKY_DEFAULT_LEGAL, GOROKY_DEFAULT_FOOTER
 
 admin = APIRouter(prefix="/api/admin", tags=["admin"])
@@ -17,6 +17,18 @@ admin = APIRouter(prefix="/api/admin", tags=["admin"])
 
 class PlanInput(BaseModel):
     plan: str
+
+
+class PlanDefInput(BaseModel):
+    name: str
+    price: float = 0
+    max_invoices: int | None = None
+    max_contacts: int | None = None
+    features: dict = {}
+
+
+class PlansUpdateInput(BaseModel):
+    plans: dict  # {plan_id: PlanDefInput-like}
 
 
 class GlobalTextsInput(BaseModel):
@@ -51,7 +63,27 @@ async def _user_row(u: dict) -> dict:
 
 @admin.get("/plans")
 async def list_plans(admin_user=Depends(require_admin)):
-    return [PLANS[p] for p in PLAN_ORDER]
+    return await plans_list()
+
+
+@admin.put("/plans")
+async def update_plans(data: PlansUpdateInput, admin_user=Depends(require_admin)):
+    clean = {}
+    for pid in PLAN_ORDER:
+        if pid not in data.plans:
+            continue
+        p = data.plans[pid]
+        feats = p.get("features", {}) if isinstance(p, dict) else {}
+        clean[pid] = {
+            "name": p.get("name"),
+            "price": p.get("price", 0),
+            "max_invoices": p.get("max_invoices"),
+            "max_contacts": p.get("max_contacts"),
+            "features": {k: bool(feats.get(k)) for k in ("email", "verifactu", "ocr")},
+        }
+    await db.global_settings.update_one({"_id": "plans"}, {"$set": {"plans": clean}}, upsert=True)
+    await _audit(admin_user["id"], "edit_plans", None)
+    return await plans_list()
 
 
 @admin.get("/users")

@@ -1,4 +1,6 @@
-PLANS = {
+from database import db
+
+DEFAULT_PLANS = {
     "basico": {
         "id": "basico", "name": "Básico", "price": 0,
         "max_invoices": 10, "max_contacts": 10,
@@ -18,15 +20,47 @@ PLANS = {
 
 PLAN_ORDER = ["basico", "medio", "platino"]
 
+# Backwards-compat alias (static defaults)
+PLANS = DEFAULT_PLANS
 
-def get_plan(plan_id: str) -> dict:
-    return PLANS.get(plan_id or "basico", PLANS["basico"])
+ADMIN_PLAN = {
+    "id": "admin", "name": "Administrador", "price": 0,
+    "max_invoices": None, "max_contacts": None,
+    "features": {"email": True, "verifactu": True, "ocr": True},
+}
 
 
-def plan_for_user(user: dict) -> dict:
-    # Admin has no limits and all features
+def _merge_one(pid: str, override: dict) -> dict:
+    base = dict(DEFAULT_PLANS[pid])
+    base["features"] = dict(base["features"])
+    for k in ("name", "price"):
+        if override.get(k) is not None:
+            base[k] = override[k]
+    # max_invoices / max_contacts: None is a valid value (=ilimitado)
+    for k in ("max_invoices", "max_contacts"):
+        if k in override:
+            base[k] = override[k]
+    if isinstance(override.get("features"), dict):
+        for fk, fv in override["features"].items():
+            base["features"][fk] = bool(fv)
+    base["id"] = pid
+    return base
+
+
+async def load_plans() -> dict:
+    """Effective plans = defaults merged with admin overrides stored in db.global_settings."""
+    doc = await db.global_settings.find_one({"_id": "plans"}) or {}
+    overrides = doc.get("plans", {}) or {}
+    return {pid: _merge_one(pid, overrides.get(pid, {})) for pid in PLAN_ORDER}
+
+
+async def plans_list() -> list:
+    plans = await load_plans()
+    return [plans[pid] for pid in PLAN_ORDER]
+
+
+async def plan_for_user(user: dict) -> dict:
     if user.get("role") == "admin":
-        return {"id": "admin", "name": "Administrador", "price": 0,
-                "max_invoices": None, "max_contacts": None,
-                "features": {"email": True, "verifactu": True, "ocr": True}}
-    return get_plan(user.get("plan", "basico"))
+        return dict(ADMIN_PLAN)
+    plans = await load_plans()
+    return plans.get(user.get("plan", "basico"), plans["basico"])
