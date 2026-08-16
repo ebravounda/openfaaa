@@ -9,10 +9,11 @@ import { Skeleton } from "@/components/ui/skeleton";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
-import { Loader2, Building2 } from "lucide-react";
+import { Loader2, Building2, ShieldCheck } from "lucide-react";
+import { Switch } from "@/components/ui/switch";
 
 export default function Settings() {
-  const [form, setForm] = useState({ name: "", nif: "", address: "", email: "", phone: "", tax_type: "autonomo", invoice_prefix: "" });
+  const [form, setForm] = useState({ name: "", nif: "", address: "", email: "", phone: "", tax_type: "autonomo", invoice_prefix: "", verifactu_enabled: false });
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
 
@@ -83,6 +84,18 @@ export default function Settings() {
                   Ejemplo: <span className="font-mono text-slate-600">{`${form.invoice_prefix ? form.invoice_prefix + "-" : ""}${new Date().getFullYear()}-0001`}</span>
                 </p>
               </div>
+            </div>
+            <div className="border border-slate-200 rounded-lg p-4 flex items-start justify-between gap-4">
+              <div>
+                <div className="flex items-center gap-2 font-medium text-slate-900">
+                  <ShieldCheck className="w-4 h-4 text-[#0052FF]" strokeWidth={1.5} /> VeriFactu
+                </div>
+                <p className="text-xs text-slate-500 mt-1 max-w-md">
+                  Activa el registro VeriFactu: cada factura genera una huella SHA-256 encadenada, un código QR y la leyenda de la AEAT en el PDF.
+                  El envío a la AEAT es una simulación (la transmisión real requiere tu certificado digital).
+                </p>
+              </div>
+              <Switch checked={form.verifactu_enabled} onCheckedChange={(v) => setForm({ ...form, verifactu_enabled: v })} data-testid="verifactu-toggle" />
             </div>
             <Button onClick={save} disabled={saving} className="bg-[#0052FF] hover:bg-[#0040CC] text-white" data-testid="save-company">
               {saving && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}Guardar datos

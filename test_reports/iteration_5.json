@@ -1,0 +1,32 @@
+{
+  "summary": "Iteration 5 (VeriFactu + Resumen anual Modelo 390 + IRPF) fully validated. Backend 29/29 pytest passing (7 new VeriFactu tests + 22 regression from prior suites). Frontend UI verified via Playwright: verifactu-toggle in Settings persists after save-company; Facturas list renders amber ShieldAlert (invoice-vf-{number}) for un-submitted VeriFactu invoices and green disabled ShieldCheck for submitted; clicking amber triggers POST /api/invoices/{id}/verifactu/submit, and after reload the shield turns green + disabled; annual-summary section shows Modelo 390 rows m390-rate-21/10/4/0 and m390-resultado, plus IRPF cards for autonomo. Non-VeriFactu invoices (created when toggle disabled) show no shield. Idempotent submit confirmed (already=true, same CSV). PDF endpoint returns %PDF with content-type application/pdf.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_verifactu.py",
+    "/app/test_reports/pytest/verifactu.xml",
+    "/app/test_reports/pytest/regression_iter5.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "verifactu_service.compute_fingerprint uses hex().upper() -> SHA-256 as 64 upper-case hex chars, matching AEAT spec; chain string uses ImporteTotal/CuotaTotal formatted 2 decimals. Correct.",
+    "server.create_invoice chains huella_anterior by looking up the most recent invoice with verifactu.huella for this user (sort created_at desc). Robust across normal and rectificativa (R1 tipo).",
+    "verifactu_submit is idempotent (returns already=true when already submitted) and does not overwrite the CSV. Good.",
+    "annual_summary computes pagos_fraccionados_130 as max(0, 0.20*rendimiento - retenciones) — this is an ANNUAL estimate that does NOT subtract quarterly modelo_130 payments already made; consider clarifying label in UI or subtracting sum of modelo_130 quarterly pagos from dashboard to avoid double-count perception. Non-blocking.",
+    "PDF QR generation catches broad Exception and logs but still returns PDF (without QR); consider surfacing a warning in the response header for the caller. Non-blocking.",
+    "server.py is now ~644 lines; extract routers (invoices, expenses, taxes, contacts) into /app/backend/routers/ in a future refactor (non-blocking; flagged since iter 4).",
+    "VeriFactu submit endpoint is public POST without extra rate-limit; since it's SIMULATED that's fine for MVP; when wiring to real AEAT SOAP add per-invoice concurrency lock to avoid double CSV assignment on race."
+  ],
+  "updated_files": ["/app/backend/tests/test_verifactu.py"],
+  "success_rate": {"backend": "100% (29/29 pytest)", "frontend": "100% (VeriFactu toggle + submit flow + annual summary)"},
+  "test_credentials": "admin@fiscalhub.es / admin123 (from /app/memory/test_credentials.md)",
+  "seed_data_creation": "Backend tests created several TEST_VF_Cliente invoices (FAC-2026-0008..0015 and R-2026-0005) with VeriFactu records and one submitted (FAC-2026-0010). Harmless residuals scoped to admin account.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Iteration 5 end-to-end verified. VeriFactu toggle persists in /api/company; POST /api/invoices adds verifactu block (huella SHA-256 hex uppercase, chained huella_anterior, F1/R1, qr_url ValidarQR, status Registrado); POST /api/invoices/{id}/verifactu/submit is idempotent with CSV VF-*; GET /api/invoices/{id}/pdf returns %PDF for VeriFactu invoices; GET /api/annual-summary?year=YYYY returns modelo_390 (rates 21/10/4/0 with base+cuota, totals, resultado_anual) and irpf (ingresos, gastos, rendimiento_neto, retenciones_soportadas, pagos_fraccionados_130, cuota_estimada). UI selectors: verifactu-toggle, save-company, invoice-vf-{number}, annual-summary, m390-rate-{r}, m390-resultado. Simulated AEAT submit is by design (not a bug).",
+  "rca of the issue": "N/A - no issues found."
+}

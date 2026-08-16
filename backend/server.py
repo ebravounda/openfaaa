@@ -23,6 +23,7 @@ import storage_service
 from storage_service import put_object, get_object, MIME_TYPES, APP_NAME
 from ocr_service import extract_expense
 from export_service import build_libros_xlsx, build_libros_csv
+import verifactu_service as vf
 
 logging.basicConfig(level=logging.INFO,
                     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
@@ -80,6 +81,7 @@ class CompanyInput(BaseModel):
     tax_type: str = "autonomo"
     invoice_prefix: str = ""
     rectify_prefix: str = "R"
+    verifactu_enabled: bool = False
 
 
 class StatusInput(BaseModel):
@@ -180,6 +182,22 @@ async def create_invoice(data: InvoiceInput, user=Depends(get_current_user)):
         "created_at": datetime.now(timezone.utc).isoformat(),
     })
     compute_invoice(doc)
+    if company.get("verifactu_enabled"):
+        last = await db.invoices.find_one(
+            {"user_id": user["id"], "verifactu.huella": {"$exists": True}},
+            {"_id": 0, "verifactu": 1}, sort=[("created_at", -1)])
+        prev = last["verifactu"]["huella"] if last else ""
+        nif = company.get("nif", "")
+        fecha = vf.to_ddmmyyyy(doc["issue_date"])
+        tipo = "R1" if doc.get("invoice_type") == "rectificativa" else "F1"
+        ts = vf.now_ts()
+        huella = vf.compute_fingerprint(nif, number, fecha, tipo, doc["iva_amount"], doc["total"], prev, ts)
+        doc["verifactu"] = {
+            "enabled": True, "tipo": tipo, "huella": huella, "huella_anterior": prev,
+            "timestamp": ts, "qr_url": vf.build_qr_url(nif, number, fecha, doc["total"]),
+            "submitted": False, "status": "Registrado (pendiente de envío)",
+            "submitted_at": None, "csv": None,
+        }
     await db.invoices.insert_one(doc)
     doc.pop("_id", None)
     return doc
@@ -234,9 +252,39 @@ async def invoice_pdf(invoice_id: str, user=Depends(get_current_user)):
     if not inv:
         raise HTTPException(status_code=404, detail="Factura no encontrada")
     company = await db.companies.find_one({"user_id": user["id"]}, {"_id": 0}) or {}
-    pdf = build_invoice_pdf(inv, company)
+    qr_png = None
+    vfd = inv.get("verifactu")
+    if vfd and vfd.get("qr_url"):
+        try:
+            qr_png = vf.generate_qr_png(vfd["qr_url"])
+        except Exception as e:
+            logger.error(f"QR generation failed: {e}")
+    pdf = build_invoice_pdf(inv, company, qr_png=qr_png, verifactu=vfd)
     return Response(content=pdf, media_type="application/pdf",
                     headers={"Content-Disposition": f'inline; filename="factura-{inv["number"]}.pdf"'})
+
+
+@api.post("/invoices/{invoice_id}/verifactu/submit")
+async def verifactu_submit(invoice_id: str, user=Depends(get_current_user)):
+    import secrets
+    inv = await db.invoices.find_one({"id": invoice_id, "user_id": user["id"]}, {"_id": 0})
+    if not inv:
+        raise HTTPException(status_code=404, detail="Factura no encontrada")
+    if not inv.get("verifactu"):
+        raise HTTPException(status_code=400, detail="La factura no tiene registro VeriFactu")
+    if inv["verifactu"].get("submitted"):
+        return {"status": inv["verifactu"]["status"], "csv": inv["verifactu"].get("csv"), "already": True}
+    # NOTA: envío a la AEAT SIMULADO. La transmisión real requiere el certificado
+    # digital del contribuyente y el servicio web (SOAP) de la AEAT.
+    csv_code = "VF-" + secrets.token_hex(8).upper()
+    now = datetime.now(timezone.utc).isoformat()
+    await db.invoices.update_one(
+        {"id": invoice_id, "user_id": user["id"]},
+        {"$set": {"verifactu.submitted": True,
+                  "verifactu.status": "Aceptado por la AEAT (simulado)",
+                  "verifactu.submitted_at": now, "verifactu.csv": csv_code}})
+    return {"status": "Aceptado por la AEAT (simulado)", "csv": csv_code,
+            "note": "Envío SIMULADO. La transmisión real a la AEAT requiere el certificado digital del contribuyente y el servicio web oficial."}
 
 
 @api.post("/invoices/{invoice_id}/send-email")
@@ -424,6 +472,55 @@ async def available_years(user=Depends(get_current_user)):
             years.add(int(exp["date"][:4]))
     years.add(datetime.now(timezone.utc).year)
     return sorted(years, reverse=True)
+
+
+@api.get("/annual-summary")
+async def annual_summary(year: Optional[int] = None, user=Depends(get_current_user)):
+    if year is None:
+        year = datetime.now(timezone.utc).year
+    ys = str(year)
+    invoices = await db.invoices.find(
+        {"user_id": user["id"], "issue_date": {"$regex": f"^{ys}"}}, {"_id": 0}).to_list(10000)
+    expenses = await db.expenses.find(
+        {"user_id": user["id"], "date": {"$regex": f"^{ys}"}}, {"_id": 0}).to_list(10000)
+
+    rates = [21, 10, 4, 0]
+    iva_repercutido, iva_soportado = [], []
+    for r in rates:
+        rep_base = round(sum(i.get("base", 0) for i in invoices if i.get("iva_rate") == r), 2)
+        rep_cuota = round(sum(i.get("iva_amount", 0) for i in invoices if i.get("iva_rate") == r), 2)
+        sop_base = round(sum(e.get("base", 0) for e in expenses if e.get("iva_rate") == r), 2)
+        sop_cuota = round(sum(e.get("iva_amount", 0) for e in expenses if e.get("iva_rate") == r), 2)
+        iva_repercutido.append({"rate": r, "base": rep_base, "cuota": rep_cuota})
+        iva_soportado.append({"rate": r, "base": sop_base, "cuota": sop_cuota})
+
+    total_cuota_rep = round(sum(x["cuota"] for x in iva_repercutido), 2)
+    total_cuota_sop = round(sum(x["cuota"] for x in iva_soportado), 2)
+    ingresos = round(sum(i.get("base", 0) for i in invoices), 2)
+    gastos = round(sum(e.get("base", 0) for e in expenses), 2)
+    rendimiento = round(ingresos - gastos, 2)
+    retenciones = round(sum(i.get("irpf_amount", 0) for i in invoices), 2)
+    pagos_130 = round(max(0.0, 0.20 * rendimiento - retenciones), 2)
+
+    return {
+        "year": year,
+        "tax_type": user.get("tax_type", "autonomo"),
+        "modelo_390": {
+            "iva_repercutido": iva_repercutido,
+            "iva_soportado": iva_soportado,
+            "total_cuota_repercutida": total_cuota_rep,
+            "total_cuota_soportada": total_cuota_sop,
+            "resultado_anual": round(total_cuota_rep - total_cuota_sop, 2),
+        },
+        "irpf": {
+            "ingresos": ingresos,
+            "gastos": gastos,
+            "rendimiento_neto": rendimiento,
+            "retenciones_soportadas": retenciones,
+            "pagos_fraccionados_130": pagos_130,
+            "cuota_estimada": round(max(0.0, 0.20 * rendimiento), 2),
+        },
+    }
 
 
 # ---------- Contacts (clients & providers) ----------

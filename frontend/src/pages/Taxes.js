@@ -18,11 +18,13 @@ const fmtDate = (d) => new Date(d).toLocaleDateString("es-ES", { day: "numeric",
 export default function Taxes() {
   const { user } = useAuth();
   const [data, setData] = useState(null);
+  const [annual, setAnnual] = useState(null);
   const [years, setYears] = useState([new Date().getFullYear()]);
   const [year, setYear] = useState(new Date().getFullYear());
 
   useEffect(() => { api.get("/available-years").then((r) => setYears(r.data)); }, []);
   useEffect(() => { setData(null); api.get(`/dashboard?year=${year}`).then((r) => setData(r.data)); }, [year]);
+  useEffect(() => { setAnnual(null); api.get(`/annual-summary?year=${year}`).then((r) => setAnnual(r.data)); }, [year]);
 
   const isAutonomo = (data?.tax_type || user?.tax_type) === "autonomo";
   const nextQ = data?.next_deadline?.quarter;
@@ -127,6 +129,73 @@ export default function Taxes() {
               </div>
               <p className="text-xs text-slate-400 mt-3">Total pagos fraccionados IRPF del ejercicio: <strong className="text-slate-600 tabular">{eur(data.modelo_130_total)}</strong></p>
             </>
+          )}
+
+          {annual && (
+            <div className="mt-10" data-testid="annual-summary">
+              <div className="mb-3">
+                <h2 className="font-display text-lg font-semibold text-slate-900">Resumen anual · Modelo 390 (IVA)</h2>
+                <p className="text-sm text-slate-500 mt-0.5">Declaración resumen anual del IVA del ejercicio {annual.year}</p>
+              </div>
+              <div className="bg-white border border-slate-200 rounded-lg shadow-sm overflow-hidden">
+                <Table>
+                  <TableHeader>
+                    <TableRow className="hover:bg-transparent">
+                      <TableHead>Tipo IVA</TableHead>
+                      <TableHead className="text-right">Base repercutida</TableHead>
+                      <TableHead className="text-right">Cuota repercutida</TableHead>
+                      <TableHead className="text-right">Base soportada</TableHead>
+                      <TableHead className="text-right">Cuota soportada</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {annual.modelo_390.iva_repercutido.map((rep, idx) => {
+                      const sop = annual.modelo_390.iva_soportado[idx];
+                      return (
+                        <TableRow key={rep.rate} data-testid={`m390-rate-${rep.rate}`}>
+                          <TableCell className="font-medium">{rep.rate}%</TableCell>
+                          <TableCell className="text-right tabular">{eur(rep.base)}</TableCell>
+                          <TableCell className="text-right tabular">{eur(rep.cuota)}</TableCell>
+                          <TableCell className="text-right tabular text-slate-500">{eur(sop.base)}</TableCell>
+                          <TableCell className="text-right tabular text-slate-500">{eur(sop.cuota)}</TableCell>
+                        </TableRow>
+                      );
+                    })}
+                    <TableRow className="bg-slate-50 hover:bg-slate-50">
+                      <TableCell className="font-semibold">Totales</TableCell>
+                      <TableCell></TableCell>
+                      <TableCell className="text-right tabular font-semibold">{eur(annual.modelo_390.total_cuota_repercutida)}</TableCell>
+                      <TableCell></TableCell>
+                      <TableCell className="text-right tabular font-semibold text-slate-500">{eur(annual.modelo_390.total_cuota_soportada)}</TableCell>
+                    </TableRow>
+                  </TableBody>
+                </Table>
+                <div className="flex items-center justify-between px-4 py-3 border-t border-slate-200">
+                  <span className="text-sm font-medium text-slate-700">Resultado anual de la liquidación (casilla 71)</span>
+                  <span className={`font-display text-lg font-semibold tabular ${annual.modelo_390.resultado_anual >= 0 ? "text-red-600" : "text-emerald-600"}`} data-testid="m390-resultado">{eur(annual.modelo_390.resultado_anual)}</span>
+                </div>
+              </div>
+
+              {isAutonomo && (
+                <div className="mt-6">
+                  <h2 className="font-display text-lg font-semibold text-slate-900 mb-3">Resumen anual · IRPF</h2>
+                  <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
+                    {[
+                      { l: "Ingresos", v: annual.irpf.ingresos },
+                      { l: "Gastos", v: annual.irpf.gastos },
+                      { l: "Rendimiento neto", v: annual.irpf.rendimiento_neto },
+                      { l: "Retenciones soportadas", v: annual.irpf.retenciones_soportadas },
+                      { l: "Pagos frac. (130)", v: annual.irpf.pagos_fraccionados_130 },
+                    ].map((c) => (
+                      <div key={c.l} className="bg-white border border-slate-200 rounded-lg shadow-sm p-4">
+                        <div className="text-[11px] font-semibold uppercase tracking-wider text-slate-500">{c.l}</div>
+                        <div className="font-display text-xl font-semibold tracking-tight mt-1 tabular">{eur(c.v)}</div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
           )}
         </>
       )}

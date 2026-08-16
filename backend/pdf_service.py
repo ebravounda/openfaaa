@@ -4,8 +4,9 @@ from reportlab.lib.units import mm
 from reportlab.lib import colors
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.platypus import (
-    SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer, HRFlowable
+    SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer, HRFlowable, Image
 )
+from io import BytesIO as _BytesIO
 
 DARK = colors.HexColor("#0A0A0A")
 MUTED = colors.HexColor("#666666")
@@ -17,7 +18,7 @@ def _eur(v):
     return f"{v:,.2f} €".replace(",", "X").replace(".", ",").replace("X", ".")
 
 
-def build_invoice_pdf(invoice: dict, company: dict) -> bytes:
+def build_invoice_pdf(invoice: dict, company: dict, qr_png: bytes = None, verifactu: dict = None) -> bytes:
     buf = BytesIO()
     doc = SimpleDocTemplate(buf, pagesize=A4, topMargin=20 * mm,
                             bottomMargin=20 * mm, leftMargin=18 * mm, rightMargin=18 * mm)
@@ -127,6 +128,24 @@ def build_invoice_pdf(invoice: dict, company: dict) -> bytes:
         story.append(Paragraph("NOTAS", label))
         story.append(Spacer(1, 2 * mm))
         story.append(Paragraph(invoice["notes"], small))
+
+    # VeriFactu: QR + leyenda
+    if qr_png and verifactu:
+        story.append(Spacer(1, 12 * mm))
+        story.append(HRFlowable(width="100%", thickness=0.5, color=BORDER))
+        story.append(Spacer(1, 4 * mm))
+        qr_img = Image(_BytesIO(qr_png), width=26 * mm, height=26 * mm)
+        vf_style = ParagraphStyle("vf", parent=small, fontSize=8, leading=11)
+        vf_text = [
+            Paragraph("<b>Factura verificable en la sede electrónica de la AEAT</b>", vf_style),
+            Paragraph("VERI*FACTU", ParagraphStyle("vfb", parent=vf_style, fontName="Helvetica-Bold", fontSize=10)),
+            Paragraph(f"Huella: {verifactu.get('huella','')[:32]}…", vf_style),
+        ]
+        if verifactu.get("csv"):
+            vf_text.append(Paragraph(f"CSV AEAT: {verifactu.get('csv')}", vf_style))
+        vt = Table([[qr_img, vf_text]], colWidths=[30 * mm, 144 * mm])
+        vt.setStyle(TableStyle([("VALIGN", (0, 0), (-1, -1), "MIDDLE")]))
+        story.append(vt)
 
     doc.build(story)
     buf.seek(0)

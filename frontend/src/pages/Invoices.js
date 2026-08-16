@@ -19,7 +19,7 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import {
-  Plus, Trash2, FileText, Mail, Download, CheckCircle2, Loader2, Pencil, Undo2,
+  Plus, Trash2, FileText, Mail, Download, CheckCircle2, Loader2, Pencil, Undo2, ShieldCheck, ShieldAlert,
 } from "lucide-react";
 
 const IVA_OPTIONS = [
@@ -189,6 +189,16 @@ export default function Invoices() {
     load();
   };
 
+  const submitVf = async (inv) => {
+    try {
+      const { data } = await api.post(`/invoices/${inv.id}/verifactu/submit`);
+      toast.success(data.status);
+      load();
+    } catch (e) {
+      toast.error(formatApiErrorDetail(e.response?.data?.detail));
+    }
+  };
+
   const nextPreview = `${form.series ? form.series + "-" : ""}${form.issue_date.slice(0, 4)}-XXXX`;
 
   return (
@@ -248,6 +258,11 @@ export default function Invoices() {
                   </TableCell>
                   <TableCell className="text-right">
                     <div className="flex items-center justify-end gap-0.5">
+                      {inv.verifactu && (inv.verifactu.submitted ? (
+                        <Button variant="ghost" size="icon" disabled title={`VeriFactu enviado (simulado) · ${inv.verifactu.csv || ""}`} data-testid={`invoice-vf-${inv.number}`} className="h-8 w-8 text-emerald-600 opacity-100"><ShieldCheck className="w-4 h-4" strokeWidth={1.5} /></Button>
+                      ) : (
+                        <Button variant="ghost" size="icon" title="Enviar a AEAT (VeriFactu, simulado)" onClick={() => submitVf(inv)} data-testid={`invoice-vf-${inv.number}`} className="h-8 w-8 text-amber-500 hover:text-amber-600"><ShieldAlert className="w-4 h-4" strokeWidth={1.5} /></Button>
+                      ))}
                       {inv.invoice_type !== "rectificativa" && (
                         <Button variant="ghost" size="icon" title="Crear rectificativa (abono)" onClick={() => openRectify(inv)} data-testid={`invoice-rectify-${inv.number}`} className="h-8 w-8 text-slate-500 hover:text-purple-600"><Undo2 className="w-4 h-4" strokeWidth={1.5} /></Button>
                       )}

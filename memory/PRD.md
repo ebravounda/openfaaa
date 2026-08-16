@@ -58,6 +58,11 @@ Sistema de facturación para España: crear facturas introduciendo datos (CIF/NI
 - Plazos: Sociedades (IS) antes del 1 ene 2027; resto (autónomos) antes del 1 jul 2027. No confundir con factura electrónica B2B (Crea y Crece, RD 238/2026).
 - Backlog P1: implementar VeriFactu (hash chain + QR + envío AEAT) — pendiente de decisión del usuario.
 
+## Implemented — Iteración 5 (2026-06)
+- ✅ VeriFactu (activable en Configuración, verifactu_enabled): por cada factura genera huella SHA-256 encadenada (spec AEAT: IDEmisorFactura, NumSerie, Fecha, TipoFactura F1/R1, CuotaTotal, ImporteTotal, Huella anterior, FechaHoraHuso), código QR (URL ValidarQR) y leyenda "VERI*FACTU" en el PDF. Envío a la AEAT SIMULADO (POST /api/invoices/{id}/verifactu/submit) — MOCKED: la transmisión real requiere certificado digital + servicio web AEAT. verifactu_service.py.
+- ✅ Resumen anual: GET /api/annual-summary. Modelo 390 (IVA repercutido/soportado por tipo 21/10/4/0, resultado anual) e IRPF (rendimiento neto, retenciones, pagos fraccionados 130). Sección en Impuestos.
+- ✅ Testing iteración 5: 29/29 backend + frontend 100%.
+
 ## Backlog (prioritized)
 - P1: Adjuntar PDF binario al email (bloqueado: la integración gestionada de Resend no soporta adjuntos actualmente).
 - P2: Facturas rectificativas; múltiples series simultáneas gestionadas.
