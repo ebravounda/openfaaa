@@ -1,0 +1,77 @@
+{
+  "app_name": "FiscalHub España",
+  "theme_mode": "light",
+  "design_archetype": "Swiss & High-Contrast (Archetype 4)",
+  "typography": {
+    "heading_font": "Manrope",
+    "body_font": "IBM Plex Sans",
+    "h1": "text-4xl sm:text-5xl font-black tracking-tighter text-[#111111]",
+    "h2": "text-2xl sm:text-3xl font-bold tracking-tight text-[#111111]",
+    "h3": "text-xl sm:text-2xl font-semibold tracking-tight text-[#111111]",
+    "h4": "text-lg sm:text-xl font-medium text-[#111111]",
+    "body": "text-base leading-relaxed text-[#333333]",
+    "small_labels": "text-xs font-bold uppercase tracking-[0.2em] text-[#666666]"
+  },
+  "colors": {
+    "background": "#FAFAFA",
+    "surface": "#FFFFFF",
+    "primary": "#0A0A0A",
+    "primary_hover": "#262626",
+    "text_main": "#111111",
+    "text_muted": "#666666",
+    "border": "#E5E5E5",
+    "accent_positive": "#2A9D8F",
+    "accent_negative": "#E63946",
+    "accent_warning": "#E9C46A"
+  },
+  "spacing_and_layout": {
+    "strategy": "The 'Bento' Grid Protocol - Mode B (High Density)",
+    "container_padding": "p-6 sm:p-8 lg:p-12",
+    "grid_gap": "gap-4 lg:gap-6",
+    "widget_ratios": {
+      "summary_metric": "col-span-1",
+      "main_chart": "col-span-1 md:col-span-2 lg:col-span-3 row-span-2",
+      "feed_list": "col-span-1 row-span-2"
+    },
+    "general_rules": "Mobile-First (grid-cols-1). Override default stretch with align-items: start where needed. Always use ample internal padding (p-6) in bordered containers."
+  },
+  "surface_strategies": {
+    "dashboard_cards": "Flat background, 1px subtle border (border-[#E5E5E5]), no shadow by default. On hover: -translate-y-1 and shadow-lg.",
+    "headers": "Solid Background with a hard bottom border. Never transparent.",
+    "grid_borders": "Use border-collapse layout for dense data tables. Subtly expose the grid skeleton for a technical look."
+  },
+  "component_rules": {
+    "buttons": "Sharp corners or very subtle rounding (rounded-sm). High contrast (Black background, White text for primary). Explicit hover states (hover:bg-[#262626] hover:text-white).",
+    "forms": "Use Shadcn Form, Input, Select. Never native HTML inputs. Left-align inputs. Left-align labels.",
+    "tables": "Dense rows. Use Shadcn Table. Distinguish 'Paid' vs 'Pending' using semantic status badges (E.g., soft green bg for paid, soft yellow for pending).",
+    "toasts": "Use Sonner component for all notifications (e.g., 'Factura enviada por email').",
+    "charts": "Use Recharts or Shadcn charts for 'IVA repercutido vs soportado' visualization. Minimalist styling, 1px lines."
+  },
+  "motion_and_interactions": {
+    "hover_states": "Required on all interactive elements. Use transition: transform 0.2s ease, opacity 0.2s ease.",
+    "lists": "Staggered entrance animations for invoice rows.",
+    "accessibility": "Respect prefers-reduced-motion. High contrast focus rings (focus:ring-2 focus:ring-[#0A0A0A])."
+  },
+  "iconography": {
+    "library": "@phosphor-icons/react",
+    "style": "Duotone weight for high-end tech feel.",
+    "install_command": "yarn add @phosphor-icons/react"
+  },
+  "universal_guidelines_for_main_agent": [
+    "Do not apply generic 'transition: all' anywhere. Apply to specific properties.",
+    "Do not center align the app container. Text and data must naturally flow from the left.",
+    "Build for React (.js), do not use TypeScript (.tsx). Modify Shadcn outputs appropriately.",
+    "Ensure all data grids, inputs, and buttons include 'data-testid' for robust testing.",
+    "Never use placeholder URLs. Use real styling or Phosphor icons as fallbacks.",
+    "For the header, do not use a transparent background over content.",
+    "Ensure contrast checks pass APCA standards. Normal text must be clearly legible on #FAFAFA background."
+  ],
+  "instructions_to_main_agent": [
+    "Implement a responsive Dashboard displaying total IVA (collected vs paid), total expenses, and the next tax deadline (e.g., Modelo 303 quarterly dates: April 20, July 20, Oct 20, Jan 20).",
+    "Implement 'Crear Factura' form with client NIF/CIF, multiple line items, IVA type selector (21%, 10%, 4%, 0%, Exento), and IRPF toggle/percentage.",
+    "Implement an Invoice List with PDF download (can mock PDF generation with simple window.print or a lightweight lib) and an 'Enviar por Email' mock button that triggers a Sonner toast.",
+    "Implement 'Registro de Gastos' table for entering vendor bills, which subtracts from the IVA to pay.",
+    "Ensure all Shadcn components are adapted for JS and Tailwind without TypeScript artifacts.",
+    "Install missing dependencies: yarn add @phosphor-icons/react sonner recharts clsx tailwind-merge framer-motion"
+  ]
+}
