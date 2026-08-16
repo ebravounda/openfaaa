@@ -30,15 +30,22 @@ Sistema de facturación para España: crear facturas introduciendo datos (CIF/NI
 - ✅ Perfil de empresa (GET/PUT /api/company).
 - ✅ Facturas: crear/listar/ver/eliminar, marcar pagada, cálculo base/IVA/IRPF/total, numeración anual.
 - ✅ PDF de factura (reportlab) en /api/invoices/{id}/pdf.
-- ✅ Envío de factura por email (HTML detallado, Resend gestionado).
+- ✅ Envío de factura por email (HTML detallado, Resend gestionado). NOTA: la integración gestionada NO admite adjuntos binarios; el email lleva la factura como HTML (el PDF se descarga en la app).
 - ✅ Gastos: crear/listar/eliminar con IVA soportado.
 - ✅ Dashboard + Impuestos (Modelo 303 trimestral con próximos vencimientos).
-- ✅ Testing 100% backend (12/12) y frontend.
+
+## Implemented — Iteración 2 (2026-06) SaaS + IA
+- ✅ SaaS multiusuario: registro con selección Autónomo/Empresa (tax_type), UI condicionada.
+- ✅ Rediseño UI profesional (azul cobalto #0052FF + slate, Manrope/IBM Plex, skeletons, responsive).
+- ✅ Escaneo de gastos con IA: subir imagen/PDF → OCR con OpenAI gpt-5.4 (emergentintegrations) → revisión con vista previa → guardar. Object storage gestionado. Endpoints: POST /api/expenses/scan, GET /api/files/{path}.
+- ✅ Selector de ejercicio (año) en Panel e Impuestos (GET /api/available-years).
+- ✅ Contactos reutilizables (clientes/proveedores): CRUD /api/contacts, autocompletado en facturas y gastos.
+- ✅ Modelo 130 (IRPF pagos fraccionados) junto al 303, solo autónomos.
+- ✅ Testing iteración 2: 19/19 backend + frontend 100%.
 
 ## Backlog (prioritized)
-- P1: Adjuntar el PDF real al email (actualmente el email envía la factura en HTML; el PDF se descarga en la app).
-- P1: Filtro por año/ejercicio en el dashboard e impuestos (selector).
-- P2: Modelo 130 (IRPF pagos fraccionados) y resumen anual.
-- P2: Gestión de clientes/proveedores guardados y reutilizables.
-- P2: Numeración de factura configurable (series, prefijos).
-- P2: Exportar libros de IVA (repercutido/soportado) a CSV/Excel.
+- P1: Adjuntar PDF binario al email (bloqueado: la integración gestionada de Resend no soporta adjuntos actualmente).
+- P2: Series/numeración de factura configurable; facturas rectificativas.
+- P2: Escaneo también de facturas de venta.
+- P2: Exportar libros de IVA e IRPF a CSV/Excel; resumen anual (Modelo 390/100).
+- P2: Editar facturas/gastos existentes; multi-línea con IVA por línea.

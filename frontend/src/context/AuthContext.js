@@ -21,8 +21,8 @@ export function AuthProvider({ children }) {
     return data;
   };
 
-  const register = async (name, email, password) => {
-    const { data } = await api.post("/auth/register", { name, email, password });
+  const register = async (name, email, password, taxType = "autonomo") => {
+    const { data } = await api.post("/auth/register", { name, email, password, tax_type: taxType });
     setUser(data);
     return data;
   };

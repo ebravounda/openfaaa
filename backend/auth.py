@@ -57,6 +57,7 @@ class RegisterInput(BaseModel):
     name: str
     email: EmailStr
     password: str
+    tax_type: str = "autonomo"
 
 
 class LoginInput(BaseModel):
@@ -70,6 +71,7 @@ def _public_user(user: dict) -> dict:
         "name": user.get("name", ""),
         "email": user["email"],
         "role": user.get("role", "user"),
+        "tax_type": user.get("tax_type", "autonomo"),
     }
 
 
@@ -122,6 +124,7 @@ async def register(data: RegisterInput, response: Response):
         "email": email,
         "password_hash": hash_password(data.password),
         "role": "user",
+        "tax_type": data.tax_type if data.tax_type in ("autonomo", "empresa") else "autonomo",
         "created_at": datetime.now(timezone.utc).isoformat(),
     }
     result = await db.users.insert_one(doc)

@@ -5,10 +5,11 @@ load_dotenv(Path(__file__).parent / ".env")
 
 import logging
 import uuid
+import base64
 from datetime import datetime, timezone, date
 from typing import List, Optional
 
-from fastapi import FastAPI, APIRouter, HTTPException, Depends
+from fastapi import FastAPI, APIRouter, HTTPException, Depends, UploadFile, File, Header, Query
 from fastapi.responses import Response
 from starlette.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
@@ -17,6 +18,9 @@ from database import db, client
 from auth import router as auth_router, get_current_user, seed_admin
 from pdf_service import build_invoice_pdf
 from email_service import send_email, build_invoice_email_html
+import storage_service
+from storage_service import put_object, get_object, MIME_TYPES, APP_NAME
+from ocr_service import extract_expense
 
 logging.basicConfig(level=logging.INFO,
                     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
@@ -58,6 +62,7 @@ class ExpenseInput(BaseModel):
     category: str = "General"
     base_amount: float = 0.0
     iva_rate: float = 21
+    attachment_path: str = ""
 
 
 class CompanyInput(BaseModel):
@@ -71,6 +76,15 @@ class CompanyInput(BaseModel):
 
 class StatusInput(BaseModel):
     status: str
+
+
+class ContactInput(BaseModel):
+    name: str
+    nif: str = ""
+    address: str = ""
+    email: str = ""
+    phone: str = ""
+    kind: str = "client"  # "client" or "provider"
 
 
 # ---------- Helpers ----------
@@ -249,25 +263,28 @@ async def dashboard(year: Optional[int] = None, user=Depends(get_current_user)):
         {"user_id": user["id"], "date": {"$regex": f"^{ys}"}}, {"_id": 0}).to_list(5000)
 
     quarters = {q: {"quarter": q, "label": QUARTER_LABELS[q], "ingresos": 0.0, "gastos": 0.0,
-                    "iva_repercutido": 0.0, "iva_soportado": 0.0} for q in (1, 2, 3, 4)}
+                    "iva_repercutido": 0.0, "iva_soportado": 0.0, "irpf": 0.0} for q in (1, 2, 3, 4)}
 
     for inv in invoices:
         q = quarter_of(inv["issue_date"])
         quarters[q]["ingresos"] += inv.get("base", 0)
         quarters[q]["iva_repercutido"] += inv.get("iva_amount", 0)
+        quarters[q]["irpf"] += inv.get("irpf_amount", 0)
     for exp in expenses:
         q = quarter_of(exp["date"])
         quarters[q]["gastos"] += exp.get("base", 0)
         quarters[q]["iva_soportado"] += exp.get("iva_amount", 0)
 
     q_list = []
+    modelo_130 = []
     today = date.today()
     next_deadline = None
+    acc_ingresos = acc_gastos = acc_irpf = acc_pagos_130 = 0.0
     for q in (1, 2, 3, 4):
         d = quarters[q]
         iva_pagar = round(d["iva_repercutido"] - d["iva_soportado"], 2)
         dl = deadline_date(year, q)
-        item = {
+        q_list.append({
             "quarter": q,
             "label": d["label"],
             "ingresos": round(d["ingresos"], 2),
@@ -276,8 +293,24 @@ async def dashboard(year: Optional[int] = None, user=Depends(get_current_user)):
             "iva_soportado": round(d["iva_soportado"], 2),
             "iva_a_pagar": iva_pagar,
             "deadline": dl.isoformat(),
-        }
-        q_list.append(item)
+        })
+
+        # Modelo 130 (IRPF pagos fraccionados) - acumulado, solo autónomos
+        acc_ingresos += d["ingresos"]
+        acc_gastos += d["gastos"]
+        acc_irpf += d["irpf"]
+        rendimiento = acc_ingresos - acc_gastos
+        pago = round(max(0.0, 0.20 * rendimiento - acc_irpf - acc_pagos_130), 2)
+        acc_pagos_130 += pago
+        modelo_130.append({
+            "quarter": q,
+            "label": d["label"],
+            "rendimiento_acumulado": round(rendimiento, 2),
+            "irpf_retenido_acumulado": round(acc_irpf, 2),
+            "pago_fraccionado": pago,
+            "deadline": dl.isoformat(),
+        })
+
         if dl >= today and next_deadline is None:
             next_deadline = {
                 "quarter": q, "label": d["label"], "date": dl.isoformat(),
@@ -292,6 +325,7 @@ async def dashboard(year: Optional[int] = None, user=Depends(get_current_user)):
 
     return {
         "year": year,
+        "tax_type": user.get("tax_type", "autonomo"),
         "iva_repercutido": iva_repercutido,
         "iva_soportado": iva_soportado,
         "iva_a_pagar": round(iva_repercutido - iva_soportado, 2),
@@ -303,8 +337,109 @@ async def dashboard(year: Optional[int] = None, user=Depends(get_current_user)):
         "expense_count": len(expenses),
         "pending_amount": round(sum(i.get("total", 0) for i in invoices if i.get("status") == "pending"), 2),
         "quarters": q_list,
+        "modelo_130": modelo_130,
+        "modelo_130_total": round(acc_pagos_130, 2),
         "next_deadline": next_deadline,
     }
+
+
+@api.get("/available-years")
+async def available_years(user=Depends(get_current_user)):
+    years = set()
+    async for inv in db.invoices.find({"user_id": user["id"]}, {"issue_date": 1, "_id": 0}):
+        if inv.get("issue_date"):
+            years.add(int(inv["issue_date"][:4]))
+    async for exp in db.expenses.find({"user_id": user["id"]}, {"date": 1, "_id": 0}):
+        if exp.get("date"):
+            years.add(int(exp["date"][:4]))
+    years.add(datetime.now(timezone.utc).year)
+    return sorted(years, reverse=True)
+
+
+# ---------- Contacts (clients & providers) ----------
+@api.get("/contacts")
+async def list_contacts(kind: Optional[str] = None, user=Depends(get_current_user)):
+    q = {"user_id": user["id"]}
+    if kind:
+        q["kind"] = kind
+    return await db.contacts.find(q, {"_id": 0}).sort("name", 1).to_list(2000)
+
+
+@api.post("/contacts")
+async def create_contact(data: ContactInput, user=Depends(get_current_user)):
+    doc = data.model_dump()
+    doc.update({"id": str(uuid.uuid4()), "user_id": user["id"],
+                "created_at": datetime.now(timezone.utc).isoformat()})
+    await db.contacts.insert_one(doc)
+    doc.pop("_id", None)
+    return doc
+
+
+@api.delete("/contacts/{contact_id}")
+async def delete_contact(contact_id: str, user=Depends(get_current_user)):
+    res = await db.contacts.delete_one({"id": contact_id, "user_id": user["id"]})
+    if res.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Contacto no encontrado")
+    return {"status": "ok"}
+
+
+# ---------- Expense document scan (OCR) ----------
+@api.post("/expenses/scan")
+async def scan_expense(file: UploadFile = File(...), user=Depends(get_current_user)):
+    data = await file.read()
+    if not data:
+        raise HTTPException(status_code=400, detail="Archivo vacío")
+    ct = (file.content_type or "").lower()
+    ext = (file.filename or "").split(".")[-1].lower() if "." in (file.filename or "") else "bin"
+
+    # Store the original document
+    store_ct = MIME_TYPES.get(ext, ct or "application/octet-stream")
+    path = f"{APP_NAME}/uploads/{user['id']}/{uuid.uuid4()}.{ext}"
+    try:
+        result = put_object(path, data, store_ct)
+        stored_path = result["path"]
+        await db.files.insert_one({
+            "id": str(uuid.uuid4()), "user_id": user["id"], "storage_path": stored_path,
+            "original_filename": file.filename, "content_type": store_ct,
+            "is_deleted": False, "created_at": datetime.now(timezone.utc).isoformat(),
+        })
+    except Exception as e:
+        logger.error(f"Storage upload failed: {e}")
+        raise HTTPException(status_code=502, detail="No se pudo guardar el archivo")
+
+    # Prepare an image for the vision model
+    is_pdf = ext == "pdf" or "pdf" in ct
+    try:
+        if is_pdf:
+            import fitz
+            doc = fitz.open(stream=data, filetype="pdf")
+            page = doc.load_page(0)
+            pix = page.get_pixmap(dpi=150)
+            img_bytes = pix.tobytes("png")
+            doc.close()
+        else:
+            img_bytes = data
+        image_b64 = base64.b64encode(img_bytes).decode("utf-8")
+    except Exception as e:
+        logger.error(f"Image prep failed: {e}")
+        raise HTTPException(status_code=400, detail="No se pudo procesar el documento")
+
+    try:
+        extracted = await extract_expense(image_b64)
+    except Exception as e:
+        logger.error(f"OCR failed: {e}")
+        raise HTTPException(status_code=502, detail="No se pudo analizar el documento con IA")
+
+    return {"attachment_path": stored_path, "extracted": extracted}
+
+
+@api.get("/files/{path:path}")
+async def download_file(path: str, user=Depends(get_current_user)):
+    record = await db.files.find_one({"storage_path": path, "user_id": user["id"], "is_deleted": False})
+    if not record:
+        raise HTTPException(status_code=404, detail="Archivo no encontrado")
+    data, ctype = get_object(path)
+    return Response(content=data, media_type=record.get("content_type", ctype))
 
 
 app.include_router(auth_router)
@@ -325,7 +460,14 @@ async def startup():
     await db.login_attempts.create_index("identifier")
     await db.invoices.create_index("user_id")
     await db.expenses.create_index("user_id")
+    await db.contacts.create_index("user_id")
+    await db.files.create_index("storage_path")
     await seed_admin()
+    try:
+        storage_service.init_storage()
+        logger.info("Storage initialized")
+    except Exception as e:
+        logger.error(f"Storage init failed: {e}")
     logger.info("Startup complete")
 
 

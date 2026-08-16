@@ -4,19 +4,25 @@ import {
   LayoutDashboard,
   FileText,
   Receipt,
+  Users,
   Landmark,
   Settings,
   LogOut,
+  Sparkles,
 } from "lucide-react";
-import { Button } from "@/components/ui/button";
 
 const nav = [
   { to: "/", label: "Panel", icon: LayoutDashboard, end: true, testid: "nav-dashboard" },
   { to: "/facturas", label: "Facturas", icon: FileText, testid: "nav-invoices" },
   { to: "/gastos", label: "Gastos", icon: Receipt, testid: "nav-expenses" },
+  { to: "/contactos", label: "Contactos", icon: Users, testid: "nav-contacts" },
   { to: "/impuestos", label: "Impuestos", icon: Landmark, testid: "nav-taxes" },
   { to: "/configuracion", label: "Configuración", icon: Settings, testid: "nav-settings" },
 ];
+
+function initials(name = "") {
+  return name.split(" ").filter(Boolean).slice(0, 2).map((w) => w[0]?.toUpperCase()).join("") || "U";
+}
 
 export default function Layout({ children }) {
   const { user, logout } = useAuth();
@@ -28,18 +34,23 @@ export default function Layout({ children }) {
   };
 
   return (
-    <div className="min-h-screen flex bg-[#FAFAFA]">
-      {/* Sidebar */}
-      <aside className="w-64 shrink-0 bg-white border-r border-[#E5E5E5] flex flex-col fixed h-screen">
-        <div className="px-6 py-6 border-b border-[#E5E5E5]">
-          <div className="font-heading text-xl font-extrabold tracking-tighter text-[#0A0A0A]">
-            FiscalHub
+    <div className="min-h-screen flex bg-[#F8FAFC]">
+      <aside className="w-[248px] shrink-0 bg-white border-r border-slate-200 flex flex-col fixed h-screen z-20">
+        <div className="px-5 py-5 flex items-center gap-2.5">
+          <div className="w-9 h-9 rounded-lg bg-[#0052FF] flex items-center justify-center">
+            <Sparkles className="w-5 h-5 text-white" strokeWidth={1.5} />
           </div>
-          <div className="text-[10px] font-bold uppercase tracking-[0.2em] text-[#666666] mt-1">
-            España
+          <div>
+            <div className="font-display text-[15px] font-semibold tracking-tight text-slate-900 leading-none">
+              FiscalHub
+            </div>
+            <div className="text-[10px] font-medium uppercase tracking-[0.16em] text-slate-400 mt-1">
+              España
+            </div>
           </div>
         </div>
-        <nav className="flex-1 px-3 py-4 space-y-1">
+
+        <nav className="flex-1 px-3 py-2 space-y-0.5">
           {nav.map((n) => (
             <NavLink
               key={n.to}
@@ -47,38 +58,46 @@ export default function Layout({ children }) {
               end={n.end}
               data-testid={n.testid}
               className={({ isActive }) =>
-                `flex items-center gap-3 px-3 py-2.5 rounded-md text-sm font-medium transition-colors duration-200 ${
+                `flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors duration-200 ${
                   isActive
-                    ? "bg-[#0A0A0A] text-white"
-                    : "text-[#333333] hover:bg-[#F4F4F4]"
+                    ? "bg-slate-100 text-[#0052FF]"
+                    : "text-slate-600 hover:bg-slate-50 hover:text-slate-900"
                 }`
               }
             >
-              <n.icon className="w-[18px] h-[18px]" />
-              {n.label}
+              {({ isActive }) => (
+                <>
+                  <n.icon className="w-[18px] h-[18px]" strokeWidth={1.5} style={isActive ? { color: "#0052FF" } : {}} />
+                  {n.label}
+                </>
+              )}
             </NavLink>
           ))}
         </nav>
-        <div className="px-3 py-4 border-t border-[#E5E5E5]">
-          <div className="px-3 pb-3">
-            <div className="text-sm font-semibold text-[#111111] truncate">{user?.name}</div>
-            <div className="text-xs text-[#666666] truncate">{user?.email}</div>
+
+        <div className="p-3 border-t border-slate-200">
+          <div className="flex items-center gap-3 px-2 py-2">
+            <div className="w-9 h-9 rounded-full bg-[#0052FF]/10 text-[#0052FF] flex items-center justify-center text-xs font-semibold">
+              {initials(user?.name)}
+            </div>
+            <div className="min-w-0 flex-1">
+              <div className="text-sm font-medium text-slate-900 truncate">{user?.name}</div>
+              <div className="text-xs text-slate-500 truncate capitalize">{user?.tax_type === "empresa" ? "Empresa" : "Autónomo"}</div>
+            </div>
+            <button
+              onClick={handleLogout}
+              data-testid="logout-button"
+              title="Cerrar sesión"
+              className="p-2 rounded-lg text-slate-400 hover:text-slate-900 hover:bg-slate-50 transition-colors duration-200"
+            >
+              <LogOut className="w-[18px] h-[18px]" strokeWidth={1.5} />
+            </button>
           </div>
-          <Button
-            variant="ghost"
-            onClick={handleLogout}
-            data-testid="logout-button"
-            className="w-full justify-start gap-3 text-[#333333] hover:bg-[#F4F4F4] rounded-md"
-          >
-            <LogOut className="w-[18px] h-[18px]" />
-            Cerrar sesión
-          </Button>
         </div>
       </aside>
 
-      {/* Content */}
-      <main className="flex-1 ml-64 min-h-screen">
-        <div className="p-6 sm:p-8 lg:p-10 max-w-[1400px]">{children}</div>
+      <main className="flex-1 ml-[248px] min-h-screen">
+        <div className="px-6 sm:px-8 lg:px-10 py-8 max-w-[1360px]">{children}</div>
       </main>
     </div>
   );

@@ -1,0 +1,30 @@
+{
+  "summary": "Iteration 2 validated all new SaaS features: (1) Register with tax_type autonomo/empresa persists and /auth/me returns it; (2) /available-years returns list incl. current year; (3) Contacts CRUD (client/provider filtering) works; (4) /expenses/scan OCR with real ticket JPEG extracted vendor='SUPERMERCADO EJEMPLO S.L.', NIF, base=95.04, iva_rate=21, total=115 and stored file downloadable by owner (401 without auth); (5) Dashboard modelo_130 (4 quarters + total) + tax_type included. Frontend: admin login → Panel year-select, Contactos tabs + create client+provider, Gastos scan flow (dialog opens with scan-preview + OCR-filled fields, save creates expense row), Manual expense button present, Invoices pick-client prefills client-name, live summary (base 1000, total 1060 for IVA21%+IRPF15%), invoice created and listed, Impuestos modelo-130-table visible with 4 rows for autónomo. Register page has tax-type-autonomo/empresa selectors. 19/19 pytest tests pass (12 regression + 7 new features).",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": [
+    "/app/backend/tests/backend_test.py",
+    "/app/backend/tests/test_new_features.py",
+    "/app/test_reports/pytest/new_features.xml",
+    "/app/test_reports/pytest/regression.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "server.py handles both PDF (via PyMuPDF fitz) and image files in /expenses/scan; base64 encoding is done once per request (fine for MVP but consider streaming for very large PDFs).",
+    "/api/files/{path:path} correctly authorizes by user_id via db.files record — good ownership check; 401 without auth confirmed.",
+    "auth.py seed_admin() inserts admin without tax_type; _public_user defaults to 'autonomo' so admin UI shows Modelo 130 correctly (matches test expectation).",
+    "OCR uses gpt-5.4 via emergentintegrations LlmChat as specified; error path returns safe defaults rather than raising, which is graceful.",
+    "storage_service uses global storage_key with lazy init + 404 re-init fallback — reasonable resilience pattern.",
+    "compute_invoice mutates dict + return value unused; minor style issue only.",
+    "No rate limit on /register or /contacts endpoints (only /login). Acceptable for MVP.",
+    "server.py grew to ~470 lines with contacts, files, scan, dashboard modelo_130 — consider splitting into routers/*.py modules if it grows further."
+  ],
+  "updated_files": ["/app/backend/tests/test_new_features.py"],
+  "success_rate": {"backend": "100% (19/19 pytest)", "frontend": "100% (all critical flows validated)"},
+  "test_credentials": "admin@fiscalhub.es / admin123 (seeded). Ephemeral registered users test_empresa_* / test_auto_* remain.",
+  "seed_data_creation": "Test-created invoices 2026-0002/0003/0004 (TEST_ClienteUI, Test Deliverable, TEST Cliente UI) and expenses/contacts left in DB during UI test flow. Backend pytest cleans up its own test data.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "All new-iteration features (tax_type in register, contacts CRUD, OCR expense scan with gpt-5.4, files endpoint auth, dashboard modelo_130, available-years, year selectors, pick-client/save-client flows, tax_type-based UI) pass end-to-end. Backend pytest suites at /app/backend/tests/{backend_test.py,test_new_features.py} (19 tests, 100% pass). Test image generation for OCR uses PIL DejaVu fonts + real ticket text — do not use blank images. Some TEST_ prefixed data (invoices/contacts) may remain in DB from UI test; harmless.",
+  "rca of the issue": "N/A - no issues found."
+}

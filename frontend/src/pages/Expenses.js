@@ -1,10 +1,12 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import api, { eur, formatApiErrorDetail } from "@/lib/api";
 import Layout from "@/components/Layout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Skeleton } from "@/components/ui/skeleton";
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table";
@@ -14,36 +16,92 @@ import {
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
-import { Plus, Trash2, Receipt, Loader2 } from "lucide-react";
+import {
+  Plus, Trash2, Receipt, Loader2, ScanLine, FileText, Sparkles, Paperclip,
+} from "lucide-react";
 
 const IVA_OPTIONS = ["21", "10", "4", "0"];
 const CATEGORIES = ["General", "Suministros", "Material", "Servicios", "Alquiler", "Software", "Transporte", "Otros"];
 
 const emptyForm = () => ({
   date: new Date().toISOString().slice(0, 10),
-  vendor_name: "",
-  vendor_nif: "",
-  description: "",
-  category: "General",
-  base_amount: "",
-  iva_rate: "21",
+  vendor_name: "", vendor_nif: "", description: "", category: "General",
+  base_amount: "", iva_rate: "21", attachment_path: "", save_provider: false,
 });
 
 export default function Expenses() {
   const [expenses, setExpenses] = useState([]);
+  const [providers, setProviders] = useState([]);
   const [loading, setLoading] = useState(true);
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState(emptyForm());
   const [saving, setSaving] = useState(false);
+  const [scanning, setScanning] = useState(false);
+  const [previewUrl, setPreviewUrl] = useState("");
+  const [previewType, setPreviewType] = useState("");
+  const fileRef = useRef(null);
 
   const load = () => {
     setLoading(true);
     api.get("/expenses").then((r) => setExpenses(r.data)).finally(() => setLoading(false));
   };
-  useEffect(load, []);
+  const loadProviders = () => api.get("/contacts?kind=provider").then((r) => setProviders(r.data));
+  useEffect(() => { load(); loadProviders(); }, []);
 
   const base = Number(form.base_amount) || 0;
   const ivaAmount = (base * Number(form.iva_rate)) / 100;
+
+  const clearPreview = () => {
+    if (previewUrl) URL.revokeObjectURL(previewUrl);
+    setPreviewUrl(""); setPreviewType("");
+  };
+
+  const loadPreview = async (path) => {
+    try {
+      const res = await api.get(`/files/${path}`, { responseType: "blob" });
+      setPreviewType(res.data.type || "");
+      setPreviewUrl(URL.createObjectURL(res.data));
+    } catch (e) {}
+  };
+
+  const openManual = () => { clearPreview(); setForm(emptyForm()); setOpen(true); };
+
+  const onScanFile = async (e) => {
+    const file = e.target.files?.[0];
+    if (fileRef.current) fileRef.current.value = "";
+    if (!file) return;
+    setScanning(true);
+    try {
+      const fd = new FormData();
+      fd.append("file", file);
+      const { data } = await api.post("/expenses/scan", fd, { headers: { "Content-Type": "multipart/form-data" } });
+      const ex = data.extracted || {};
+      clearPreview();
+      setForm({
+        date: ex.date || new Date().toISOString().slice(0, 10),
+        vendor_name: ex.vendor_name || "",
+        vendor_nif: ex.vendor_nif || "",
+        description: ex.description || "",
+        category: CATEGORIES.includes(ex.category) ? ex.category : "General",
+        base_amount: ex.base_amount ? String(ex.base_amount) : "",
+        iva_rate: IVA_OPTIONS.includes(String(ex.iva_rate)) ? String(ex.iva_rate) : "21",
+        attachment_path: data.attachment_path || "",
+        save_provider: false,
+      });
+      loadPreview(data.attachment_path);
+      setOpen(true);
+      toast.success("Documento analizado. Revisa los datos y guarda.");
+    } catch (err) {
+      toast.error(formatApiErrorDetail(err.response?.data?.detail) || "No se pudo escanear");
+    } finally {
+      setScanning(false);
+    }
+  };
+
+  const pickProvider = (id) => {
+    const p = providers.find((x) => x.id === id);
+    if (p) setForm((f) => ({ ...f, vendor_name: p.name, vendor_nif: p.nif }));
+  };
 
   const save = async () => {
     if (!form.vendor_name.trim()) return toast.error("Introduce el proveedor");
@@ -51,18 +109,15 @@ export default function Expenses() {
     setSaving(true);
     try {
       await api.post("/expenses", {
-        date: form.date,
-        vendor_name: form.vendor_name,
-        vendor_nif: form.vendor_nif,
-        description: form.description,
-        category: form.category,
-        base_amount: base,
-        iva_rate: Number(form.iva_rate),
+        date: form.date, vendor_name: form.vendor_name, vendor_nif: form.vendor_nif,
+        description: form.description, category: form.category,
+        base_amount: base, iva_rate: Number(form.iva_rate), attachment_path: form.attachment_path,
       });
+      if (form.save_provider) {
+        try { await api.post("/contacts", { name: form.vendor_name, nif: form.vendor_nif, kind: "provider" }); loadProviders(); } catch (e) {}
+      }
       toast.success("Gasto registrado");
-      setOpen(false);
-      setForm(emptyForm());
-      load();
+      setOpen(false); clearPreview(); setForm(emptyForm()); load();
     } catch (e) {
       toast.error(formatApiErrorDetail(e.response?.data?.detail));
     } finally {
@@ -78,43 +133,51 @@ export default function Expenses() {
   };
 
   const totalGastos = expenses.reduce((s, e) => s + (e.base || 0), 0);
-  const totalIvaSoportado = expenses.reduce((s, e) => s + (e.iva_amount || 0), 0);
+  const totalIva = expenses.reduce((s, e) => s + (e.iva_amount || 0), 0);
+  const hasPreview = !!form.attachment_path;
 
   return (
     <Layout>
-      <div className="flex items-end justify-between mb-8">
+      <div className="flex items-center justify-between mb-6 gap-4 flex-wrap">
         <div>
-          <h1 className="font-heading text-3xl sm:text-4xl font-black tracking-tighter text-[#111111]">Gastos</h1>
-          <p className="text-sm text-[#666666] mt-1">Registra tus compras para deducir el IVA soportado</p>
+          <h1 className="font-display text-[28px] font-semibold tracking-tight text-slate-900">Gastos</h1>
+          <p className="text-sm text-slate-500 mt-0.5">Escanea tickets y facturas de compra o añádelos a mano</p>
         </div>
-        <Button onClick={() => { setForm(emptyForm()); setOpen(true); }} className="bg-[#0A0A0A] hover:bg-[#262626] text-white rounded-md" data-testid="new-expense-button">
-          <Plus className="w-4 h-4 mr-2" /> Nuevo gasto
-        </Button>
+        <div className="flex items-center gap-2">
+          <input ref={fileRef} type="file" accept="image/*,application/pdf" onChange={onScanFile} className="hidden" data-testid="scan-file-input" />
+          <Button onClick={() => fileRef.current?.click()} disabled={scanning} className="bg-[#0052FF] hover:bg-[#0040CC] text-white" data-testid="scan-button">
+            {scanning ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <ScanLine className="w-4 h-4 mr-2" strokeWidth={1.5} />}
+            {scanning ? "Analizando…" : "Escanear con IA"}
+          </Button>
+          <Button variant="outline" onClick={openManual} className="border-slate-200 text-slate-700" data-testid="new-expense-button">
+            <Plus className="w-4 h-4 mr-2" strokeWidth={1.5} /> Manual
+          </Button>
+        </div>
       </div>
 
       <div className="grid grid-cols-2 gap-4 mb-6 max-w-md">
-        <div className="bg-white border border-[#E5E5E5] rounded-md p-4">
-          <div className="text-xs font-bold uppercase tracking-[0.15em] text-[#666666]">Total gastos</div>
-          <div className="font-heading text-2xl font-black mt-1" data-testid="total-gastos">{eur(totalGastos)}</div>
+        <div className="bg-white border border-slate-200 rounded-lg shadow-sm p-4">
+          <div className="text-[11px] font-semibold uppercase tracking-wider text-slate-500">Total gastos</div>
+          <div className="font-display text-2xl font-semibold tracking-tight mt-1 tabular" data-testid="total-gastos">{eur(totalGastos)}</div>
         </div>
-        <div className="bg-white border border-[#E5E5E5] rounded-md p-4">
-          <div className="text-xs font-bold uppercase tracking-[0.15em] text-[#666666]">IVA soportado</div>
-          <div className="font-heading text-2xl font-black mt-1 text-[#2A9D8F]" data-testid="total-iva-soportado">{eur(totalIvaSoportado)}</div>
+        <div className="bg-white border border-slate-200 rounded-lg shadow-sm p-4">
+          <div className="text-[11px] font-semibold uppercase tracking-wider text-slate-500">IVA soportado</div>
+          <div className="font-display text-2xl font-semibold tracking-tight mt-1 tabular text-[#0052FF]" data-testid="total-iva-soportado">{eur(totalIva)}</div>
         </div>
       </div>
 
-      <div className="bg-white border border-[#E5E5E5] rounded-md overflow-hidden">
+      <div className="bg-white border border-slate-200 rounded-lg shadow-sm overflow-hidden">
         {loading ? (
-          <div className="flex items-center justify-center h-48"><Loader2 className="w-6 h-6 animate-spin" /></div>
+          <div className="p-5 space-y-3">{[0, 1, 2].map((i) => <Skeleton key={i} className="h-12 rounded-md" />)}</div>
         ) : expenses.length === 0 ? (
-          <div className="text-center py-16 text-[#666666]" data-testid="expenses-empty">
-            <Receipt className="w-10 h-10 mx-auto mb-3 opacity-30" />
-            Aún no has registrado ningún gasto.
+          <div className="border-2 border-dashed border-slate-200 m-5 rounded-lg py-14 text-center" data-testid="expenses-empty">
+            <Receipt className="w-12 h-12 mx-auto text-slate-300" strokeWidth={1.25} />
+            <p className="text-slate-500 mt-3">Sin gastos todavía. Prueba a escanear un ticket con IA.</p>
           </div>
         ) : (
           <Table>
             <TableHeader>
-              <TableRow className="bg-[#FAFAFA]">
+              <TableRow className="hover:bg-transparent">
                 <TableHead>Fecha</TableHead>
                 <TableHead>Proveedor</TableHead>
                 <TableHead>Categoría</TableHead>
@@ -126,17 +189,21 @@ export default function Expenses() {
             </TableHeader>
             <TableBody>
               {expenses.map((exp, i) => (
-                <TableRow key={exp.id} className="row-in" style={{ animationDelay: `${i * 30}ms` }} data-testid={`expense-row-${i}`}>
-                  <TableCell className="text-sm">{exp.date}</TableCell>
-                  <TableCell className="text-sm font-medium">{exp.vendor_name}{exp.description ? <span className="text-[#666666] font-normal"> · {exp.description}</span> : null}</TableCell>
-                  <TableCell className="text-sm text-[#666666]">{exp.category}</TableCell>
-                  <TableCell className="text-right text-sm">{eur(exp.base)}</TableCell>
-                  <TableCell className="text-right text-sm text-[#2A9D8F]">{eur(exp.iva_amount)} ({exp.iva_rate}%)</TableCell>
-                  <TableCell className="text-right text-sm font-bold">{eur(exp.total)}</TableCell>
+                <TableRow key={exp.id} data-testid={`expense-row-${i}`}>
+                  <TableCell className="text-sm text-slate-600 tabular">{exp.date}</TableCell>
+                  <TableCell className="text-sm font-medium text-slate-900">
+                    <span className="inline-flex items-center gap-1.5">
+                      {exp.attachment_path && <Paperclip className="w-3.5 h-3.5 text-slate-400" strokeWidth={1.5} />}
+                      {exp.vendor_name}
+                    </span>
+                    {exp.description ? <span className="text-slate-400 font-normal"> · {exp.description}</span> : null}
+                  </TableCell>
+                  <TableCell className="text-sm text-slate-500">{exp.category}</TableCell>
+                  <TableCell className="text-right text-sm tabular">{eur(exp.base)}</TableCell>
+                  <TableCell className="text-right text-sm text-[#0052FF] tabular">{eur(exp.iva_amount)} <span className="text-slate-400">({exp.iva_rate}%)</span></TableCell>
+                  <TableCell className="text-right text-sm font-semibold tabular">{eur(exp.total)}</TableCell>
                   <TableCell className="text-right">
-                    <Button variant="ghost" size="icon" onClick={() => remove(exp)} className="h-8 w-8 text-[#E63946]" data-testid={`expense-delete-${i}`}>
-                      <Trash2 className="w-4 h-4" />
-                    </Button>
+                    <Button variant="ghost" size="icon" onClick={() => remove(exp)} className="h-8 w-8 text-slate-400 hover:text-red-600" data-testid={`expense-delete-${i}`}><Trash2 className="w-4 h-4" strokeWidth={1.5} /></Button>
                   </TableCell>
                 </TableRow>
               ))}
@@ -145,58 +212,80 @@ export default function Expenses() {
         )}
       </div>
 
-      <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className="max-w-lg" data-testid="expense-dialog">
-          <DialogHeader><DialogTitle className="font-heading text-xl">Nuevo gasto</DialogTitle></DialogHeader>
-          <div className="space-y-4">
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label>Fecha</Label>
-                <Input type="date" value={form.date} onChange={(e) => setForm({ ...form, date: e.target.value })} data-testid="expense-date" />
+      <Dialog open={open} onOpenChange={(v) => { setOpen(v); if (!v) clearPreview(); }}>
+        <DialogContent className={hasPreview ? "max-w-3xl max-h-[92vh] overflow-y-auto" : "max-w-lg"} data-testid="expense-dialog">
+          <DialogHeader>
+            <DialogTitle className="font-display flex items-center gap-2">
+              {hasPreview && <Sparkles className="w-4 h-4 text-[#0052FF]" strokeWidth={1.5} />}
+              {hasPreview ? "Revisar gasto escaneado" : "Nuevo gasto"}
+            </DialogTitle>
+          </DialogHeader>
+
+          <div className={hasPreview ? "grid grid-cols-1 md:grid-cols-2 gap-5" : ""}>
+            {hasPreview && (
+              <div className="bg-slate-50 border border-slate-200 rounded-lg overflow-hidden md:sticky md:top-0 h-[360px] flex items-center justify-center" data-testid="scan-preview">
+                {!previewUrl ? (
+                  <Loader2 className="w-6 h-6 animate-spin text-slate-300" />
+                ) : previewType.includes("pdf") ? (
+                  <div className="text-center text-slate-500 p-6"><FileText className="w-12 h-12 mx-auto text-slate-300" strokeWidth={1.25} /><p className="text-sm mt-2">Documento PDF adjunto</p></div>
+                ) : (
+                  <img src={previewUrl} alt="Documento" className="w-full h-full object-contain" />
+                )}
               </div>
-              <div className="space-y-2">
-                <Label>Categoría</Label>
-                <Select value={form.category} onValueChange={(v) => setForm({ ...form, category: v })}>
-                  <SelectTrigger data-testid="expense-category"><SelectValue /></SelectTrigger>
-                  <SelectContent>{CATEGORIES.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}</SelectContent>
-                </Select>
+            )}
+
+            <div className="space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2"><Label>Fecha</Label><Input type="date" value={form.date} onChange={(e) => setForm({ ...form, date: e.target.value })} data-testid="expense-date" /></div>
+                <div className="space-y-2">
+                  <Label>Categoría</Label>
+                  <Select value={form.category} onValueChange={(v) => setForm({ ...form, category: v })}>
+                    <SelectTrigger data-testid="expense-category"><SelectValue /></SelectTrigger>
+                    <SelectContent>{CATEGORIES.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}</SelectContent>
+                  </Select>
+                </div>
               </div>
-              <div className="space-y-2">
-                <Label>Proveedor</Label>
-                <Input value={form.vendor_name} onChange={(e) => setForm({ ...form, vendor_name: e.target.value })} data-testid="expense-vendor" />
+
+              {providers.length > 0 && (
+                <div className="space-y-2">
+                  <Label>Proveedor guardado</Label>
+                  <Select onValueChange={pickProvider}>
+                    <SelectTrigger data-testid="pick-provider"><SelectValue placeholder="Seleccionar…" /></SelectTrigger>
+                    <SelectContent>{providers.map((p) => <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>)}</SelectContent>
+                  </Select>
+                </div>
+              )}
+
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2"><Label>Proveedor</Label><Input value={form.vendor_name} onChange={(e) => setForm({ ...form, vendor_name: e.target.value })} data-testid="expense-vendor" /></div>
+                <div className="space-y-2"><Label>NIF/CIF</Label><Input value={form.vendor_nif} onChange={(e) => setForm({ ...form, vendor_nif: e.target.value })} data-testid="expense-vendor-nif" /></div>
               </div>
-              <div className="space-y-2">
-                <Label>NIF/CIF proveedor</Label>
-                <Input value={form.vendor_nif} onChange={(e) => setForm({ ...form, vendor_nif: e.target.value })} data-testid="expense-vendor-nif" />
+              <div className="space-y-2"><Label>Descripción</Label><Input value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} data-testid="expense-description" /></div>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2"><Label>Base imponible (€)</Label><Input type="number" step="0.01" value={form.base_amount} onChange={(e) => setForm({ ...form, base_amount: e.target.value })} data-testid="expense-base" /></div>
+                <div className="space-y-2">
+                  <Label>Tipo de IVA</Label>
+                  <Select value={form.iva_rate} onValueChange={(v) => setForm({ ...form, iva_rate: v })}>
+                    <SelectTrigger data-testid="expense-iva"><SelectValue /></SelectTrigger>
+                    <SelectContent>{IVA_OPTIONS.map((o) => <SelectItem key={o} value={o}>{o}%</SelectItem>)}</SelectContent>
+                  </Select>
+                </div>
               </div>
-            </div>
-            <div className="space-y-2">
-              <Label>Descripción</Label>
-              <Input value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} data-testid="expense-description" />
-            </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label>Base imponible (€)</Label>
-                <Input type="number" step="0.01" value={form.base_amount} onChange={(e) => setForm({ ...form, base_amount: e.target.value })} data-testid="expense-base" />
+              <div className="flex items-center gap-2">
+                <Checkbox id="save_provider" checked={form.save_provider} onCheckedChange={(v) => setForm({ ...form, save_provider: !!v })} data-testid="save-provider-checkbox" />
+                <label htmlFor="save_provider" className="text-sm text-slate-600 cursor-pointer">Guardar como proveedor</label>
               </div>
-              <div className="space-y-2">
-                <Label>Tipo de IVA</Label>
-                <Select value={form.iva_rate} onValueChange={(v) => setForm({ ...form, iva_rate: v })}>
-                  <SelectTrigger data-testid="expense-iva"><SelectValue /></SelectTrigger>
-                  <SelectContent>{IVA_OPTIONS.map((o) => <SelectItem key={o} value={o}>{o}%</SelectItem>)}</SelectContent>
-                </Select>
+              <div className="bg-slate-50 border border-slate-200 rounded-lg p-3 flex justify-between text-sm">
+                <span className="text-slate-500">IVA soportado: <strong className="text-[#0052FF] tabular">{eur(ivaAmount)}</strong></span>
+                <span className="font-display font-semibold text-slate-900 tabular">Total {eur(base + ivaAmount)}</span>
               </div>
-            </div>
-            <div className="bg-[#FAFAFA] border border-[#E5E5E5] rounded-md p-4 flex justify-between text-sm">
-              <span className="text-[#666666]">IVA soportado: <strong className="text-[#2A9D8F]">{eur(ivaAmount)}</strong></span>
-              <span className="font-heading font-black text-[#111111]">Total {eur(base + ivaAmount)}</span>
             </div>
           </div>
+
           <DialogFooter>
-            <Button variant="outline" onClick={() => setOpen(false)} className="rounded-md">Cancelar</Button>
-            <Button onClick={save} disabled={saving} className="bg-[#0A0A0A] hover:bg-[#262626] text-white rounded-md" data-testid="save-expense">
-              {saving && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
-              Guardar gasto
+            <Button variant="outline" onClick={() => { setOpen(false); clearPreview(); }} className="border-slate-200">Cancelar</Button>
+            <Button onClick={save} disabled={saving} className="bg-[#0052FF] hover:bg-[#0040CC] text-white" data-testid="save-expense">
+              {saving && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}Guardar gasto
             </Button>
           </DialogFooter>
         </DialogContent>
