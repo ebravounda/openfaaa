@@ -10,6 +10,7 @@ import Invoices from "@/pages/Invoices";
 import Expenses from "@/pages/Expenses";
 import Contacts from "@/pages/Contacts";
 import Taxes from "@/pages/Taxes";
+import Connection from "@/pages/Connection";
 import Settings from "@/pages/Settings";
 
 function App() {
@@ -25,6 +26,7 @@ function App() {
           <Route path="/gastos" element={<ProtectedRoute><Expenses /></ProtectedRoute>} />
           <Route path="/contactos" element={<ProtectedRoute><Contacts /></ProtectedRoute>} />
           <Route path="/impuestos" element={<ProtectedRoute><Taxes /></ProtectedRoute>} />
+          <Route path="/conexion" element={<ProtectedRoute><Connection /></ProtectedRoute>} />
           <Route path="/configuracion" element={<ProtectedRoute><Settings /></ProtectedRoute>} />
         </Routes>
       </BrowserRouter>

@@ -1,0 +1,37 @@
+{
+  "summary": "Iteration 6 (VeriFactu optional + user certificate + connection log + monthly cron purge) tested end-to-end. Created backend/tests/test_verifactu_cert.py with 10 tests covering certificate upload validation (wrong password 400, OK returns meta), meta hides 'data'/'password', signed submit produces log with RegistroAlta/CSV/EstadoEnvio/signer, unsigned still works without cert, cron 401 without secret and clears log with Bearer secret, and user isolation. All 10 iter6 tests pass. Full regression: 38/39 pass (1 pre-existing regression in iter5 idempotency).",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "POST /api/invoices/{id}/verifactu/submit", "issue": "Idempotency lost: second submit no longer returns already:true and inserts a NEW connection-log entry (duplicates log per invoice). test_verifactu.py::test_submit_and_idempotent fails. Suggested fix: if invoice.verifactu.submitted is True, short-circuit and return {already: true, csv, signed} without re-inserting a log entry."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_verifactu_cert.py",
+    "/app/test_reports/pytest/iter6_cert.xml",
+    "/app/test_reports/pytest/iter6_all.xml"
+  ],
+  "action_items": [
+    "Restore idempotency in POST /api/invoices/{id}/verifactu/submit: when verifactu.submitted is true, return {already: true, csv, signed} and skip inserting a duplicate verifactu_log entry."
+  ],
+  "critical_code_review_comments": [
+    "server.py verifactu_submit always inserts a new verifactu_log entry on repeated calls -> log duplication and broken idempotency contract expected by earlier tests.",
+    "server.py is 744 lines; consider splitting VeriFactu/certificate/cron endpoints into a dedicated router module for maintainability.",
+    "cron/purge-verifactu-log deletes ALL log entries globally (delete_many({})). This is fine for a monthly cron run out-of-band, but if the endpoint is exposed for manual use, consider scoping or explicit confirmation."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_verifactu_cert.py"
+  ],
+  "success_rate": {"backend": "97%", "frontend": "100%"},
+  "test_credentials": "admin@fiscalhub.es / admin123; WEBHOOK_CRON_SECRET read from backend/.env",
+  "seed_data_creation": "Generated ephemeral self-signed .pfx via cryptography.pkcs12 in tests (TEST_ADMIN_CN, UI_TEST_CN). Created test invoices and a second registered user TEST_iter6_other@example.com for isolation tests.",
+  "retest_needed": true,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Iteration 6 endpoints (upload/get/delete cert, connection-log, cron purge, signed submit) all verified. Only known failure is legacy idempotency test in test_verifactu.py. UI verified with admin: cert upload shows meta, Conexión panel shows status cards + purge notice + expandable log with request/response XML. To retest idempotency after fix, run: pytest backend/tests/test_verifactu.py::test_submit_and_idempotent. Note: login redirects to '/' not '/dashboard'; navbar shows Panel/Facturas/Gastos/Contactos/Impuestos/Conexión/Configuración.",
+  "rca of the issue": "verifactu_submit unconditionally builds XML, calls simulate_aeat_response, updates invoice fields, and inserts a new verifactu_log entry every call. There is no check on inv['verifactu'].get('submitted'). Add an early return before the log insert when already submitted, preserving CSV and signed flags from the stored verifactu doc."
+}

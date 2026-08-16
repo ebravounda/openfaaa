@@ -7,10 +7,12 @@ import logging
 import uuid
 import base64
 import re
+import secrets
+import hmac
 from datetime import datetime, timezone, date
 from typing import List, Optional
 
-from fastapi import FastAPI, APIRouter, HTTPException, Depends, UploadFile, File, Header, Query
+from fastapi import FastAPI, APIRouter, HTTPException, Depends, UploadFile, File, Header, Query, Form, Request, BackgroundTasks
 from fastapi.responses import Response
 from starlette.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
@@ -24,6 +26,7 @@ from storage_service import put_object, get_object, MIME_TYPES, APP_NAME
 from ocr_service import extract_expense
 from export_service import build_libros_xlsx, build_libros_csv
 import verifactu_service as vf
+import cert_service
 
 logging.basicConfig(level=logging.INFO,
                     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
@@ -266,25 +269,107 @@ async def invoice_pdf(invoice_id: str, user=Depends(get_current_user)):
 
 @api.post("/invoices/{invoice_id}/verifactu/submit")
 async def verifactu_submit(invoice_id: str, user=Depends(get_current_user)):
-    import secrets
     inv = await db.invoices.find_one({"id": invoice_id, "user_id": user["id"]}, {"_id": 0})
     if not inv:
         raise HTTPException(status_code=404, detail="Factura no encontrada")
-    if not inv.get("verifactu"):
+    vfd = inv.get("verifactu")
+    if not vfd:
         raise HTTPException(status_code=400, detail="La factura no tiene registro VeriFactu")
-    if inv["verifactu"].get("submitted"):
-        return {"status": inv["verifactu"]["status"], "csv": inv["verifactu"].get("csv"), "already": True}
-    # NOTA: envío a la AEAT SIMULADO. La transmisión real requiere el certificado
-    # digital del contribuyente y el servicio web (SOAP) de la AEAT.
-    csv_code = "VF-" + secrets.token_hex(8).upper()
-    now = datetime.now(timezone.utc).isoformat()
+    if vfd.get("submitted"):
+        return {"status": vfd.get("status"), "csv": vfd.get("csv"),
+                "signed": vfd.get("signed", False), "already": True, "simulated": True}
+    company = await db.companies.find_one({"user_id": user["id"]}, {"_id": 0}) or {}
+    nif = company.get("nif", "")
+
+    # Encadenamiento: número de la factura anterior
+    prev_number = ""
+    if vfd.get("huella_anterior"):
+        prev = await db.invoices.find_one(
+            {"user_id": user["id"], "verifactu.huella": vfd["huella_anterior"]},
+            {"_id": 0, "number": 1})
+        prev_number = prev["number"] if prev else ""
+
+    registro_xml = vf.build_registro_alta_xml(company, inv, prev_number,
+                                              vfd.get("huella_anterior", ""), vfd["timestamp"], vfd["huella"])
+
+    # Firma con el certificado del usuario (si existe)
+    signature, signed, signer = None, False, None
+    cert_doc = await db.certificates.find_one({"user_id": user["id"]})
+    if cert_doc:
+        try:
+            data = cert_service.decrypt(cert_doc["data"].encode())
+            pwd = cert_service.decrypt(cert_doc["password"].encode()).decode()
+            key, cert, _ = cert_service.parse_pfx(data, pwd)
+            signature = cert_service.sign_data(key, registro_xml.encode("utf-8"))
+            signed = True
+            signer = cert_service.cert_metadata(cert).get("subject_cn")
+        except Exception as e:
+            logger.error(f"Cert signing failed: {e}")
+
+    soap_request = vf.build_soap_request(registro_xml, nif, signature)
+
+    # NOTA: transmisión a la AEAT SIMULADA (requiere certificado + servicio web oficial)
+    resp_ts = datetime.now(timezone.utc).isoformat()
+    csv_code = vfd.get("csv") or ("VF-" + secrets.token_hex(8).upper())
+    aeat_response = vf.simulate_aeat_response(nif, inv["number"], csv_code, resp_ts)
+
     await db.invoices.update_one(
         {"id": invoice_id, "user_id": user["id"]},
         {"$set": {"verifactu.submitted": True,
                   "verifactu.status": "Aceptado por la AEAT (simulado)",
-                  "verifactu.submitted_at": now, "verifactu.csv": csv_code}})
-    return {"status": "Aceptado por la AEAT (simulado)", "csv": csv_code,
-            "note": "Envío SIMULADO. La transmisión real a la AEAT requiere el certificado digital del contribuyente y el servicio web oficial."}
+                  "verifactu.submitted_at": resp_ts, "verifactu.csv": csv_code,
+                  "verifactu.signed": signed}})
+
+    entry = {
+        "id": str(uuid.uuid4()), "user_id": user["id"], "invoice_id": invoice_id,
+        "invoice_number": inv["number"], "created_at": resp_ts,
+        "endpoint": "https://www1.agenciatributaria.gob.es/wlpl/TIKE-CONT/RegFactuSistemaFacturacion (SIMULADO)",
+        "estado": "Correcto", "estado_registro": "Aceptado", "csv": csv_code,
+        "signed": signed, "signer": signer, "huella": vfd["huella"], "simulated": True,
+        "request_xml": soap_request, "response_xml": aeat_response,
+    }
+    await db.verifactu_log.insert_one(entry)
+
+    return {"status": "Aceptado por la AEAT (simulado)", "csv": csv_code, "signed": signed,
+            "simulated": True,
+            "note": "Transmisión SIMULADA. El envío real requiere el certificado del contribuyente y el servicio web oficial de la AEAT."}
+
+
+# ---------- VeriFactu: certificado y log de conexión ----------
+@api.post("/verifactu/certificate")
+async def upload_certificate(file: UploadFile = File(...), password: str = Form(""), user=Depends(get_current_user)):
+    data = await file.read()
+    try:
+        _key, cert, _chain = cert_service.parse_pfx(data, password)
+    except Exception:
+        raise HTTPException(status_code=400, detail="Certificado o contraseña no válidos (.pfx/.p12)")
+    meta = cert_service.cert_metadata(cert)
+    doc = {
+        "user_id": user["id"],
+        "data": cert_service.encrypt(data).decode(),
+        "password": cert_service.encrypt(password.encode()).decode(),
+        "meta": meta, "filename": file.filename,
+        "uploaded_at": datetime.now(timezone.utc).isoformat(),
+    }
+    await db.certificates.update_one({"user_id": user["id"]}, {"$set": doc}, upsert=True)
+    return {"meta": meta, "filename": file.filename, "uploaded_at": doc["uploaded_at"]}
+
+
+@api.get("/verifactu/certificate")
+async def get_certificate(user=Depends(get_current_user)):
+    doc = await db.certificates.find_one({"user_id": user["id"]}, {"_id": 0, "data": 0, "password": 0})
+    return doc or {}
+
+
+@api.delete("/verifactu/certificate")
+async def delete_certificate(user=Depends(get_current_user)):
+    await db.certificates.delete_one({"user_id": user["id"]})
+    return {"status": "ok"}
+
+
+@api.get("/verifactu/connection-log")
+async def connection_log(user=Depends(get_current_user)):
+    return await db.verifactu_log.find({"user_id": user["id"]}, {"_id": 0}).sort("created_at", -1).to_list(500)
 
 
 @api.post("/invoices/{invoice_id}/send-email")
@@ -612,6 +697,22 @@ async def download_file(path: str, user=Depends(get_current_user)):
 app.include_router(auth_router)
 app.include_router(api)
 
+
+@app.post("/api/cron/purge-verifactu-log")
+async def purge_verifactu_log(request: Request, background: BackgroundTasks):
+    # Cron endpoints must ack 2xx immediately; enqueue/background the actual work.
+    token = request.headers.get("Authorization", "")
+    expected = "Bearer " + os.environ.get("WEBHOOK_CRON_SECRET", "")
+    if not hmac.compare_digest(token, expected):
+        raise HTTPException(status_code=401, detail="No autorizado")
+
+    async def _purge():
+        res = await db.verifactu_log.delete_many({})
+        logger.info(f"VeriFactu log purged: {res.deleted_count} entradas")
+
+    background.add_task(_purge)
+    return {"status": "accepted"}
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[os.environ.get("FRONTEND_URL", "http://localhost:3000")],
@@ -629,6 +730,8 @@ async def startup():
     await db.expenses.create_index("user_id")
     await db.contacts.create_index("user_id")
     await db.files.create_index("storage_path")
+    await db.certificates.create_index("user_id", unique=True)
+    await db.verifactu_log.create_index("user_id")
     await seed_admin()
     try:
         storage_service.init_storage()

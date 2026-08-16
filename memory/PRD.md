@@ -63,6 +63,14 @@ Sistema de facturación para España: crear facturas introduciendo datos (CIF/NI
 - ✅ Resumen anual: GET /api/annual-summary. Modelo 390 (IVA repercutido/soportado por tipo 21/10/4/0, resultado anual) e IRPF (rendimiento neto, retenciones, pagos fraccionados 130). Sección en Impuestos.
 - ✅ Testing iteración 5: 29/29 backend + frontend 100%.
 
+## Implemented — Iteración 6 (2026-06) VeriFactu real por usuario
+- ✅ VeriFactu opcional (toggle en Configuración, verifactu_enabled).
+- ✅ Certificado digital por usuario: subida .pfx/.p12 + contraseña, validado y guardado CIFRADO (Fernet, CERT_ENCRYPTION_KEY). cert_service.py (parse_pfx, cert_metadata, sign_data RSA-SHA256). Endpoints POST/GET/DELETE /api/verifactu/certificate.
+- ✅ Envío VeriFactu: genera XML RegistroAlta (SuministroLR), lo FIRMA con el certificado del usuario, y registra en el log la petición SOAP y la respuesta de la AEAT (estado, CSV). Idempotente (no duplica). Transmisión real a la AEAT MOCKED (simulada).
+- ✅ Panel "Conexión AEAT": estado (certificado, servicio, nº registros), log detallado (request/response XML expandible), aviso de purga.
+- ✅ Log de conexión se borra automáticamente el día 3 de cada mes vía cron (.emergent/crons.yml → POST /api/cron/purge-verifactu-log, auth Bearer WEBHOOK_CRON_SECRET).
+- ✅ Testing iteración 6: 10/10 nuevas + regresión; idempotencia corregida.
+
 ## Backlog (prioritized)
 - P1: Adjuntar PDF binario al email (bloqueado: la integración gestionada de Resend no soporta adjuntos actualmente).
 - P2: Facturas rectificativas; múltiples series simultáneas gestionadas.

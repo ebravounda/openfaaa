@@ -1,0 +1,8 @@
+crons:
+  - name: purge-vf-log
+    description: "Borra el log de conexión VeriFactu-AEAT el día 3 de cada mes a las 03:00"
+    cron: "0 3 3 * *"
+    endpoint: "{{BASE_URL}}/api/cron/purge-verifactu-log"
+    method: POST
+    # Cron endpoints must ack 2xx immediately; enqueue/background the actual work.
+    enabled: true
