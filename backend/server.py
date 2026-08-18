@@ -9,7 +9,7 @@ import base64
 import re
 import secrets
 import hmac
-from datetime import datetime, timezone, date
+from datetime import datetime, timezone, date, timedelta
 from typing import List, Optional
 
 from fastapi import FastAPI, APIRouter, HTTPException, Depends, UploadFile, File, Header, Query, Form, Request, BackgroundTasks
@@ -1047,8 +1047,9 @@ async def purge_verifactu_log(request: Request, background: BackgroundTasks):
         raise HTTPException(status_code=401, detail="No autorizado")
 
     async def _purge():
-        res = await db.verifactu_log.delete_many({})
-        logger.info(f"VeriFactu log purged: {res.deleted_count} entradas")
+        cutoff = (datetime.now(timezone.utc) - timedelta(days=60)).isoformat()
+        res = await db.verifactu_log.delete_many({"created_at": {"$lt": cutoff}})
+        logger.info(f"VeriFactu log purgado (>60 días): {res.deleted_count} entradas")
 
     background.add_task(_purge)
     return {"status": "accepted"}
@@ -1107,10 +1108,13 @@ async def check_cert_expiry(request: Request, background: BackgroundTasks):
     background.add_task(_check)
     return {"status": "accepted"}
 
+_cors_env = os.environ.get("CORS_ORIGINS") or os.environ.get("FRONTEND_URL", "http://localhost:3000")
+_cors_origins = [o.strip().rstrip("/") for o in _cors_env.split(",") if o.strip()]
+
 app.add_middleware(SecurityMiddleware)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[os.environ.get("FRONTEND_URL", "http://localhost:3000")],
+    allow_origins=_cors_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

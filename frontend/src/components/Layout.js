@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import api from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
+import { Seo } from "@/components/Seo";
 import { AssistantWidget } from "@/components/AssistantWidget";
 import {
   LayoutDashboard,
@@ -97,6 +98,7 @@ export default function Layout({ children }) {
 
   return (
     <div className="min-h-screen bg-[#F8FAFC]">
+      <Seo title="Mi cuenta" description="Panel de gestión de OpenFactura." noindex />
       {user?.is_impersonating && (
         <div className="fixed top-0 left-0 right-0 z-[60] h-9 bg-amber-500 text-white text-xs sm:text-sm px-3 sm:px-5 flex items-center justify-center gap-2 sm:gap-3" data-testid="impersonation-banner">
           <UserCog className="w-4 h-4 shrink-0" strokeWidth={1.5} />

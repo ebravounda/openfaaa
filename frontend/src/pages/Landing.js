@@ -1,5 +1,6 @@
 import { Link } from "react-router-dom";
 import { motion } from "framer-motion";
+import { Seo } from "@/components/Seo";
 import { Button } from "@/components/ui/button";
 import {
   Sparkles, FileText, Landmark, ShieldCheck, ScanLine, Bot, Check, ArrowRight,
@@ -247,6 +248,11 @@ const TESTIMONIALS = [
 export default function Landing() {
   return (
     <div className="min-h-screen bg-white text-slate-900 font-outfit selection:bg-[#0052FF]/20">
+      <Seo
+        path="/"
+        title="Programa de facturación para autónomos y pymes en España"
+        description="Crea facturas, calcula tu IVA e IRPF (modelos 303 y 130), escanea gastos con IA y cumple con VeriFactu de la AEAT. Prueba gratis 14 días, sin tarjeta. Disponible en Madrid, Barcelona, Valencia, Sevilla, Málaga, Granada, Fuengirola y toda España."
+      />
       {/* Promo bar */}
       <div className="bg-slate-900 text-slate-100 text-center text-xs sm:text-sm py-2 px-4" data-testid="promo-bar">
         Prueba gratis 14 días · Planes con opción anual y <span className="text-white font-semibold">2 meses gratis</span>

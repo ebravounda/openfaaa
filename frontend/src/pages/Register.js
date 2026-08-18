@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import { useAuth } from "@/context/AuthContext";
+import { Seo } from "@/components/Seo";
 import { formatApiErrorDetail } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -58,6 +59,7 @@ export default function Register() {
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-[#F8FAFC] p-6">
+      <Seo path="/registro" title="Crea tu cuenta gratis" description="Regístrate en OpenFactura y prueba gratis 14 días. Facturación, IVA, IRPF y VeriFactu para autónomos y pymes en España." />
       <form onSubmit={submit} className="w-full max-w-md bg-white border border-slate-200 rounded-2xl shadow-sm p-8 space-y-6" data-testid="register-form">
         <div className="flex items-center gap-2.5">
           <img src="/openfactura-logo.png" alt="OpenFactura by GoRoky" className="h-7 w-auto" />

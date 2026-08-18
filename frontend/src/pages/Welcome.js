@@ -1,5 +1,6 @@
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/context/AuthContext";
+import { Seo } from "@/components/Seo";
 import { Button } from "@/components/ui/button";
 import { PartyPopper, ArrowRight } from "lucide-react";
 
@@ -8,6 +9,7 @@ export default function Welcome() {
   const { user } = useAuth();
   return (
     <div className="min-h-screen bg-[#F8FAFC] flex items-center justify-center px-4">
+      <Seo title="Bienvenido" noindex />
       <div className="bg-white border border-slate-200 rounded-2xl shadow-sm p-8 sm:p-10 max-w-md w-full text-center" data-testid="welcome-page">
         <div className="w-16 h-16 rounded-2xl bg-[#0052FF]/10 text-[#0052FF] flex items-center justify-center mx-auto mb-5">
           <PartyPopper className="w-8 h-8" strokeWidth={1.5} />

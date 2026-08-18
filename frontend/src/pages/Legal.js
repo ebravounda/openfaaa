@@ -1,9 +1,11 @@
 import { Link } from "react-router-dom";
 import { ArrowLeft } from "lucide-react";
+import { Seo } from "@/components/Seo";
 
-function LegalShell({ title, children }) {
+function LegalShell({ title, path, description, children }) {
   return (
     <div className="min-h-screen bg-white">
+      <Seo path={path} title={title} description={description} />
       <div className="max-w-3xl mx-auto px-4 sm:px-6 py-12">
         <Link to="/" className="inline-flex items-center gap-2 text-sm text-[#0052FF] mb-6"><ArrowLeft className="w-4 h-4" strokeWidth={2} /> Volver</Link>
         <h1 className="font-display text-3xl font-semibold tracking-tight mb-2">{title}</h1>
@@ -16,7 +18,7 @@ function LegalShell({ title, children }) {
 
 export function Terms() {
   return (
-    <LegalShell title="Términos y condiciones">
+    <LegalShell title="Términos y condiciones" path="/terminos" description="Términos y condiciones de uso de OpenFactura.es, el software de facturación para autónomos y pymes en España.">
       <p>Bienvenido a OpenFactura.es. Al crear una cuenta y utilizar la plataforma aceptas estos términos.</p>
       <h3 className="font-semibold text-slate-900">1. Servicio</h3>
       <p>OpenFactura.es es una herramienta de facturación y gestión fiscal para autónomos y empresas en España. Ofrecemos emisión de facturas, cálculo de IVA e IRPF, registro VeriFactu y funciones de IA de apoyo. No prestamos asesoramiento fiscal vinculante; la responsabilidad final de las declaraciones recae en el usuario.</p>
@@ -38,7 +40,7 @@ export function Terms() {
 
 export function Privacy() {
   return (
-    <LegalShell title="Política de privacidad">
+    <LegalShell title="Política de privacidad" path="/privacidad" description="Política de privacidad de OpenFactura.es. Tratamos tus datos conforme al RGPD y la LOPDGDD.">
       <p>En OpenFactura.es tratamos tus datos conforme al RGPD y a la LOPDGDD.</p>
       <h3 className="font-semibold text-slate-900">1. Responsable</h3>
       <p>OpenFactura.es. Contacto de privacidad: privacy@openfactura.es</p>

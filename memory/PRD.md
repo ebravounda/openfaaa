@@ -134,6 +134,10 @@ Sistema de facturación para España: crear facturas introduciendo datos (CIF/NI
 ## REGLA PERMANENTE — Independencia y servidor Plesk
 - El servidor Plesk del usuario aloja OTRAS plataformas (ingresoqr.com, gym24.app, tramilex, goroky y varios contenedores). **PROHIBIDO tocar cualquiera de ellas.** openfactura.es debe ser 100% independiente: su propio dominio, su propia base de datos MongoDB (MONGO_URL/DB_NAME propios), sus propias variables de entorno. Nada compartido ni referenciado entre plataformas.
 
+## Implemented — Iteración 17 (2026-06) SEO por página + Preparación de despliegue independiente
+- ✅ **SEO por página (react-helmet-async@3.0.0)**: componente `Seo` (`components/Seo.jsx`) con title/description/canonical/OG/Twitter únicos. Aplicado a Landing (/), Login, Registro, Términos y Privacidad (indexables) y noindex en páginas privadas (vía Layout + Welcome). index.html limpiado: solo etiquetas globales (keywords, geo, JSON-LD, fuentes, favicon, manifest); las per-page las gestiona Helmet (sin duplicados). Verificado en navegador: 1 sola meta description por página, canonical y robots correctos.
+- ✅ **Preparación de despliegue (independiente en Plesk)**: guía completa en `/app/DEPLOYMENT.md` (BD Mongo propia `openfactura_prod`, usuario dedicado, systemd con puerto exclusivo, build React, proxy nginx solo del vhost, HTTPS, cron con secreto, webhook Stripe, checklist de independencia). Fix bloqueadores del deployment_agent: (1) cron purge-verifactu-log ahora borra SOLO registros >60 días (ya no `delete_many({})`); (2) CORS usa `CORS_ORIGINS` (multi-origen, coma) con fallback `FRONTEND_URL`. NOTA: CORS NO se pone en `"*"` a propósito (rompería cookies con credentials).
+
 ## Backlog (prioritized)
 - P2: Editar los límites/precios de los planes desde el panel admin (ahora son fijos en plans.py).
 - P2: Registro de actividad/logs de admin visible en UI (ya se guarda en db.admin_audit).
