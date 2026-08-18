@@ -22,6 +22,7 @@ payments = APIRouter(prefix="/api")
 class CheckoutReq(BaseModel):
     plan: str
     origin_url: str
+    cycle: str = "monthly"
 
 
 class PortalReq(BaseModel):
@@ -50,7 +51,8 @@ async def create_checkout(req: CheckoutReq, user=Depends(get_current_user)):
     plans = await load_plans()
     ss.ensure_tax_settings()
     ss.sync_catalog(plans)
-    price_id = ss.get_price_id(ss.PLAN_LOOKUP[req.plan])
+    cycle = "yearly" if req.cycle == "yearly" else "monthly"
+    price_id = ss.get_price_id(ss.lookup_for(req.plan, cycle))
     if not price_id:
         raise HTTPException(status_code=500, detail="Precio no disponible en Stripe")
     meta = {"user_id": user["id"], "plan": req.plan}

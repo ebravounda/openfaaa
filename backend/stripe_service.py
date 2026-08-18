@@ -7,7 +7,13 @@ CURRENCY = "eur"
 TAX_CODE = "txcd_10103001"  # SaaS
 # Only paid plans are purchasable
 PLAN_LOOKUP = {"medio": "plan_medio_monthly", "platino": "plan_platino_monthly"}
-LOOKUP_PLAN = {v: k for k, v in PLAN_LOOKUP.items()}
+PLAN_LOOKUP_YEAR = {"medio": "plan_medio_yearly", "platino": "plan_platino_yearly"}
+LOOKUP_PLAN = {**{v: k for k, v in PLAN_LOOKUP.items()},
+               **{v: k for k, v in PLAN_LOOKUP_YEAR.items()}}
+
+
+def lookup_for(plan_id: str, cycle: str = "monthly") -> str:
+    return (PLAN_LOOKUP_YEAR if cycle == "yearly" else PLAN_LOOKUP).get(plan_id)
 
 
 def _account_country() -> str:
@@ -46,25 +52,29 @@ def _get_or_create_product(pid: str, name: str):
 
 def sync_catalog(plans: dict):
     """Create/update Stripe recurring Prices to match current DB plan prices."""
-    for plan_id, lookup in PLAN_LOOKUP.items():
+    for plan_id in PLAN_LOOKUP:
         p = plans.get(plan_id)
         if not p:
             continue
-        amount = int(round(float(p.get("price", 0) or 0) * 100))
-        if amount <= 0:
+        monthly = int(round(float(p.get("price", 0) or 0) * 100))
+        if monthly <= 0:
             continue
         prod = _get_or_create_product(f"plan_{plan_id}", p.get("name") or plan_id)
-        existing = stripe.Price.list(lookup_keys=[lookup], active=True, limit=1).data
-        if existing and (existing[0].unit_amount != amount or existing[0].currency != CURRENCY):
-            try:
-                stripe.Price.modify(existing[0].id, active=False)
-            except Exception:
-                pass
-            existing = []
-        if not existing:
-            stripe.Price.create(product=prod.id, unit_amount=amount, currency=CURRENCY,
-                                lookup_key=lookup, transfer_lookup_key=True,
-                                recurring={"interval": "month"})
+        for lookup, amount, interval in (
+            (PLAN_LOOKUP[plan_id], monthly, "month"),
+            (PLAN_LOOKUP_YEAR[plan_id], monthly * 10, "year"),
+        ):
+            existing = stripe.Price.list(lookup_keys=[lookup], active=True, limit=1).data
+            if existing and (existing[0].unit_amount != amount or existing[0].currency != CURRENCY):
+                try:
+                    stripe.Price.modify(existing[0].id, active=False)
+                except Exception:
+                    pass
+                existing = []
+            if not existing:
+                stripe.Price.create(product=prod.id, unit_amount=amount, currency=CURRENCY,
+                                    lookup_key=lookup, transfer_lookup_key=True,
+                                    recurring={"interval": interval})
 
 
 def get_price_id(lookup: str):

@@ -61,6 +61,26 @@ async def _user_row(u: dict) -> dict:
     }
 
 
+@admin.get("/revenue")
+async def revenue(admin_user=Depends(require_admin)):
+    plans = await load_plans()
+    mp = _month_prefix()
+    by_plan, mrr, altas_mes = {}, 0.0, 0
+    for pid in PLAN_ORDER:
+        c = await db.users.count_documents({"plan": pid, "role": {"$ne": "admin"}})
+        by_plan[pid] = c
+        if pid in ("medio", "platino"):
+            mrr += c * float(plans[pid].get("price", 0) or 0)
+            altas_mes += await db.users.count_documents(
+                {"plan": pid, "role": {"$ne": "admin"},
+                 "plan_updated_at": {"$regex": f"^{mp}"}})
+    trials = await db.users.count_documents(
+        {"plan": "basico", "role": {"$ne": "admin"}, "trial_ends_at": {"$gt": datetime.now(timezone.utc).isoformat()}})
+    return {"mrr": round(mrr, 2), "arr": round(mrr * 12, 2), "by_plan": by_plan,
+            "altas_mes": altas_mes, "trials_activos": trials,
+            "prices": {p: plans[p]["price"] for p in PLAN_ORDER}}
+
+
 @admin.get("/plans")
 async def list_plans(admin_user=Depends(require_admin)):
     return await plans_list()

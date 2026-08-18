@@ -20,6 +20,23 @@ DEFAULT_PLANS = {
 
 PLAN_ORDER = ["basico", "medio", "platino"]
 
+TRIAL_PLAN = {
+    "id": "trial", "name": "Prueba (14 días)", "price": 0,
+    "max_invoices": None, "max_contacts": None,
+    "features": {"email": True, "verifactu": True, "ocr": True},
+}
+
+
+def _trial_active(user: dict) -> bool:
+    te = user.get("trial_ends_at")
+    if not te:
+        return False
+    try:
+        from datetime import datetime, timezone
+        return datetime.now(timezone.utc) < datetime.fromisoformat(te)
+    except Exception:
+        return False
+
 # Backwards-compat alias (static defaults)
 PLANS = DEFAULT_PLANS
 
@@ -62,5 +79,7 @@ async def plans_list() -> list:
 async def plan_for_user(user: dict) -> dict:
     if user.get("role") == "admin":
         return dict(ADMIN_PLAN)
+    if user.get("plan", "basico") == "basico" and _trial_active(user):
+        return dict(TRIAL_PLAN)
     plans = await load_plans()
     return plans.get(user.get("plan", "basico"), plans["basico"])

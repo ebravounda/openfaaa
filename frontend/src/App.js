@@ -1,7 +1,7 @@
 import "@/App.css";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { Toaster } from "sonner";
-import { AuthProvider } from "@/context/AuthContext";
+import { AuthProvider, useAuth } from "@/context/AuthContext";
 import ProtectedRoute from "@/components/ProtectedRoute";
 import Login from "@/pages/Login";
 import Register from "@/pages/Register";
@@ -16,6 +16,15 @@ import Admin from "@/pages/Admin";
 import Pricing from "@/pages/Pricing";
 import PaymentSuccess from "@/pages/PaymentSuccess";
 import PaymentCancel from "@/pages/PaymentCancel";
+import Landing from "@/pages/Landing";
+import { Terms, Privacy } from "@/pages/Legal";
+import Welcome from "@/pages/Welcome";
+
+function Home() {
+  const { user, checking } = useAuth();
+  if (checking) return null;
+  return user ? <Dashboard /> : <Landing />;
+}
 
 function App() {
   return (
@@ -25,7 +34,10 @@ function App() {
         <Routes>
           <Route path="/login" element={<Login />} />
           <Route path="/registro" element={<Register />} />
-          <Route path="/" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
+          <Route path="/terminos" element={<Terms />} />
+          <Route path="/privacidad" element={<Privacy />} />
+          <Route path="/bienvenida" element={<ProtectedRoute><Welcome /></ProtectedRoute>} />
+          <Route path="/" element={<Home />} />
           <Route path="/facturas" element={<ProtectedRoute><Invoices /></ProtectedRoute>} />
           <Route path="/gastos" element={<ProtectedRoute><Expenses /></ProtectedRoute>} />
           <Route path="/contactos" element={<ProtectedRoute><Contacts /></ProtectedRoute>} />

@@ -1,0 +1,40 @@
+{
+  "summary": "Iter 13 (Landing, Welcome, Legal, 14-day trial, yearly checkout, admin MRR panel) tested backend + frontend. 7/7 backend tests pass. Frontend verified end-to-end incl. real Stripe redirect. Found and fixed 1 critical bug (Layout.js referenced undefined `trialDays`) which was crashing all authenticated pages.",
+  "backend_issues": { "critical": [], "minor": [] },
+  "frontend_issues": {
+    "ui_bugs": [
+      {
+        "component": "Layout.js",
+        "issue": "ReferenceError: `trialDays is not defined` at line 179. The trial banner block references a variable that was never declared/computed. This crashed the entire Layout, making Pricing, Admin, Dashboard, Invoices, Expenses, Contacts, Taxes, Connection, Settings all unrenderable (white screen). Fixed by computing trialDays from user.trial_ends_at.",
+        "selector": "[data-testid=\"trial-banner\"]",
+        "priority": "CRITICAL"
+      }
+    ],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iter13_features.py",
+    "/app/test_reports/pytest/iter13.xml"
+  ],
+  "action_items": [
+    "Review the trialDays fix I applied in /app/frontend/src/components/Layout.js. My fix computes days remaining from user.trial_ends_at; confirm the UX copy is what you intended (banner appears on all pages during trial with 'Ver planes' upgrade link).",
+    "Consider adding a React ErrorBoundary around Layout so future undefined-var bugs don't blank the app."
+  ],
+  "critical_code_review_comments": [
+    "CRITICAL: Layout.js `trialDays` reference was a showstopper. Any authenticated route crashed with white screen. Suggests this feature was added but the variable definition was missed. Recommend adding at least a smoke test that renders Dashboard after login.",
+    "Welcome page 'welcome-start' navigates to '/' which shows Dashboard. Works, but consider explicit navigate('/dashboard') pattern or ensuring first-run experience (empty state) is friendly.",
+    "Pricing.js hardcodes yearly = monthly * 10 for display; ensure this matches Stripe prices synced in stripe_service.sync_catalog (currently monthly*10, consistent)."
+  ],
+  "updated_files": [
+    "/app/frontend/src/components/Layout.js (added trialDays computation from user.trial_ends_at)",
+    "/app/backend/tests/test_iter13_features.py (new test file)"
+  ],
+  "success_rate": { "backend": "100% (7/7)", "frontend": "100% after fix" },
+  "test_credentials": "Admin admin@fiscalhub.es / admin123; demo demo_pricing@example.com / test1234; new trial users created dynamically with TEST_trial_* prefix.",
+  "seed_data_creation": "Created ~8 TEST_trial_* users via /api/auth/register during automated testing (counted toward 'Pruebas activas' = 8 in admin panel).",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "All 5 new features (Landing/, Register->Welcome with 14-day trial, /terminos + /privacidad, yearly toggle in /precios producing Stripe yearly checkout, /admin revenue panel) work. IMPORTANT: I fixed a bug in Layout.js (undefined trialDays). Verify main agent's follow-up matches intended trial banner UX. Backend endpoints validated: GET /api/plan returns trial plan, POST /api/payments/checkout with cycle=yearly returns checkout.stripe.com URL, GET /api/admin/revenue returns {mrr, arr, by_plan, altas_mes, trials_activos}.",
+  "rca of the issue": "Layout.js referenced `trialDays` at line 179-183 without ever declaring it. Likely the author added the trial banner JSX but forgot to add the computation. React threw ReferenceError inside <Layout>, propagating up and rendering blank. Fix: computed trialDays = ceil((new Date(user.trial_ends_at) - Date.now())/86400000) when user is non-admin and trial not expired; null otherwise so banner is hidden."
+}

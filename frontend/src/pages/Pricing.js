@@ -26,6 +26,7 @@ export default function Pricing() {
   const [upgrading, setUpgrading] = useState(null);
   const [history, setHistory] = useState([]);
   const [portalLoading, setPortalLoading] = useState(false);
+  const [cycle, setCycle] = useState("monthly");
 
   useEffect(() => {
     Promise.all([api.get("/plans"), api.get("/plan")])
@@ -41,7 +42,7 @@ export default function Pricing() {
   const upgrade = async (planId) => {
     setUpgrading(planId);
     try {
-      const { data } = await api.post("/payments/checkout", { plan: planId, origin_url: window.location.origin });
+      const { data } = await api.post("/payments/checkout", { plan: planId, cycle, origin_url: window.location.origin });
       window.location.href = data.checkout_url;
     } catch (e) {
       toast.error(formatApiErrorDetail(e.response?.data?.detail));
@@ -79,12 +80,26 @@ export default function Pricing() {
           <h1 className="font-display text-[28px] font-semibold tracking-tight text-slate-900">Planes y precios</h1>
           <p className="text-sm text-slate-500 mt-0.5">Elige el plan que mejor se adapta a tu negocio</p>
         </div>
-        {(current?.id === "medio" || current?.id === "platino") && (
-          <Button onClick={manageSubscription} disabled={portalLoading} variant="outline" className="border-slate-200" data-testid="manage-subscription">
-            {portalLoading ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Settings2 className="w-4 h-4 mr-2" strokeWidth={1.5} />}
-            Gestionar / cancelar suscripción
-          </Button>
-        )}
+        <div className="flex items-center gap-3 flex-wrap">
+          <div className="inline-flex items-center bg-slate-100 rounded-full p-1" data-testid="billing-cycle-toggle">
+            <button
+              onClick={() => setCycle("monthly")}
+              data-testid="cycle-monthly"
+              className={`px-4 py-1.5 text-sm font-medium rounded-full transition-colors duration-200 ${cycle === "monthly" ? "bg-white text-slate-900 shadow-sm" : "text-slate-500"}`}
+            >Mensual</button>
+            <button
+              onClick={() => setCycle("yearly")}
+              data-testid="cycle-yearly"
+              className={`px-4 py-1.5 text-sm font-medium rounded-full transition-colors duration-200 flex items-center gap-1.5 ${cycle === "yearly" ? "bg-white text-slate-900 shadow-sm" : "text-slate-500"}`}
+            >Anual <span className="text-[10px] font-semibold text-emerald-600 bg-emerald-50 px-1.5 py-0.5 rounded-full">2 meses gratis</span></button>
+          </div>
+          {(current?.id === "medio" || current?.id === "platino") && (
+            <Button onClick={manageSubscription} disabled={portalLoading} variant="outline" className="border-slate-200" data-testid="manage-subscription">
+              {portalLoading ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Settings2 className="w-4 h-4 mr-2" strokeWidth={1.5} />}
+              Gestionar / cancelar suscripción
+            </Button>
+          )}
+        </div>
       </div>
 
       {loading ? (
@@ -146,9 +161,23 @@ export default function Pricing() {
                   )}
                   <div className="font-display text-lg font-semibold text-slate-900">{p.name}</div>
                   <div className="mt-2 flex items-baseline gap-1">
-                    <span className="font-display text-3xl font-semibold tracking-tight tabular">{p.price === 0 ? "Gratis" : `${Number(p.price).toFixed(2)}€`}</span>
-                    {p.price > 0 && <span className="text-sm text-slate-400">/mes</span>}
+                    {p.price === 0 ? (
+                      <span className="font-display text-3xl font-semibold tracking-tight tabular">Gratis</span>
+                    ) : cycle === "yearly" ? (
+                      <>
+                        <span className="font-display text-3xl font-semibold tracking-tight tabular">{(Number(p.price) * 10).toFixed(2)}€</span>
+                        <span className="text-sm text-slate-400">/año</span>
+                      </>
+                    ) : (
+                      <>
+                        <span className="font-display text-3xl font-semibold tracking-tight tabular">{Number(p.price).toFixed(2)}€</span>
+                        <span className="text-sm text-slate-400">/mes</span>
+                      </>
+                    )}
                   </div>
+                  {p.price > 0 && cycle === "yearly" && (
+                    <div className="text-xs text-emerald-600 font-medium mt-1" data-testid={`yearly-note-${p.id}`}>Equivale a {(Number(p.price) * 10 / 12).toFixed(2)}€/mes · ahorras {(Number(p.price) * 2).toFixed(2)}€</div>
+                  )}
 
                   <div className="mt-5 space-y-2.5 text-sm flex-1">
                     <div className="flex items-center gap-2 text-slate-700">

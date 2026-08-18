@@ -81,6 +81,7 @@ def _public_user(user: dict) -> dict:
         "plan": user.get("plan", "basico"),
         "is_blocked": bool(user.get("is_blocked", False)),
         "activity": user.get("activity", ""),
+        "trial_ends_at": user.get("trial_ends_at", ""),
     }
 
 
@@ -151,6 +152,7 @@ async def register(data: RegisterInput, response: Response):
         "role": "user",
         "plan": "basico",
         "is_blocked": False,
+        "trial_ends_at": (datetime.now(timezone.utc) + timedelta(days=14)).isoformat(),
         "tax_type": data.tax_type if data.tax_type in ("autonomo", "empresa") else "autonomo",
         "created_at": datetime.now(timezone.utc).isoformat(),
     }

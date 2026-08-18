@@ -17,7 +17,7 @@ import {
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
-import { Users, ShieldOff, FileText, Search, UserCog, Ban, CheckCircle2, Loader2, Save, CreditCard, History } from "lucide-react";
+import { Users, ShieldOff, FileText, Search, UserCog, Ban, CheckCircle2, Loader2, Save, CreditCard, History, TrendingUp, Euro, Rocket, UserPlus } from "lucide-react";
 
 const PLAN_LABEL = { basico: "Básico", medio: "Medio", platino: "Platino" };
 const actionLabel = (a) => {
@@ -47,6 +47,7 @@ export default function Admin() {
   const [plans, setPlans] = useState([]);
   const [savingPlans, setSavingPlans] = useState(false);
   const [audit, setAudit] = useState([]);
+  const [revenue, setRevenue] = useState(null);
 
   const load = (query = "") => {
     setLoading(true);
@@ -64,6 +65,7 @@ export default function Admin() {
     api.get("/admin/global-templates/goroky").then((r) => setGk(r.data)).catch(() => {});
     api.get("/admin/plans").then((r) => setPlans(r.data)).catch(() => {});
     api.get("/admin/audit").then((r) => setAudit(r.data)).catch(() => {});
+    api.get("/admin/revenue").then((r) => setRevenue(r.data)).catch(() => {});
   }, []);
 
   if (user && (user.role !== "admin" || user.is_impersonating)) return <Navigate to="/" replace />;
@@ -165,6 +167,38 @@ export default function Admin() {
             </div>
           </div>
         ))}
+      </div>
+
+      <div className="bg-white border border-slate-200 rounded-lg shadow-sm overflow-hidden mb-8" data-testid="revenue-panel">
+        <div className="px-5 py-4 border-b border-slate-100 flex items-center gap-2">
+          <TrendingUp className="w-4 h-4 text-[#0052FF]" strokeWidth={1.5} />
+          <div className="font-medium text-slate-900">Ingresos y suscripciones</div>
+        </div>
+        <div className="p-5 grid grid-cols-2 md:grid-cols-4 gap-4">
+          {[
+            { label: "MRR (ingreso mensual)", value: revenue ? `${Number(revenue.mrr).toFixed(2)}€` : "—", icon: Euro, color: "text-[#0052FF] bg-[#0052FF]/10" },
+            { label: "ARR (ingreso anual)", value: revenue ? `${Number(revenue.arr).toFixed(2)}€` : "—", icon: TrendingUp, color: "text-emerald-600 bg-emerald-50" },
+            { label: "Altas este mes", value: revenue?.altas_mes ?? "—", icon: UserPlus, color: "text-violet-600 bg-violet-50" },
+            { label: "Pruebas activas", value: revenue?.trials_activos ?? "—", icon: Rocket, color: "text-amber-600 bg-amber-50" },
+          ].map((c) => (
+            <div key={c.label} className="flex items-center gap-3" data-testid={`revenue-${c.label}`}>
+              <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${c.color}`}><c.icon className="w-5 h-5" strokeWidth={1.5} /></div>
+              <div>
+                <div className="text-xl font-semibold text-slate-900 tabular">{c.value}</div>
+                <div className="text-xs text-slate-500">{c.label}</div>
+              </div>
+            </div>
+          ))}
+        </div>
+        {revenue?.by_plan && (
+          <div className="px-5 pb-5 flex flex-wrap gap-2">
+            {["basico", "medio", "platino"].map((pid) => (
+              <Badge key={pid} className={`rounded-full ${PLAN_BADGE[pid]} hover:${PLAN_BADGE[pid]}`} data-testid={`revenue-plan-${pid}`}>
+                {PLAN_LABEL[pid]}: {revenue.by_plan[pid] ?? 0}
+              </Badge>
+            ))}
+          </div>
+        )}
       </div>
 
       <div className="bg-white border border-slate-200 rounded-lg shadow-sm overflow-hidden mb-8">

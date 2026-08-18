@@ -43,7 +43,7 @@ export default function Register() {
     setLoading(true);
     try {
       await register(name, email, password, taxType, activity === "none" ? "" : activity);
-      navigate("/configuracion");
+      navigate("/bienvenida");
     } catch (err) {
       setError(formatApiErrorDetail(err.response?.data?.detail) || err.message);
     } finally {

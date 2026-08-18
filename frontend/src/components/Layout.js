@@ -86,6 +86,15 @@ export default function Layout({ children }) {
 
   const bannerH = user?.is_impersonating ? 36 : 0;
 
+  let trialDays = null;
+  if (user && user.role !== "admin" && (user.plan || "basico") === "basico" && user.trial_ends_at) {
+    try {
+      const end = new Date(user.trial_ends_at);
+      const diffMs = end.getTime() - Date.now();
+      if (diffMs > 0) trialDays = Math.ceil(diffMs / 86400000);
+    } catch (_) { /* noop */ }
+  }
+
   return (
     <div className="min-h-screen bg-[#F8FAFC]">
       {user?.is_impersonating && (
@@ -176,6 +185,13 @@ export default function Layout({ children }) {
       </aside>
 
       <main className="lg:ml-[248px] min-h-screen pt-14 lg:pt-0" style={{ marginTop: bannerH }}>
+        {trialDays != null && (
+          <div className="px-4 sm:px-8 lg:px-10 py-2.5 flex items-center gap-3 text-xs sm:text-sm border-b bg-[#0052FF]/5 border-[#0052FF]/10 text-[#0052FF]" data-testid="trial-banner">
+            <Sparkles className="w-4 h-4 shrink-0" strokeWidth={1.5} />
+            <span className="min-w-0">Prueba gratuita: te {trialDays === 1 ? "queda 1 día" : `quedan ${trialDays} días`} con todas las funciones.</span>
+            <NavLink to="/precios" className="ml-auto shrink-0 font-medium underline underline-offset-2" data-testid="trial-upgrade">Ver planes</NavLink>
+          </div>
+        )}
         {usageWarn && (
           <div className={`px-4 sm:px-8 lg:px-10 py-2.5 flex items-center gap-3 text-xs sm:text-sm border-b ${usageWarn.over ? "bg-red-50 border-red-100 text-red-800" : "bg-amber-50 border-amber-100 text-amber-800"}`} data-testid="usage-warning-banner">
             <span className="min-w-0">{usageWarn.text} Mejora tu plan para seguir sin límites.</span>

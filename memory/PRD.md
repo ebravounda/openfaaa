@@ -115,8 +115,14 @@ Sistema de facturación para España: crear facturas introduciendo datos (CIF/NI
 - ✅ Auth: create_access_token/refresh_token soportan claim `imp`; get_current_user rechaza usuarios bloqueados y expone is_impersonating; require_admin (bloquea a impersonadores). refresh conserva `imp`.
 - ✅ Testing iteración 8/9: 18/18 nuevos + 70/70 regresión backend, frontend 100%, sin bugs.
 
+## Implemented — Iteración 14 (2026-06) Trial + Landing + Plan Anual + Panel MRR
+- ✅ **Prueba de 14 días**: al registrarse, auth.py asigna trial_ends_at = now+14d; plans.plan_for_user devuelve TRIAL_PLAN (todas las funciones) mientras el trial esté activo y el plan sea básico. Banner de días restantes en Layout (data-testid trial-banner, oculto para admin y planes de pago).
+- ✅ **Landing pública** ('/' sin sesión): OpenFactura.es con hero, features y CTAs (Landing.js). Rutas legales '/terminos' y '/privacidad' (Legal.js). Pantalla de Bienvenida '/bienvenida' tras el registro (Welcome.js).
+- ✅ **Plan Anual (Stripe)**: toggle mensual/anual en /precios (billing-cycle-toggle); precio anual = mensual×10 (2 meses gratis) con nota de ahorro. checkout envía cycle; stripe_service crea Prices yearly (lookup plan_*_yearly). Verificado: checkout con cycle=yearly devuelve URL checkout.stripe.com.
+- ✅ **Panel de Ingresos (Super Admin)**: GET /api/admin/revenue (MRR, ARR, by_plan, altas_mes, trials_activos). Panel 'Ingresos y suscripciones' en /admin (revenue-panel) con tarjetas y badges por plan.
+- ✅ Bug crítico corregido: Layout.js referenciaba trialDays sin definir (pantalla en blanco en rutas autenticadas). Testing iteración 14: 7/7 backend + frontend 100% tras el fix.
+
 ## Backlog (prioritized)
-- P1: Adjuntar PDF binario al email (bloqueado: la integración gestionada de Resend no soporta adjuntos actualmente).
 - P2: Búsqueda por CIF también al registrar Gastos (autocompletar proveedor).
 - P2: Editar los límites/precios de los planes desde el panel admin (ahora son fijos en plans.py).
 - P2: Registro de actividad/logs de admin visible en UI (ya se guarda en db.admin_audit).
