@@ -28,6 +28,15 @@ def verify_password(plain: str, hashed: str) -> bool:
     return bcrypt.checkpw(plain.encode("utf-8"), hashed.encode("utf-8"))
 
 
+def validate_password_strength(password: str):
+    if len(password) < 8:
+        raise HTTPException(status_code=422, detail="La contraseña debe tener al menos 8 caracteres.")
+    if len(password) > 128:
+        raise HTTPException(status_code=422, detail="La contraseña es demasiado larga.")
+    if not any(c.isalpha() for c in password) or not any(c.isdigit() for c in password):
+        raise HTTPException(status_code=422, detail="La contraseña debe incluir letras y números.")
+
+
 def create_access_token(user_id: str, email: str, imp: str = None) -> str:
     payload = {
         "sub": user_id,
@@ -140,8 +149,34 @@ async def _register_failed(identifier: str):
     await db.login_attempts.update_one({"identifier": identifier}, {"$set": update}, upsert=True)
 
 
+async def _check_register_throttle(ip: str):
+    from datetime import datetime, timezone, timedelta
+    now = datetime.now(timezone.utc)
+    rec = await db.register_attempts.find_one({"ip": ip})
+    if rec:
+        window_start = rec.get("window_start")
+        count = rec.get("count", 0)
+        if window_start and (now - datetime.fromisoformat(window_start)) < timedelta(hours=1):
+            if count >= 5:
+                raise HTTPException(status_code=429, detail="Demasiados registros desde esta conexión. Inténtalo más tarde.")
+
+
+async def _register_count_inc(ip: str):
+    from datetime import datetime, timezone, timedelta
+    now = datetime.now(timezone.utc)
+    rec = await db.register_attempts.find_one({"ip": ip})
+    if rec and rec.get("window_start") and (now - datetime.fromisoformat(rec["window_start"])) < timedelta(hours=1):
+        await db.register_attempts.update_one({"ip": ip}, {"$inc": {"count": 1}})
+    else:
+        await db.register_attempts.update_one(
+            {"ip": ip}, {"$set": {"count": 1, "window_start": now.isoformat()}}, upsert=True)
+
+
 @router.post("/register")
-async def register(data: RegisterInput, response: Response):
+async def register(data: RegisterInput, request: Request, response: Response):
+    ip = request.client.host if request.client else "unknown"
+    await _check_register_throttle(ip)
+    validate_password_strength(data.password)
     email = data.email.lower()
     if await db.users.find_one({"email": email}):
         raise HTTPException(status_code=400, detail="Este email ya está registrado")
@@ -160,6 +195,7 @@ async def register(data: RegisterInput, response: Response):
         doc["activity"] = data.activity
     result = await db.users.insert_one(doc)
     uid = str(result.inserted_id)
+    await _register_count_inc(ip)
     _set_cookies(response, create_access_token(uid, email), create_refresh_token(uid))
     doc["_id"] = result.inserted_id
     return _public_user(doc)

@@ -1,0 +1,36 @@
+{
+  "summary": "Iter 14 – Security middleware regression + CSRF-safe UI mutations. Backend: 14/14 security tests pass (headers, docs 404, password strength Spanish 422, CSRF cookie-no-header 403 vs cookie+X-OF-Client 200, admin regex-escape safe against .*, (, [abc, \\\\, ?). Frontend: logged in as admin and executed CRUD across Contactos (create+delete), Configuración (PUT /api/company), Facturas (create), Admin (block/unblock toggle + save plans). Captured every response with status 403 on /api/* — count = 0. Frontend axios interceptor is correctly sending X-OF-Client: web on all state-changing calls, so no regression from the new SecurityMiddleware.",
+  "backend_issues": { "critical": [], "minor": [] },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Dialogs (contact, invoice, expense)", "issues": ["Console warnings: 'Missing Description or aria-describedby for DialogContent' from Radix — accessibility nit, not blocking."]}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iter14_security.py",
+    "/app/test_reports/pytest/iter14.xml"
+  ],
+  "action_items": [
+    "Optional: Add DialogDescription (or aria-describedby) to Radix DialogContent components to silence a11y warnings.",
+    "Optional: Invoice save produced one 422 in console during UI test (invoice was still created and list shows 111 rows) — likely from an AI-review side call; worth confirming that all subsidiary POSTs from the invoice dialog also send X-OF-Client (they do via the shared axios instance, but if any raw fetch() is used it would fail)."
+  ],
+  "critical_code_review_comments": [
+    "SecurityMiddleware CSRF check only fires when the request has an access_token cookie — so Bearer-only API clients are unaffected. Good separation.",
+    "CSRF_EXEMPT_PREFIXES correctly exempt /api/stripe/webhook and /api/cron/. Any future webhook must be added to this tuple.",
+    "MAX_BODY_BYTES=12MB globally; endpoint-specific stricter limits (certificate 5MB, expenses/scan 10MB) are enforced inside the routes — correct layered approach.",
+    "re.escape(q) in admin_routes.list_users is verified safe against .*, parens, brackets, backslashes and ? — passes literal-search test.",
+    "FastAPI docs/openapi.json confirmed 404 — good hardening for prod."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iter14_security.py (new)"
+  ],
+  "success_rate": { "backend": "100% (14/14)", "frontend": "100% (0 CSRF 403s across all tested mutations)" },
+  "test_credentials": "Admin admin@fiscalhub.es / admin123 ; demo demo_pricing@example.com / test1234.",
+  "seed_data_creation": "Created 1 TEST_ contact (then deleted), 1 TEST_ invoice, and ~4 TEST_pw_* / TEST_pw_ok_* users via /api/auth/register during pytest.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "SecurityMiddleware is live and working. All future state-changing endpoints called from browser cookies MUST be preceded by X-OF-Client:web (frontend axios instance already does this). If a new fetch()/raw XHR is added, remember to include that header, otherwise it will 403. Webhook/cron routes should be added to CSRF_EXEMPT_PREFIXES in /app/backend/security.py.",
+  "rca of the issue": "No issue reproduced — verification-only run. Prior iter 13 fix (Layout trialDays) still holds."
+}

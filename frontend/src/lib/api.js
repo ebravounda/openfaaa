@@ -5,6 +5,7 @@ export const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 const api = axios.create({
   baseURL: API,
   withCredentials: true,
+  headers: { "X-OF-Client": "web" },
 });
 
 export const eur = (v) =>

@@ -20,6 +20,7 @@ from pydantic import BaseModel, Field
 from database import db, client
 from bson import ObjectId
 from auth import router as auth_router, get_current_user, seed_admin
+from security import SecurityMiddleware
 from admin_routes import admin as admin_router
 from plans import plan_for_user, plans_list
 from templates import TEMPLATE_MAP
@@ -38,7 +39,11 @@ logging.basicConfig(level=logging.INFO,
                     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)
 
-app = FastAPI()
+app = FastAPI(
+    docs_url="/api/docs" if os.environ.get("EXPOSE_API_DOCS") == "true" else None,
+    redoc_url=None,
+    openapi_url="/api/openapi.json" if os.environ.get("EXPOSE_API_DOCS") == "true" else None,
+)
 api = APIRouter(prefix="/api")
 
 
@@ -596,6 +601,8 @@ async def verifactu_submit(invoice_id: str, user=Depends(get_current_user)):
 @api.post("/verifactu/certificate")
 async def upload_certificate(file: UploadFile = File(...), password: str = Form(""), user=Depends(get_current_user)):
     data = await file.read()
+    if len(data) > 5 * 1024 * 1024:
+        raise HTTPException(status_code=413, detail="El certificado no puede superar 5 MB")
     try:
         _key, cert, _chain = cert_service.parse_pfx(data, password)
     except Exception:
@@ -969,6 +976,8 @@ async def scan_expense(file: UploadFile = File(...), user=Depends(get_current_us
     data = await file.read()
     if not data:
         raise HTTPException(status_code=400, detail="Archivo vacío")
+    if len(data) > 10 * 1024 * 1024:
+        raise HTTPException(status_code=413, detail="El archivo no puede superar 10 MB")
     ct = (file.content_type or "").lower()
     ext = (file.filename or "").split(".")[-1].lower() if "." in (file.filename or "") else "bin"
 
@@ -1098,6 +1107,7 @@ async def check_cert_expiry(request: Request, background: BackgroundTasks):
     background.add_task(_check)
     return {"status": "accepted"}
 
+app.add_middleware(SecurityMiddleware)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[os.environ.get("FRONTEND_URL", "http://localhost:3000")],
@@ -1109,8 +1119,12 @@ app.add_middleware(
 
 @app.on_event("startup")
 async def startup():
+    secret = os.environ.get("JWT_SECRET", "")
+    if len(secret) < 32:
+        logger.warning("SECURITY: JWT_SECRET es demasiado corto (<32 chars). Usa un secreto aleatorio de 64 hex en producción.")
     await db.users.create_index("email", unique=True)
     await db.login_attempts.create_index("identifier")
+    await db.register_attempts.create_index("ip")
     await db.invoices.create_index("user_id")
     await db.expenses.create_index("user_id")
     await db.contacts.create_index("user_id")

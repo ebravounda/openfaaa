@@ -125,6 +125,15 @@ Sistema de facturación para España: crear facturas introduciendo datos (CIF/NI
 ## Implemented — Iteración 15 (2026-06) Landing rediseñada estilo Holded
 - ✅ Landing.js reconstruida al estilo holded.com/es (petición explícita del usuario): fuente Outfit, acento cobalto #0052FF, secciones alternas claras/oscuras. Estructura: promo bar, nav sticky con blur, hero split con mockup de dashboard flotante + badge VeriFactu, franja de stats animadas, 5 módulos zig-zag con mockups de producto en HTML/Tailwind (dashboard, factura, Modelo 303, escáner OCR, chat FiscalBot), sección oscura "Por qué OpenFactura" (bento 6 razones), testimonios, audiencias (Autónomos/Pymes/Asesorías), franja de integraciones y CTA final azul. Animaciones con framer-motion (fade-up al hacer scroll, staggered, barras animadas). Sin fotos de stock. Verificado por screenshot (hero, features, sección oscura).
 
+## Implemented — Iteración 16 (2026-06) SEO + Endurecimiento de seguridad
+- ✅ **SEO integral (landing)**: index.html con title/description optimizados, keywords, canonical, robots, geo-tags (España), Open Graph + Twitter Cards con imagen social (og-image.jpg), y JSON-LD (Organization, WebSite, SoftwareApplication con rating, Service con areaServed de 14 ciudades, FAQPage). robots.txt, sitemap.xml y manifest.json en /public. Sección visible "Cobertura nacional" con 20 ciudades (Madrid, Barcelona, Valencia, Sevilla, Málaga, Granada, Fuengirola…). NOTA: es una SPA (CSR); para posicionar debe desplegarse en el dominio real openfactura.es. Meta por-página requeriría react-helmet + SSR/prerender (pendiente).
+- ✅ **Logo OpenFactura by GoRoky**: integrado en landing (nav+footer), Login (variante blanca), Registro, y Layout (sidebar + topbar móvil). Optimizado a 42KB/28KB. Precarga con prioridad alta.
+- ✅ **Seguridad (security.py SecurityMiddleware)**: cabeceras HTTP (nosniff, X-Frame-Options DENY, HSTS, Referrer-Policy, Permissions-Policy), protección CSRF vía cabecera `X-OF-Client: web` (frontend axios la envía; exentos webhook Stripe y cron), límite de tamaño (12MB global, cert 5MB, OCR 10MB), oculta header Server. Validación de fuerza de contraseña (min 8, letras+números) y throttle de registro (5/h por IP). re.escape en búsqueda de admin (anti regex/NoSQL injection). Docs FastAPI deshabilitados (404). Check de JWT_SECRET en arranque.
+- ✅ Testing iteración 14 (seguridad): 14/14 backend + 0 regresiones CSRF en la UI (frontend 100%).
+
+## REGLA PERMANENTE — Independencia y servidor Plesk
+- El servidor Plesk del usuario aloja OTRAS plataformas (ingresoqr.com, gym24.app, tramilex, goroky y varios contenedores). **PROHIBIDO tocar cualquiera de ellas.** openfactura.es debe ser 100% independiente: su propio dominio, su propia base de datos MongoDB (MONGO_URL/DB_NAME propios), sus propias variables de entorno. Nada compartido ni referenciado entre plataformas.
+
 ## Backlog (prioritized)
 - P2: Editar los límites/precios de los planes desde el panel admin (ahora son fijos en plans.py).
 - P2: Registro de actividad/logs de admin visible en UI (ya se guarda en db.admin_audit).

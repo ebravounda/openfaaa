@@ -1,4 +1,5 @@
 from datetime import datetime, timezone
+import re
 
 from fastapi import APIRouter, HTTPException, Depends, Response, Request
 from pydantic import BaseModel
@@ -116,9 +117,10 @@ async def update_plans(data: PlansUpdateInput, admin_user=Depends(require_admin)
 async def list_users(q: str = "", admin_user=Depends(require_admin)):
     query = {}
     if q:
+        safe = re.escape(q.strip()[:100])
         query = {"$or": [
-            {"email": {"$regex": q, "$options": "i"}},
-            {"name": {"$regex": q, "$options": "i"}},
+            {"email": {"$regex": safe, "$options": "i"}},
+            {"name": {"$regex": safe, "$options": "i"}},
         ]}
     users = await db.users.find(query).sort("created_at", -1).to_list(1000)
     return [await _user_row(u) for u in users]
