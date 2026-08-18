@@ -194,7 +194,7 @@ export default function Expenses() {
         </div>
       </div>
 
-      <div className="grid grid-cols-2 gap-4 mb-6 max-w-md">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-6 max-w-md">
         <div className="bg-white border border-slate-200 rounded-lg shadow-sm p-4">
           <div className="text-[11px] font-semibold uppercase tracking-wider text-slate-500">Total gastos</div>
           <div className="font-display text-2xl font-semibold tracking-tight mt-1 tabular" data-testid="total-gastos">{eur(totalGastos)}</div>
@@ -277,7 +277,7 @@ export default function Expenses() {
             )}
 
             <div className="space-y-4">
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="space-y-2"><Label>Fecha</Label><Input type="date" value={form.date} onChange={(e) => setForm({ ...form, date: e.target.value })} data-testid="expense-date" /></div>
                 <div className="space-y-2">
                   <Label>Categoría</Label>
@@ -298,7 +298,7 @@ export default function Expenses() {
                 </div>
               )}
 
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="space-y-2"><Label>Proveedor</Label><Input value={form.vendor_name} onChange={(e) => setForm({ ...form, vendor_name: e.target.value })} data-testid="expense-vendor" /></div>
                 <div className="space-y-2">
                   <Label>NIF/CIF</Label>
@@ -311,7 +311,7 @@ export default function Expenses() {
                 </div>
               </div>
               <div className="space-y-2"><Label>Descripción</Label><Input value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} data-testid="expense-description" /></div>
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="space-y-2"><Label>Base imponible (€)</Label><Input type="number" step="0.01" value={form.base_amount} onChange={(e) => setForm({ ...form, base_amount: e.target.value })} data-testid="expense-base" /></div>
                 <div className="space-y-2">
                   <Label>Tipo de IVA</Label>

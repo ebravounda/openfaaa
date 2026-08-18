@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import api from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
+import { AssistantWidget } from "@/components/AssistantWidget";
 import {
   LayoutDashboard,
   FileText,
@@ -17,6 +18,8 @@ import {
   UserCog,
   ArrowLeft,
   CreditCard,
+  Menu,
+  X,
 } from "lucide-react";
 
 const baseNav = [
@@ -39,6 +42,7 @@ function initials(name = "") {
 export default function Layout({ children }) {
   const { user, logout, setUser } = useAuth();
   const navigate = useNavigate();
+  const [mobileOpen, setMobileOpen] = useState(false);
 
   const isAdmin = user?.role === "admin" && !user?.is_impersonating;
   const nav = isAdmin
@@ -80,44 +84,64 @@ export default function Layout({ children }) {
     }
   };
 
+  const bannerH = user?.is_impersonating ? 36 : 0;
+
   return (
-    <div className="min-h-screen flex bg-[#F8FAFC]">
+    <div className="min-h-screen bg-[#F8FAFC]">
       {user?.is_impersonating && (
-        <div className="fixed top-0 left-0 right-0 z-50 bg-amber-500 text-white text-sm px-5 py-2 flex items-center justify-center gap-3" data-testid="impersonation-banner">
-          <UserCog className="w-4 h-4" strokeWidth={1.5} />
-          <span>Estás viendo como <strong>{user?.name || user?.email}</strong></span>
-          <button onClick={stopImpersonate} data-testid="stop-impersonate-button" className="ml-2 inline-flex items-center gap-1 bg-white/20 hover:bg-white/30 rounded-full px-3 py-1 font-medium transition-colors">
+        <div className="fixed top-0 left-0 right-0 z-[60] h-9 bg-amber-500 text-white text-xs sm:text-sm px-3 sm:px-5 flex items-center justify-center gap-2 sm:gap-3" data-testid="impersonation-banner">
+          <UserCog className="w-4 h-4 shrink-0" strokeWidth={1.5} />
+          <span className="truncate">Viendo como <strong>{user?.name || user?.email}</strong></span>
+          <button onClick={stopImpersonate} data-testid="stop-impersonate-button" className="ml-1 shrink-0 inline-flex items-center gap-1 bg-white/20 hover:bg-white/30 rounded-full px-3 py-1 font-medium transition-colors">
             <ArrowLeft className="w-3.5 h-3.5" strokeWidth={2} /> Volver a admin
           </button>
         </div>
       )}
-      <aside className={`w-[248px] shrink-0 bg-white border-r border-slate-200 flex flex-col fixed h-screen z-20 ${user?.is_impersonating ? "pt-9" : ""}`}>
+
+      {/* Barra superior móvil */}
+      <header className="lg:hidden fixed left-0 right-0 z-40 h-14 bg-white border-b border-slate-200 flex items-center gap-3 px-4" style={{ top: bannerH }}>
+        <button onClick={() => setMobileOpen(true)} data-testid="mobile-menu-button" className="p-1.5 -ml-1.5 rounded-lg text-slate-600 hover:bg-slate-100 transition-colors" aria-label="Abrir menú">
+          <Menu className="w-6 h-6" strokeWidth={1.5} />
+        </button>
+        <div className="flex items-center gap-2">
+          <div className="w-7 h-7 rounded-lg bg-[#0052FF] flex items-center justify-center"><Sparkles className="w-4 h-4 text-white" strokeWidth={1.5} /></div>
+          <span className="font-display text-[15px] font-semibold tracking-tight text-slate-900">FiscalHub</span>
+        </div>
+      </header>
+
+      {/* Backdrop móvil */}
+      {mobileOpen && (
+        <div className="fixed inset-0 bg-slate-900/50 z-40 lg:hidden" onClick={() => setMobileOpen(false)} data-testid="mobile-backdrop" />
+      )}
+
+      <aside
+        className={`fixed left-0 w-[264px] max-w-[82vw] bg-white border-r border-slate-200 flex flex-col z-50 transform transition-transform duration-300 ease-out ${mobileOpen ? "translate-x-0" : "-translate-x-full"} lg:translate-x-0`}
+        style={{ top: bannerH, height: `calc(100vh - ${bannerH}px)` }}
+      >
         <div className="px-5 py-5 flex items-center gap-2.5">
           <div className="w-9 h-9 rounded-lg bg-[#0052FF] flex items-center justify-center">
             <Sparkles className="w-5 h-5 text-white" strokeWidth={1.5} />
           </div>
-          <div>
-            <div className="font-display text-[15px] font-semibold tracking-tight text-slate-900 leading-none">
-              FiscalHub
-            </div>
-            <div className="text-[10px] font-medium uppercase tracking-[0.16em] text-slate-400 mt-1">
-              España
-            </div>
+          <div className="flex-1">
+            <div className="font-display text-[15px] font-semibold tracking-tight text-slate-900 leading-none">FiscalHub</div>
+            <div className="text-[10px] font-medium uppercase tracking-[0.16em] text-slate-400 mt-1">España</div>
           </div>
+          <button onClick={() => setMobileOpen(false)} className="lg:hidden p-1.5 rounded-lg text-slate-400 hover:bg-slate-100" data-testid="mobile-menu-close" aria-label="Cerrar menú">
+            <X className="w-5 h-5" strokeWidth={1.5} />
+          </button>
         </div>
 
-        <nav className="flex-1 px-3 py-2 space-y-0.5">
+        <nav className="flex-1 overflow-y-auto px-3 py-2 space-y-0.5">
           {nav.map((n) => (
             <NavLink
               key={n.to}
               to={n.to}
               end={n.end}
               data-testid={n.testid}
+              onClick={() => setMobileOpen(false)}
               className={({ isActive }) =>
                 `flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors duration-200 ${
-                  isActive
-                    ? "bg-slate-100 text-[#0052FF]"
-                    : "text-slate-600 hover:bg-slate-50 hover:text-slate-900"
+                  isActive ? "bg-slate-100 text-[#0052FF]" : "text-slate-600 hover:bg-slate-50 hover:text-slate-900"
                 }`
               }
             >
@@ -144,27 +168,23 @@ export default function Layout({ children }) {
                   : (PLAN_LABEL[user?.plan] ? `Plan ${PLAN_LABEL[user?.plan]}` : (user?.tax_type === "empresa" ? "Empresa" : "Autónomo"))}
               </div>
             </div>
-            <button
-              onClick={handleLogout}
-              data-testid="logout-button"
-              title="Cerrar sesión"
-              className="p-2 rounded-lg text-slate-400 hover:text-slate-900 hover:bg-slate-50 transition-colors duration-200"
-            >
+            <button onClick={handleLogout} data-testid="logout-button" title="Cerrar sesión" className="p-2 rounded-lg text-slate-400 hover:text-slate-900 hover:bg-slate-50 transition-colors duration-200">
               <LogOut className="w-[18px] h-[18px]" strokeWidth={1.5} />
             </button>
           </div>
         </div>
       </aside>
 
-      <main className={`flex-1 ml-[248px] min-h-screen ${user?.is_impersonating ? "pt-9" : ""}`}>
+      <main className="lg:ml-[248px] min-h-screen pt-14 lg:pt-0" style={{ marginTop: bannerH }}>
         {usageWarn && (
-          <div className={`px-6 sm:px-8 lg:px-10 py-2.5 flex items-center gap-3 text-sm border-b ${usageWarn.over ? "bg-red-50 border-red-100 text-red-800" : "bg-amber-50 border-amber-100 text-amber-800"}`} data-testid="usage-warning-banner">
-            <span>{usageWarn.text} Mejora tu plan para seguir sin límites.</span>
+          <div className={`px-4 sm:px-8 lg:px-10 py-2.5 flex items-center gap-3 text-xs sm:text-sm border-b ${usageWarn.over ? "bg-red-50 border-red-100 text-red-800" : "bg-amber-50 border-amber-100 text-amber-800"}`} data-testid="usage-warning-banner">
+            <span className="min-w-0">{usageWarn.text} Mejora tu plan para seguir sin límites.</span>
             <NavLink to="/precios" className="ml-auto shrink-0 font-medium underline underline-offset-2 hover:opacity-80" data-testid="usage-warning-upgrade">Ver planes</NavLink>
           </div>
         )}
-        <div className="px-6 sm:px-8 lg:px-10 py-8 max-w-[1360px]">{children}</div>
+        <div className="px-4 sm:px-8 lg:px-10 py-6 lg:py-8 max-w-[1360px] w-full">{children}</div>
       </main>
+      <AssistantWidget />
     </div>
   );
 }

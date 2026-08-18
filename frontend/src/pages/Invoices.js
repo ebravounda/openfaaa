@@ -19,7 +19,7 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import {
-  Plus, Trash2, FileText, Mail, Download, CheckCircle2, Loader2, Pencil, Undo2, ShieldCheck, ShieldAlert, Search,
+  Plus, Trash2, FileText, Mail, Download, CheckCircle2, Loader2, Pencil, Undo2, ShieldCheck, ShieldAlert, Search, Ban, Sparkles,
 } from "lucide-react";
 
 const IVA_OPTIONS = [
@@ -100,7 +100,7 @@ export default function Invoices() {
   };
   const loadClients = () => api.get("/contacts?kind=client").then((r) => setClients(r.data));
   useEffect(() => {
-    load(); loadClients();
+    load(); loadClients(); loadIrpfHint();
     api.get("/company").then((r) => {
       setPrefix(r.data?.invoice_prefix || "");
       setRectifyPrefix(r.data?.rectify_prefix || "R");
@@ -125,7 +125,7 @@ export default function Invoices() {
     if (c) setForm((f) => ({ ...f, client: { name: c.name, nif: c.nif, address: c.address, email: c.email } }));
   };
 
-  const openNew = () => { setEditingId(null); setForm({ ...emptyForm(), series: prefix }); setOpen(true); };
+  const openNew = () => { setEditingId(null); setReview(null); setForm({ ...emptyForm(), series: prefix }); setOpen(true); };
   const openRectify = (inv) => {
     setEditingId(null);
     setForm({
@@ -243,6 +243,47 @@ export default function Invoices() {
     }
   };
 
+  const anular = async (inv) => {
+    if (!window.confirm(`¿Anular la factura ${inv.number}? Esta acción registra la anulación en VeriFactu y no se puede deshacer.`)) return;
+    try {
+      const { data } = await api.post(`/invoices/${inv.id}/anular`);
+      toast.success(data.verifactu ? `Factura anulada · ${data.verifactu.status}` : "Factura anulada");
+      load();
+    } catch (e) {
+      toast.error(formatApiErrorDetail(e.response?.data?.detail));
+    }
+  };
+
+  const [irpfHint, setIrpfHint] = useState(null);
+  const [reviewing, setReviewing] = useState(false);
+  const [review, setReview] = useState(null);
+
+  const loadIrpfHint = async () => {
+    try {
+      const { data } = await api.get("/irpf/suggestion");
+      setIrpfHint(data);
+    } catch (e) { setIrpfHint(null); }
+  };
+
+  const reviewWithAI = async () => {
+    setReviewing(true);
+    setReview(null);
+    try {
+      const { data } = await api.post("/invoices/review", {
+        client: form.client,
+        line_items: form.line_items.map((i) => ({ ...i, quantity: Number(i.quantity), unit_price: Number(i.unit_price) })),
+        iva_rate: Number(form.iva_rate),
+        irpf_rate: Number(form.irpf_rate),
+        issue_date: form.issue_date,
+      });
+      setReview(data);
+    } catch (e) {
+      toast.error(formatApiErrorDetail(e.response?.data?.detail));
+    } finally {
+      setReviewing(false);
+    }
+  };
+
   const nextPreview = `${form.series ? form.series + "-" : ""}${form.issue_date.slice(0, 4)}-XXXX`;
 
   return (
@@ -296,7 +337,9 @@ export default function Invoices() {
                   <TableCell className="text-right text-sm text-slate-500 tabular">{eur(inv.iva_amount)}</TableCell>
                   <TableCell className="text-right text-sm font-semibold tabular">{eur(inv.total)}</TableCell>
                   <TableCell>
-                    {inv.status === "paid"
+                    {inv.status === "anulada"
+                      ? <Badge className="bg-red-100 text-red-700 hover:bg-red-100 rounded-full">Anulada</Badge>
+                      : inv.status === "paid"
                       ? <Badge className="bg-emerald-100 text-emerald-700 hover:bg-emerald-100 rounded-full">Pagada</Badge>
                       : <Badge className="bg-amber-100 text-amber-700 hover:bg-amber-100 rounded-full">Pendiente</Badge>}
                   </TableCell>
@@ -307,15 +350,22 @@ export default function Invoices() {
                       ) : (
                         <Button variant="ghost" size="icon" title="Enviar a AEAT (VeriFactu, simulado)" onClick={() => submitVf(inv)} data-testid={`invoice-vf-${inv.number}`} className="h-8 w-8 text-amber-500 hover:text-amber-600"><ShieldAlert className="w-4 h-4" strokeWidth={1.5} /></Button>
                       ))}
-                      {inv.invoice_type !== "rectificativa" && (
+                      {inv.invoice_type !== "rectificativa" && inv.status !== "anulada" && (
                         <Button variant="ghost" size="icon" title="Crear rectificativa (abono)" onClick={() => openRectify(inv)} data-testid={`invoice-rectify-${inv.number}`} className="h-8 w-8 text-slate-500 hover:text-purple-600"><Undo2 className="w-4 h-4" strokeWidth={1.5} /></Button>
                       )}
-                      <Button variant="ghost" size="icon" title="Editar" onClick={() => openEdit(inv)} data-testid={`invoice-edit-${inv.number}`} className="h-8 w-8 text-slate-500 hover:text-[#0052FF]"><Pencil className="w-4 h-4" strokeWidth={1.5} /></Button>
+                      {inv.status !== "anulada" && (
+                        <Button variant="ghost" size="icon" title="Editar" onClick={() => openEdit(inv)} data-testid={`invoice-edit-${inv.number}`} className="h-8 w-8 text-slate-500 hover:text-[#0052FF]"><Pencil className="w-4 h-4" strokeWidth={1.5} /></Button>
+                      )}
                       <Button variant="ghost" size="icon" title="Ver PDF" onClick={() => openPdf(inv)} data-testid={`invoice-pdf-${inv.number}`} className="h-8 w-8 text-slate-500 hover:text-slate-900"><Download className="w-4 h-4" strokeWidth={1.5} /></Button>
                       <Button variant="ghost" size="icon" title="Enviar por email" onClick={() => sendEmail(inv)} disabled={sendingId === inv.id} data-testid={`invoice-email-${inv.number}`} className="h-8 w-8 text-slate-500 hover:text-[#0052FF]">
                         {sendingId === inv.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <Mail className="w-4 h-4" strokeWidth={1.5} />}
                       </Button>
-                      <Button variant="ghost" size="icon" title="Marcar pagada" onClick={() => markPaid(inv)} data-testid={`invoice-paid-${inv.number}`} className="h-8 w-8 text-slate-500 hover:text-emerald-600"><CheckCircle2 className={`w-4 h-4 ${inv.status === "paid" ? "text-emerald-600" : ""}`} strokeWidth={1.5} /></Button>
+                      {inv.status !== "anulada" && (
+                        <Button variant="ghost" size="icon" title="Marcar pagada" onClick={() => markPaid(inv)} data-testid={`invoice-paid-${inv.number}`} className="h-8 w-8 text-slate-500 hover:text-emerald-600"><CheckCircle2 className={`w-4 h-4 ${inv.status === "paid" ? "text-emerald-600" : ""}`} strokeWidth={1.5} /></Button>
+                      )}
+                      {inv.status !== "anulada" && (
+                        <Button variant="ghost" size="icon" title="Anular factura (con VeriFactu)" onClick={() => anular(inv)} data-testid={`invoice-anular-${inv.number}`} className="h-8 w-8 text-slate-400 hover:text-red-600"><Ban className="w-4 h-4" strokeWidth={1.5} /></Button>
+                      )}
                       <Button variant="ghost" size="icon" title="Eliminar" onClick={() => remove(inv)} data-testid={`invoice-delete-${inv.number}`} className="h-8 w-8 text-slate-400 hover:text-red-600"><Trash2 className="w-4 h-4" strokeWidth={1.5} /></Button>
                     </div>
                   </TableCell>
@@ -336,7 +386,7 @@ export default function Invoices() {
             </div>
           )}
           <div className="space-y-5">
-            <div className="grid grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
               <div className="space-y-2"><Label>Fecha de emisión</Label><Input type="date" value={form.issue_date} onChange={(e) => setForm({ ...form, issue_date: e.target.value })} data-testid="invoice-date" /></div>
               {!editingId && (
                 <div className="space-y-2">
@@ -358,7 +408,7 @@ export default function Invoices() {
 
             <div className="border border-slate-200 rounded-lg p-4 space-y-4">
               <div className="text-[11px] font-semibold uppercase tracking-wider text-slate-500">Datos del cliente</div>
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="space-y-2"><Label>Nombre / Razón social</Label><Input value={form.client.name} onChange={(e) => setForm({ ...form, client: { ...form.client, name: e.target.value } })} data-testid="client-name" /></div>
                 <div className="space-y-2"><Label>NIF / CIF</Label>
                   <div className="flex gap-2">
@@ -394,7 +444,7 @@ export default function Invoices() {
               ))}
             </div>
 
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label>Tipo de IVA</Label>
                 <Select value={form.iva_rate} onValueChange={(v) => setForm({ ...form, iva_rate: v })}>
@@ -408,6 +458,17 @@ export default function Invoices() {
                   <SelectTrigger data-testid="irpf-select"><SelectValue /></SelectTrigger>
                   <SelectContent>{IRPF_OPTIONS.map((o) => <SelectItem key={o.v} value={o.v}>{o.l}</SelectItem>)}</SelectContent>
                 </Select>
+                {irpfHint && (
+                  <div className="text-xs text-slate-500 bg-blue-50 border border-blue-100 rounded-md p-2 flex items-start gap-2" data-testid="irpf-hint">
+                    <Sparkles className="w-3.5 h-3.5 text-[#0052FF] shrink-0 mt-0.5" strokeWidth={1.5} />
+                    <span>
+                      {irpfHint.reason}{" "}
+                      {irpfHint.suggested_rate > 0 && String(irpfHint.suggested_rate) !== form.irpf_rate && (
+                        <button type="button" className="text-[#0052FF] font-medium underline" onClick={() => setForm({ ...form, irpf_rate: String(irpfHint.suggested_rate) })} data-testid="apply-irpf-suggestion">Aplicar {irpfHint.suggested_rate}%</button>
+                      )}
+                    </span>
+                  </div>
+                )}
               </div>
             </div>
 
@@ -415,7 +476,7 @@ export default function Invoices() {
 
             <div className="border border-slate-200 rounded-lg p-4 space-y-4" data-testid="payment-section">
               <div className="text-[11px] font-semibold uppercase tracking-wider text-slate-500">Datos de pago y periodo (opcional · plantilla GoRoky)</div>
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="space-y-2"><Label>Vencimiento</Label><Input type="date" value={form.due_date} onChange={(e) => setForm({ ...form, due_date: e.target.value })} data-testid="invoice-due-date" /></div>
                 <div className="space-y-2"><Label>Periodo</Label><Input value={form.period} onChange={(e) => setForm({ ...form, period: e.target.value })} placeholder="agosto 2026" data-testid="invoice-period" /></div>
                 <div className="space-y-2"><Label>Concepto</Label><Input value={form.concept_label} onChange={(e) => setForm({ ...form, concept_label: e.target.value })} placeholder="PAGO" data-testid="invoice-concept" /></div>
@@ -443,8 +504,26 @@ export default function Invoices() {
               {Number(form.irpf_rate) > 0 && <div className="flex justify-between text-slate-500"><span>Retención IRPF (-{form.irpf_rate}%)</span><span className="tabular">-{eur(irpfAmount)}</span></div>}
               <div className="flex justify-between font-display text-lg font-semibold text-slate-900 pt-2 border-t border-slate-200 mt-2"><span>Total</span><span className="tabular" data-testid="summary-total">{eur(total)}</span></div>
             </div>
+
+            {review && (
+              <div className={`rounded-lg p-4 text-sm border ${review.ok ? "bg-emerald-50 border-emerald-200" : "bg-amber-50 border-amber-200"}`} data-testid="ai-review-result">
+                <div className="font-medium mb-1 flex items-center gap-2">
+                  <Sparkles className="w-4 h-4 text-[#0052FF]" strokeWidth={1.5} />
+                  {review.ok ? "Revisión IA: todo correcto" : "Revisión IA: revisa estos puntos"}
+                </div>
+                {review.summary && <p className="text-slate-600 mb-2">{review.summary}</p>}
+                <ul className="space-y-1">
+                  {(review.issues || []).map((it, i) => (
+                    <li key={i} className={it.severity === "error" ? "text-red-700" : "text-amber-700"}>• {it.message}</li>
+                  ))}
+                </ul>
+              </div>
+            )}
           </div>
           <DialogFooter>
+            <Button variant="outline" onClick={reviewWithAI} disabled={reviewing} className="border-slate-200 mr-auto" data-testid="review-ai">
+              {reviewing ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Sparkles className="w-4 h-4 mr-2" strokeWidth={1.5} />}Revisar con IA
+            </Button>
             <Button variant="outline" onClick={() => setOpen(false)} className="border-slate-200">Cancelar</Button>
             <Button onClick={save} disabled={saving} className="bg-[#0052FF] hover:bg-[#0040CC] text-white" data-testid="save-invoice">
               {saving && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}{editingId ? "Guardar cambios" : "Emitir factura"}

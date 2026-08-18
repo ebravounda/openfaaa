@@ -42,6 +42,18 @@ def compute_fingerprint(nif, numserie, fecha, tipo, cuota, importe, prev, ts) ->
     return hashlib.sha256(chain.encode("utf-8")).hexdigest().upper()
 
 
+def compute_fingerprint_anulacion(nif, numserie, fecha, prev, ts) -> str:
+    """Huella SHA-256 encadenada para RegistroAnulacion (VeriFactu)."""
+    chain = (
+        f"IDEmisorFacturaAnulada={nif}"
+        f"&NumSerieFacturaAnulada={numserie}"
+        f"&FechaExpedicionFacturaAnulada={fecha}"
+        f"&Huella={prev}"
+        f"&FechaHoraHusoGenRegistro={ts}"
+    )
+    return hashlib.sha256(chain.encode("utf-8")).hexdigest().upper()
+
+
 def build_qr_url(nif, numserie, fecha, importe) -> str:
     return QR_BASE + "?" + urlencode({
         "nif": nif, "numserie": numserie, "fecha": fecha, "importe": _fmt_num(importe),
@@ -105,6 +117,34 @@ def build_registro_alta_xml(company: dict, invoice: dict, prev_number: str, prev
         f"<sf:TipoHuella>01</sf:TipoHuella>"
         f"<sf:Huella>{huella}</sf:Huella>"
         f"</sf:RegistroAlta>"
+    )
+
+
+def build_registro_anulacion_xml(company: dict, invoice: dict, prev_number: str, prev_huella: str,
+                                 ts: str, huella: str) -> str:
+    """RegistroAnulacion según SuministroLR de VeriFactu (representativo del XSD de la AEAT)."""
+    nif = company.get("nif", "")
+    fecha = to_ddmmyyyy(invoice["issue_date"])
+    encad = (f"<sf:RegistroAnterior><sf:IDEmisorFactura>{_xesc(nif)}</sf:IDEmisorFactura>"
+             f"<sf:NumSerieFactura>{_xesc(prev_number)}</sf:NumSerieFactura>"
+             f"<sf:Huella>{_xesc(prev_huella)}</sf:Huella></sf:RegistroAnterior>"
+             if prev_huella else "<sf:PrimerRegistro>S</sf:PrimerRegistro>")
+    return (
+        '<?xml version="1.0" encoding="UTF-8"?>\n'
+        '<sf:RegistroAnulacion xmlns:sf="https://www2.agenciatributaria.gob.es/static_files/common/internet/dep/aplicaciones/es/aeat/tikeV1.0/SistemaFacturacion.xsd">'
+        f"<sf:IDVersion>1.0</sf:IDVersion>"
+        f"<sf:IDFactura>"
+        f"<sf:IDEmisorFacturaAnulada>{_xesc(nif)}</sf:IDEmisorFacturaAnulada>"
+        f"<sf:NumSerieFacturaAnulada>{_xesc(invoice['number'])}</sf:NumSerieFacturaAnulada>"
+        f"<sf:FechaExpedicionFacturaAnulada>{fecha}</sf:FechaExpedicionFacturaAnulada>"
+        f"</sf:IDFactura>"
+        f"<sf:Encadenamiento>{encad}</sf:Encadenamiento>"
+        f"<sf:SistemaInformatico><sf:NombreSistemaInformatico>FiscalHub</sf:NombreSistemaInformatico>"
+        f"<sf:IdSistemaInformatico>FH</sf:IdSistemaInformatico><sf:Version>1.0</sf:Version></sf:SistemaInformatico>"
+        f"<sf:FechaHoraHusoGenRegistro>{ts}</sf:FechaHoraHusoGenRegistro>"
+        f"<sf:TipoHuella>01</sf:TipoHuella>"
+        f"<sf:Huella>{huella}</sf:Huella>"
+        f"</sf:RegistroAnulacion>"
     )
 
 

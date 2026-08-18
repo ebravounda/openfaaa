@@ -77,6 +77,15 @@ Sistema de facturación para España: crear facturas introduciendo datos (CIF/NI
 - ✅ Personalización por usuario: elegir plantilla, color de acento (con override) y pie de factura. Company: template_id, accent_color, invoice_footer. El PDF aplica el color al encabezado/total y añade el pie.
 - ✅ Panel Conexión muestra el modo real (Simulado/Preproducción).
 
+## Implemented — Iteración 13 (2026-06) UX móvil estilo Holded + anulación/IRPF/IA/validación
+- ✅ **Responsive móvil**: Layout.js con barra superior (hamburguesa) y **drawer deslizable** con backdrop en móvil; sidebar fijo solo en lg+. Formularios apilan en móvil. Verificado por testing agent (iteration_13, 100%). Corrige "el menú tapaba el panel en móvil".
+- ✅ **Anular con VeriFactu**: botón Anular (RegistroAnulación, huella encadenada), estado ANULADA, sello rojo en PDF, excluida de impuestos. Doble anulación bloqueada (backend verifactu_service + server /invoices/{id}/anular).
+- ✅ **IRPF**: sugerencia 7% nuevo autónomo (año alta + 2), 15% general, 0% empresas. Campo "Fecha de alta" en Configuración. GET /api/irpf/suggestion.
+- ✅ **Asistente IA** (OpenAI vía Emergent key): chat flotante FiscalBot + "Revisar con IA" en el formulario. spanish_tax.py (validador NIF/NIE/CIF) + ai_service.py.
+- ✅ **Validación de factura**: NIF/CIF con dígito control, IVA∈{0,4,10,21}, IRPF 0-47, conceptos y cliente obligatorios (422). Factura anulada no editable.
+- ✅ Testing iteración 12 (features) + 13 (móvil): verde, sin bugs de producto.
+
+
 ## Implemented — Iteración 12 (2026-06) Gestión de suscripción + Historial + Auditoría + Plantilla por actividad
 - ✅ Cancelar/gestionar suscripción: portal de cliente de Stripe (POST /api/payments/portal, stripe_service.ensure_portal_configuration/create_portal_session). Webhooks customer.subscription.updated (cambio de plan) y .deleted (baja → básico) sincronizan el plan.
 - ✅ Historial de pagos: GET /api/payments/history (facturas de Stripe del cliente); tabla en /precios (payment-history) con fecha, importe, estado y enlace a factura. Botón "Gestionar / cancelar suscripción" visible solo en planes de pago.

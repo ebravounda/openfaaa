@@ -30,6 +30,8 @@ from storage_service import put_object, get_object, MIME_TYPES, APP_NAME
 from ocr_service import extract_expense
 from export_service import build_libros_xlsx, build_libros_csv
 import verifactu_service as vf
+import spanish_tax
+import ai_service
 import cert_service
 
 logging.basicConfig(level=logging.INFO,
@@ -101,10 +103,24 @@ class CompanyInput(BaseModel):
     legal_name: str = ""
     legal_notice: str = ""
     footer_message: str = ""
+    autonomo_start_date: str = ""
 
 
 class StatusInput(BaseModel):
     status: str
+
+
+class AssistantInput(BaseModel):
+    message: str
+    session_id: str = ""
+
+
+class ReviewInput(BaseModel):
+    client: dict = {}
+    line_items: list = []
+    iva_rate: float = 21
+    irpf_rate: float = 0
+    issue_date: str = ""
 
 
 class ContactInput(BaseModel):
@@ -127,6 +143,32 @@ def compute_invoice(inv: dict) -> dict:
     inv["irpf_amount"] = irpf_amount
     inv["total"] = total
     return inv
+
+
+def _validate_invoice(data) -> None:
+    errors = []
+    cl = data.client
+    if not (cl.name or "").strip():
+        errors.append("El nombre del cliente es obligatorio.")
+    if not (cl.nif or "").strip():
+        errors.append("El NIF/CIF del cliente es obligatorio.")
+    elif not spanish_tax.validate_nif(cl.nif):
+        errors.append(f"El NIF/CIF '{cl.nif}' no es válido (revisa la letra de control).")
+    if not data.line_items:
+        errors.append("Añade al menos un concepto a la factura.")
+    for i, it in enumerate(data.line_items, 1):
+        if not (it.description or "").strip():
+            errors.append(f"El concepto {i} necesita una descripción.")
+        if it.quantity is None or it.quantity <= 0:
+            errors.append(f"La cantidad del concepto {i} debe ser mayor que 0.")
+        if it.unit_price is None or it.unit_price < 0:
+            errors.append(f"El precio del concepto {i} no puede ser negativo.")
+    if data.iva_rate not in (0, 4, 10, 21):
+        errors.append("El tipo de IVA debe ser 0, 4, 10 o 21%.")
+    if data.irpf_rate < 0 or data.irpf_rate > 47:
+        errors.append("El IRPF debe estar entre 0% y 47%.")
+    if errors:
+        raise HTTPException(status_code=422, detail=" ".join(errors))
 
 
 def compute_expense(exp: dict) -> dict:
@@ -237,6 +279,7 @@ async def list_invoices(user=Depends(get_current_user)):
 
 @api.post("/invoices")
 async def create_invoice(data: InvoiceInput, user=Depends(get_current_user)):
+    _validate_invoice(data)
     plan = await plan_for_user(user)
     if plan["max_invoices"] is not None:
         cnt = await db.invoices.count_documents(
@@ -294,9 +337,12 @@ async def get_invoice(invoice_id: str, user=Depends(get_current_user)):
 
 @api.put("/invoices/{invoice_id}")
 async def update_invoice(invoice_id: str, data: InvoiceInput, user=Depends(get_current_user)):
+    _validate_invoice(data)
     existing = await db.invoices.find_one({"id": invoice_id, "user_id": user["id"]}, {"_id": 0})
     if not existing:
         raise HTTPException(status_code=404, detail="Factura no encontrada")
+    if existing.get("status") == "anulada":
+        raise HTTPException(status_code=400, detail="No se puede editar una factura anulada.")
     doc = data.model_dump()
     doc.pop("series", None)
     doc.update({
@@ -317,6 +363,116 @@ async def update_status(invoice_id: str, data: StatusInput, user=Depends(get_cur
     if res.matched_count == 0:
         raise HTTPException(status_code=404, detail="Factura no encontrada")
     return {"status": "ok"}
+
+
+@api.post("/invoices/{invoice_id}/anular")
+async def anular_invoice(invoice_id: str, user=Depends(get_current_user)):
+    inv = await db.invoices.find_one({"id": invoice_id, "user_id": user["id"]}, {"_id": 0})
+    if not inv:
+        raise HTTPException(status_code=404, detail="Factura no encontrada")
+    if inv.get("status") == "anulada":
+        raise HTTPException(status_code=400, detail="La factura ya está anulada.")
+    company = await db.companies.find_one({"user_id": user["id"]}, {"_id": 0}) or {}
+    now_iso = datetime.now(timezone.utc).isoformat()
+    verifactu_result = None
+
+    vfd = inv.get("verifactu")
+    if vfd and vfd.get("enabled"):
+        nif = company.get("nif", "")
+        fecha = vf.to_ddmmyyyy(inv["issue_date"])
+        ts = vf.now_ts()
+        last = await db.invoices.find_one(
+            {"user_id": user["id"], "verifactu.huella": {"$exists": True}},
+            {"_id": 0, "verifactu": 1, "number": 1}, sort=[("created_at", -1)])
+        prev = (last or {}).get("verifactu", {}).get("huella", "") if last else ""
+        prev_number = (last or {}).get("number", "") if last else ""
+        huella = vf.compute_fingerprint_anulacion(nif, inv["number"], fecha, prev, ts)
+        registro_xml = vf.build_registro_anulacion_xml(company, inv, prev_number, prev, ts, huella)
+
+        signature, signed, signer, cert_bytes, cert_pwd = None, False, None, None, None
+        cert_doc = await db.certificates.find_one({"user_id": user["id"]})
+        if cert_doc:
+            try:
+                cert_bytes = cert_service.decrypt(cert_doc["data"].encode())
+                cert_pwd = cert_service.decrypt(cert_doc["password"].encode()).decode()
+                key, cert, _ = cert_service.parse_pfx(cert_bytes, cert_pwd)
+                signature = cert_service.sign_data(key, registro_xml.encode("utf-8"))
+                signed = True
+                signer = cert_service.cert_metadata(cert).get("subject_cn")
+            except Exception as e:
+                logger.error(f"Cert signing (anulacion) failed: {e}")
+
+        soap_request = vf.build_soap_request(registro_xml, nif, signature)
+        mode = company.get("verifactu_mode", "simulado")
+        if mode == "preproduccion" and cert_bytes:
+            real = await vf.send_to_aeat(cert_bytes, cert_pwd, soap_request)
+            simulated, http_status, endpoint = False, real["status"], real["url"]
+            if real["ok"]:
+                submitted, estado_reg = True, "Anulada"
+                aeat_response = real["response"]
+                csv_code = "VF-ANUL-" + secrets.token_hex(6).upper()
+                status_msg = "Anulación aceptada por la AEAT (preproducción)"
+            else:
+                submitted, estado_reg = False, "Rechazado"
+                aeat_response = real["response"] or f"ERROR DE CONEXIÓN CON LA AEAT (preproducción):\n{real['error']}"
+                csv_code = None
+                status_msg = "Error al anular en la AEAT (preproducción)"
+        else:
+            simulated, http_status, endpoint = True, 200, "AEAT VerifactuSOAP (SIMULADO)"
+            submitted, estado_reg = True, "Anulada"
+            csv_code = "VF-ANUL-" + secrets.token_hex(6).upper()
+            aeat_response = vf.simulate_aeat_response(nif, inv["number"], csv_code, now_iso)
+            status_msg = "Anulación aceptada por la AEAT (simulado)"
+
+        await db.verifactu_log.insert_one({
+            "id": str(uuid.uuid4()), "user_id": user["id"], "invoice_id": invoice_id,
+            "invoice_number": inv["number"], "created_at": now_iso, "endpoint": endpoint,
+            "estado": "Correcto" if submitted else "Error", "estado_registro": estado_reg,
+            "csv": csv_code, "signed": signed, "signer": signer, "huella": huella,
+            "simulated": simulated, "mode": mode, "http_status": http_status,
+            "request_xml": soap_request, "response_xml": aeat_response, "tipo_registro": "Anulacion",
+        })
+        verifactu_result = {"huella": huella, "timestamp": ts, "submitted": submitted,
+                            "status": status_msg, "csv": csv_code, "signed": signed, "mode": mode}
+
+    await db.invoices.update_one(
+        {"id": invoice_id, "user_id": user["id"]},
+        {"$set": {"status": "anulada", "annulled": True, "annulled_at": now_iso,
+                  "verifactu.anulacion": verifactu_result}})
+    return {"status": "anulada", "verifactu": verifactu_result}
+
+
+@api.get("/irpf/suggestion")
+async def irpf_suggestion(user=Depends(get_current_user)):
+    company = await db.companies.find_one({"user_id": user["id"]}, {"_id": 0}) or {}
+    tax_type = company.get("tax_type") or user.get("tax_type", "autonomo")
+    return spanish_tax.irpf_suggestion(tax_type, company.get("autonomo_start_date", ""))
+
+
+@api.post("/assistant/chat")
+async def assistant_chat(data: AssistantInput, user=Depends(get_current_user)):
+    if not (data.message or "").strip():
+        raise HTTPException(status_code=400, detail="Escribe una pregunta.")
+    sid = data.session_id or f"assist-{user['id']}"
+    try:
+        reply = await ai_service.assistant_reply(sid, data.message.strip())
+    except Exception as e:
+        logger.error(f"assistant error: {e}")
+        raise HTTPException(status_code=502, detail="El asistente no está disponible ahora mismo. Inténtalo de nuevo.")
+    return {"reply": reply, "session_id": sid}
+
+
+@api.post("/invoices/review")
+async def review_invoice_ai(data: ReviewInput, user=Depends(get_current_user)):
+    draft = data.model_dump()
+    # NIF check determinista añadido al contexto
+    nif = (draft.get("client") or {}).get("nif", "")
+    draft["nif_valido"] = spanish_tax.validate_nif(nif) if nif else False
+    try:
+        return await ai_service.review_invoice(draft)
+    except Exception as e:
+        logger.error(f"review error: {e}")
+        raise HTTPException(status_code=502, detail="No se pudo revisar con IA ahora mismo.")
 
 
 @api.delete("/invoices/{invoice_id}")
@@ -624,7 +780,7 @@ async def dashboard(year: Optional[int] = None, user=Depends(get_current_user)):
         year = datetime.now(timezone.utc).year
     ys = str(year)
     invoices = await db.invoices.find(
-        {"user_id": user["id"], "issue_date": {"$regex": f"^{ys}"}}, {"_id": 0}).to_list(5000)
+        {"user_id": user["id"], "issue_date": {"$regex": f"^{ys}"}, "status": {"$ne": "anulada"}}, {"_id": 0}).to_list(5000)
     expenses = await db.expenses.find(
         {"user_id": user["id"], "date": {"$regex": f"^{ys}"}}, {"_id": 0}).to_list(5000)
 
@@ -728,7 +884,7 @@ async def annual_summary(year: Optional[int] = None, user=Depends(get_current_us
         year = datetime.now(timezone.utc).year
     ys = str(year)
     invoices = await db.invoices.find(
-        {"user_id": user["id"], "issue_date": {"$regex": f"^{ys}"}}, {"_id": 0}).to_list(10000)
+        {"user_id": user["id"], "issue_date": {"$regex": f"^{ys}"}, "status": {"$ne": "anulada"}}, {"_id": 0}).to_list(10000)
     expenses = await db.expenses.find(
         {"user_id": user["id"], "date": {"$regex": f"^{ys}"}}, {"_id": 0}).to_list(10000)
 

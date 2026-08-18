@@ -22,6 +22,19 @@ def _eur(v):
     return f"{v:,.2f} €".replace(",", "X").replace(".", ",").replace("X", ".")
 
 
+def _stamp_anulada(canvas, doc, anulada: bool):
+    if not anulada:
+        return
+    canvas.saveState()
+    w, h = A4
+    canvas.translate(w / 2, h / 2)
+    canvas.rotate(30)
+    canvas.setFont("Helvetica-Bold", 80)
+    canvas.setFillColorRGB(0.86, 0.15, 0.15, alpha=0.22)
+    canvas.drawCentredString(0, 0, "ANULADA")
+    canvas.restoreState()
+
+
 def build_invoice_pdf(invoice: dict, company: dict, qr_png: bytes = None, verifactu: dict = None) -> bytes:
     comp0 = company or {}
     if TEMPLATE_MAP.get(comp0.get("template_id", ""), {}).get("layout") == "goroky":
@@ -165,7 +178,9 @@ def build_invoice_pdf(invoice: dict, company: dict, qr_png: bytes = None, verifa
         vt.setStyle(TableStyle([("VALIGN", (0, 0), (-1, -1), "MIDDLE")]))
         story.append(vt)
 
-    doc.build(story)
+    _anulada = str(invoice.get("status", "")).lower() == "anulada"
+    doc.build(story, onFirstPage=lambda c, d: _stamp_anulada(c, d, _anulada),
+              onLaterPages=lambda c, d: _stamp_anulada(c, d, _anulada))
     buf.seek(0)
     return buf.read()
 
@@ -411,6 +426,7 @@ def build_goroky_invoice_pdf(invoice: dict, company: dict, qr_png: bytes = None,
 
     def _on_page(canvas, d):
         _grk_header_footer(canvas, d, comp, footer_msg)
+        _stamp_anulada(canvas, d, str(invoice.get("status", "")).lower() == "anulada")
 
     doc.build(story, onFirstPage=_on_page, onLaterPages=_on_page)
     buf.seek(0)

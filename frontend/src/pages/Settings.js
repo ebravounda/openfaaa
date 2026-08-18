@@ -94,17 +94,18 @@ export default function Settings() {
             </div>
           </div>
           <div className="p-6 space-y-5">
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="space-y-2"><Label>Nombre / Razón social</Label><Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} data-testid="company-name" /></div>
               <div className="space-y-2"><Label>NIF / CIF</Label><Input value={form.nif} onChange={(e) => setForm({ ...form, nif: e.target.value })} placeholder="B12345678 / 12345678Z" data-testid="company-nif" /></div>
             </div>
             <div className="space-y-2"><Label>Dirección fiscal</Label><Input value={form.address} onChange={(e) => setForm({ ...form, address: e.target.value })} data-testid="company-address" /></div>
             <div className="space-y-2"><Label>Nombre legal (2ª línea, opcional)</Label><Input value={form.legal_name} onChange={(e) => setForm({ ...form, legal_name: e.target.value })} placeholder="TRAMILEX GLOBAL SERVICE SL" data-testid="company-legal-name" /></div>
-            <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-2"><Label>Fecha de alta como autónomo (para el IRPF reducido del 7%)</Label><Input type="date" value={form.autonomo_start_date || ""} onChange={(e) => setForm({ ...form, autonomo_start_date: e.target.value })} data-testid="company-autonomo-start" /></div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="space-y-2"><Label>Email</Label><Input type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} data-testid="company-email" /></div>
               <div className="space-y-2"><Label>Teléfono</Label><Input value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} data-testid="company-phone" /></div>
             </div>
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label>Tipo de actividad</Label>
                 <Select value={form.tax_type} onValueChange={(v) => setForm({ ...form, tax_type: v })}>
