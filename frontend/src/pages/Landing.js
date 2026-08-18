@@ -37,7 +37,7 @@ function BrowserFrame({ children, className = "" }) {
         <span className="w-3 h-3 rounded-full bg-red-400" />
         <span className="w-3 h-3 rounded-full bg-amber-400" />
         <span className="w-3 h-3 rounded-full bg-emerald-400" />
-        <span className="ml-3 text-[11px] text-slate-400 font-mono">app.openfactura.es</span>
+        <span className="ml-3 text-[11px] text-slate-400 font-mono">openfactura.es</span>
       </div>
       {children}
     </div>
