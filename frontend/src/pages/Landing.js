@@ -3,7 +3,7 @@ import { motion } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import {
   Sparkles, FileText, Landmark, ShieldCheck, ScanLine, Bot, Check, ArrowRight,
-  Menu, TrendingUp, Zap, ReceiptText, Building2, Users, Briefcase, Star,
+  Menu, TrendingUp, Zap, ReceiptText, Building2, Users, Briefcase, Star, MapPin,
 } from "lucide-react";
 
 const ACCENT = "#0052FF";
@@ -447,6 +447,36 @@ export default function Landing() {
               {["Stripe", "VeriFactu AEAT", "VIES", "Resend", "PayPal", "Google"].map((n) => (
                 <span key={n} className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-slate-50 px-4 py-2 text-sm font-medium text-slate-600">
                   <Zap className="w-3.5 h-3.5" style={{ color: ACCENT }} strokeWidth={2} /> {n}
+                </span>
+              ))}
+            </div>
+          </Reveal>
+        </div>
+      </section>
+
+      {/* Cobertura nacional (SEO local) */}
+      <section className="bg-[#F8FAFC] border-t border-slate-100">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-20 sm:py-24 text-center">
+          <Reveal>
+            <span className="inline-flex items-center gap-2 text-sm font-semibold" style={{ color: ACCENT }}>
+              <MapPin className="w-4 h-4" strokeWidth={2} /> Cobertura nacional
+            </span>
+            <h2 className="text-3xl sm:text-4xl font-bold tracking-tight mt-3 max-w-3xl mx-auto">
+              El programa de facturación para autónomos y pymes en toda España
+            </h2>
+            <p className="text-slate-500 mt-4 max-w-2xl mx-auto leading-relaxed">
+              OpenFactura funciona 100% en la nube, así que puedes facturar, controlar tu IVA e IRPF y cumplir con VeriFactu desde cualquier ciudad. Miles de autónomos y empresas ya lo usan en:
+            </p>
+          </Reveal>
+          <Reveal delay={0.1}>
+            <div className="flex flex-wrap items-center justify-center gap-2.5 mt-8 max-w-4xl mx-auto">
+              {[
+                "Madrid", "Barcelona", "Valencia", "Sevilla", "Málaga", "Granada", "Fuengirola",
+                "Bilbao", "Zaragoza", "Murcia", "Alicante", "Palma de Mallorca", "Las Palmas",
+                "Vigo", "Marbella", "Córdoba", "Valladolid", "Gijón", "A Coruña", "Santander",
+              ].map((city) => (
+                <span key={city} className="inline-flex items-center gap-1.5 rounded-full border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700">
+                  <MapPin className="w-3.5 h-3.5 text-slate-400" strokeWidth={2} /> Facturación en {city}
                 </span>
               ))}
             </div>

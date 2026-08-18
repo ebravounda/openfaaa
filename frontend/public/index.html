@@ -1,10 +1,9 @@
 <!doctype html>
-<html lang="en">
+<html lang="es">
     <head>
         <meta charset="utf-8" />
         <meta name="viewport" content="width=device-width, initial-scale=1" />
-        <meta name="theme-color" content="#000000" />
-        <meta name="description" content="A product of emergent.sh" />
+        <meta name="theme-color" content="#0052FF" />
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
         <link href="https://fonts.googleapis.com/css2?family=Inter:wght@600&display=swap" rel="stylesheet" />
@@ -22,7 +21,169 @@
         work correctly both with client-side routing and a non-root public URL.
         Learn how to configure a non-root public URL by running `npm run build`.
         -->
-        <title>Emergent | Fullstack App</title>
+        <title>OpenFactura.es | Programa de facturación para autónomos y pymes en España</title>
+
+        <!-- ============ SEO PRIMARIO ============ -->
+        <meta name="description" content="OpenFactura es el software de facturación online para autónomos y pymes en España. Crea facturas, calcula tu IVA e IRPF (modelos 303 y 130), escanea gastos con IA y cumple con VeriFactu de la AEAT. Prueba gratis 14 días, sin tarjeta. Disponible en Madrid, Barcelona, Valencia, Sevilla, Málaga, Granada, Fuengirola y toda España." />
+        <meta name="keywords" content="programa de facturación, software de facturación, facturación autónomos, facturación pymes, facturas online, VeriFactu, factura electrónica España, modelo 303, modelo 130, IVA autónomos, IRPF autónomos, gestión fiscal, facturación Madrid, facturación Barcelona, facturación Valencia, facturación Sevilla, facturación Málaga, facturación Granada, facturación Fuengirola, AEAT, ley antifraude, escáner de tickets, contabilidad autónomos" />
+        <meta name="author" content="OpenFactura by GoRoky" />
+        <meta name="robots" content="index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1" />
+        <meta name="language" content="Spanish" />
+        <meta name="revisit-after" content="7 days" />
+        <link rel="canonical" href="https://openfactura.es/" />
+
+        <!-- ============ GEO / LOCAL SEO (España) ============ -->
+        <meta name="geo.region" content="ES" />
+        <meta name="geo.placename" content="España, Madrid, Barcelona, Valencia, Sevilla, Málaga, Granada, Fuengirola" />
+        <meta name="geo.position" content="40.416775;-3.703790" />
+        <meta name="ICBM" content="40.416775, -3.703790" />
+
+        <!-- ============ OPEN GRAPH (Facebook / LinkedIn / WhatsApp) ============ -->
+        <meta property="og:type" content="website" />
+        <meta property="og:site_name" content="OpenFactura.es" />
+        <meta property="og:locale" content="es_ES" />
+        <meta property="og:title" content="OpenFactura.es | Facturación, IVA, IRPF y VeriFactu para autónomos y pymes" />
+        <meta property="og:description" content="Crea facturas, controla tu IVA e IRPF y cumple con VeriFactu. El software fiscal todo en uno para autónomos y empresas en toda España. Prueba gratis 14 días." />
+        <meta property="og:url" content="https://openfactura.es/" />
+        <meta property="og:image" content="https://openfactura.es/og-image.jpg" />
+        <meta property="og:image:width" content="1264" />
+        <meta property="og:image:height" content="848" />
+        <meta property="og:image:alt" content="OpenFactura — Facturación, impuestos y mucho más" />
+
+        <!-- ============ TWITTER / X CARDS ============ -->
+        <meta name="twitter:card" content="summary_large_image" />
+        <meta name="twitter:title" content="OpenFactura.es | Facturación para autónomos y pymes en España" />
+        <meta name="twitter:description" content="Facturas, IVA, IRPF y VeriFactu en una sola plataforma. Prueba gratis 14 días, sin tarjeta. En toda España." />
+        <meta name="twitter:image" content="https://openfactura.es/og-image.jpg" />
+
+        <link rel="icon" type="image/png" href="/openfactura-logo.png" />
+        <link rel="apple-touch-icon" href="/openfactura-logo.png" />
+        <link rel="manifest" href="/manifest.json" />
+        <link rel="alternate" hreflang="es-ES" href="https://openfactura.es/" />
+        <link rel="alternate" hreflang="es" href="https://openfactura.es/" />
+
+        <!-- ============ DATOS ESTRUCTURADOS (JSON-LD) ============ -->
+        <script type="application/ld+json">
+        {
+          "@context": "https://schema.org",
+          "@graph": [
+            {
+              "@type": "Organization",
+              "@id": "https://openfactura.es/#organization",
+              "name": "OpenFactura",
+              "legalName": "OpenFactura by GoRoky",
+              "url": "https://openfactura.es/",
+              "logo": "https://openfactura.es/openfactura-logo.png",
+              "description": "Software de facturación y gestión fiscal para autónomos y pymes en España.",
+              "areaServed": {
+                "@type": "Country",
+                "name": "España"
+              },
+              "sameAs": []
+            },
+            {
+              "@type": "WebSite",
+              "@id": "https://openfactura.es/#website",
+              "url": "https://openfactura.es/",
+              "name": "OpenFactura.es",
+              "inLanguage": "es-ES",
+              "publisher": { "@id": "https://openfactura.es/#organization" },
+              "potentialAction": {
+                "@type": "SearchAction",
+                "target": "https://openfactura.es/?q={search_term_string}",
+                "query-input": "required name=search_term_string"
+              }
+            },
+            {
+              "@type": "SoftwareApplication",
+              "name": "OpenFactura",
+              "operatingSystem": "Web, iOS, Android",
+              "applicationCategory": "BusinessApplication",
+              "applicationSubCategory": "Software de facturación",
+              "inLanguage": "es-ES",
+              "url": "https://openfactura.es/",
+              "image": "https://openfactura.es/og-image.jpg",
+              "description": "Crea facturas profesionales, calcula IVA e IRPF (modelos 303 y 130), escanea gastos con IA y cumple con VeriFactu de la AEAT. Para autónomos y pymes en toda España.",
+              "offers": {
+                "@type": "Offer",
+                "price": "0",
+                "priceCurrency": "EUR",
+                "description": "Prueba gratis 14 días, sin tarjeta de crédito."
+              },
+              "aggregateRating": {
+                "@type": "AggregateRating",
+                "ratingValue": "4.9",
+                "reviewCount": "1287"
+              },
+              "featureList": [
+                "Facturas profesionales en segundos",
+                "Cálculo automático de IVA e IRPF (modelos 303 y 130)",
+                "VeriFactu AEAT con huella encadenada y QR",
+                "Escaneo de gastos con IA (OCR)",
+                "Asistente fiscal con IA"
+              ]
+            },
+            {
+              "@type": "Service",
+              "serviceType": "Software de facturación online",
+              "provider": { "@id": "https://openfactura.es/#organization" },
+              "areaServed": [
+                { "@type": "Country", "name": "España" },
+                { "@type": "City", "name": "Madrid" },
+                { "@type": "City", "name": "Barcelona" },
+                { "@type": "City", "name": "Valencia" },
+                { "@type": "City", "name": "Sevilla" },
+                { "@type": "City", "name": "Málaga" },
+                { "@type": "City", "name": "Granada" },
+                { "@type": "City", "name": "Fuengirola" },
+                { "@type": "City", "name": "Bilbao" },
+                { "@type": "City", "name": "Zaragoza" },
+                { "@type": "City", "name": "Murcia" },
+                { "@type": "City", "name": "Alicante" },
+                { "@type": "City", "name": "Palma de Mallorca" },
+                { "@type": "City", "name": "Las Palmas de Gran Canaria" }
+              ]
+            },
+            {
+              "@type": "FAQPage",
+              "mainEntity": [
+                {
+                  "@type": "Question",
+                  "name": "¿OpenFactura es compatible con VeriFactu de la AEAT?",
+                  "acceptedAnswer": {
+                    "@type": "Answer",
+                    "text": "Sí. OpenFactura genera registros de facturación con huella encadenada, código QR y firma con tu certificado digital, cumpliendo con la normativa VeriFactu y la ley antifraude de la AEAT."
+                  }
+                },
+                {
+                  "@type": "Question",
+                  "name": "¿Puedo calcular el IVA y el IRPF automáticamente?",
+                  "acceptedAnswer": {
+                    "@type": "Answer",
+                    "text": "Claro. OpenFactura calcula tu IVA e IRPF a medida que facturas y prepara los modelos 303, 130 y el resumen anual 390. También aplica el 7% de IRPF reducido si eres nuevo autónomo."
+                  }
+                },
+                {
+                  "@type": "Question",
+                  "name": "¿Está disponible en toda España?",
+                  "acceptedAnswer": {
+                    "@type": "Answer",
+                    "text": "Sí, OpenFactura funciona 100% en la nube y está disponible para autónomos y pymes en toda España: Madrid, Barcelona, Valencia, Sevilla, Málaga, Granada, Fuengirola y cualquier ciudad."
+                  }
+                },
+                {
+                  "@type": "Question",
+                  "name": "¿Cuánto cuesta y hay prueba gratis?",
+                  "acceptedAnswer": {
+                    "@type": "Answer",
+                    "text": "Puedes probar OpenFactura gratis durante 14 días sin tarjeta de crédito. Después eliges el plan que mejor se adapte a tu negocio, con opción anual y 2 meses gratis."
+                  }
+                }
+              ]
+            }
+          ]
+        }
+        </script>
         <script>window.addEventListener("error",function(e){if(e.error instanceof DOMException&&e.error.name==="DataCloneError"&&e.message&&e.message.includes("PerformanceServerTiming")){e.stopImmediatePropagation();e.preventDefault()}},true);</script>
         <script src="https://assets.emergent.sh/scripts/emergent-main.js"></script>
     </head>

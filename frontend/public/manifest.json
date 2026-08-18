@@ -1,0 +1,17 @@
+{
+  "short_name": "OpenFactura",
+  "name": "OpenFactura.es — Programa de facturación para autónomos y pymes en España",
+  "description": "Crea facturas, calcula tu IVA e IRPF (modelos 303 y 130) y cumple con VeriFactu. Software de facturación online para autónomos y empresas en toda España.",
+  "icons": [
+    {
+      "src": "openfactura-logo.png",
+      "type": "image/png",
+      "sizes": "449x96"
+    }
+  ],
+  "start_url": "/",
+  "display": "standalone",
+  "theme_color": "#0052FF",
+  "background_color": "#FFFFFF",
+  "lang": "es-ES"
+}

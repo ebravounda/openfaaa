@@ -1,0 +1,14 @@
+User-agent: *
+Allow: /
+
+# Bloquear rutas privadas de la aplicación
+Disallow: /facturas
+Disallow: /gastos
+Disallow: /contactos
+Disallow: /impuestos
+Disallow: /conexion
+Disallow: /configuracion
+Disallow: /admin
+Disallow: /payment/
+
+Sitemap: https://openfactura.es/sitemap.xml
