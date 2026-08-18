@@ -113,8 +113,7 @@ export default function Layout({ children }) {
           <Menu className="w-6 h-6" strokeWidth={1.5} />
         </button>
         <div className="flex items-center gap-2">
-          <div className="w-7 h-7 rounded-lg bg-[#0052FF] flex items-center justify-center"><Sparkles className="w-4 h-4 text-white" strokeWidth={1.5} /></div>
-          <span className="font-display text-[15px] font-semibold tracking-tight text-slate-900">FiscalHub</span>
+          <img src="/openfactura-logo.png" alt="OpenFactura by GoRoky" className="h-6 w-auto" />
         </div>
       </header>
 
@@ -128,13 +127,7 @@ export default function Layout({ children }) {
         style={{ top: bannerH, height: `calc(100vh - ${bannerH}px)` }}
       >
         <div className="px-5 py-5 flex items-center gap-2.5">
-          <div className="w-9 h-9 rounded-lg bg-[#0052FF] flex items-center justify-center">
-            <Sparkles className="w-5 h-5 text-white" strokeWidth={1.5} />
-          </div>
-          <div className="flex-1">
-            <div className="font-display text-[15px] font-semibold tracking-tight text-slate-900 leading-none">FiscalHub</div>
-            <div className="text-[10px] font-medium uppercase tracking-[0.16em] text-slate-400 mt-1">España</div>
-          </div>
+          <img src="/openfactura-logo.png" alt="OpenFactura by GoRoky" className="h-7 w-auto flex-1 object-contain object-left" />
           <button onClick={() => setMobileOpen(false)} className="lg:hidden p-1.5 rounded-lg text-slate-400 hover:bg-slate-100" data-testid="mobile-menu-close" aria-label="Cerrar menú">
             <X className="w-5 h-5" strokeWidth={1.5} />
           </button>

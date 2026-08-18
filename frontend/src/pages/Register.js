@@ -60,10 +60,7 @@ export default function Register() {
     <div className="min-h-screen flex items-center justify-center bg-[#F8FAFC] p-6">
       <form onSubmit={submit} className="w-full max-w-md bg-white border border-slate-200 rounded-2xl shadow-sm p-8 space-y-6" data-testid="register-form">
         <div className="flex items-center gap-2.5">
-          <div className="w-9 h-9 rounded-lg bg-[#0052FF] flex items-center justify-center">
-            <Sparkles className="w-5 h-5 text-white" strokeWidth={1.5} />
-          </div>
-          <span className="font-display text-lg font-semibold tracking-tight text-slate-900">FiscalHub España</span>
+          <img src="/openfactura-logo.png" alt="OpenFactura by GoRoky" className="h-7 w-auto" />
         </div>
         <div>
           <h2 className="font-display text-2xl font-semibold tracking-tight text-slate-900">Crea tu cuenta</h2>

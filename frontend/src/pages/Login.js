@@ -40,10 +40,7 @@ export default function Login() {
       <div className="hidden lg:flex flex-col justify-between p-14 bg-[#0A1B3D] text-white relative overflow-hidden">
         <div className="absolute -right-24 -top-24 w-96 h-96 rounded-full bg-[#0052FF]/30 blur-3xl" />
         <div className="flex items-center gap-2.5 relative">
-          <div className="w-9 h-9 rounded-lg bg-[#0052FF] flex items-center justify-center">
-            <Sparkles className="w-5 h-5 text-white" strokeWidth={1.5} />
-          </div>
-          <span className="font-display text-lg font-semibold tracking-tight">FiscalHub España</span>
+          <img src="/openfactura-logo-white.png" alt="OpenFactura by GoRoky" className="h-8 w-auto" />
         </div>
         <div className="relative">
           <h1 className="font-display text-4xl xl:text-5xl font-semibold tracking-tight leading-[1.1]">

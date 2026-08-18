@@ -255,8 +255,7 @@ export default function Landing() {
       <header className="sticky top-0 z-40 bg-white/80 backdrop-blur-md border-b border-slate-100">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ background: ACCENT }}><Sparkles className="w-4 h-4 text-white" strokeWidth={1.5} /></div>
-            <span className="text-lg font-bold tracking-tight">OpenFactura<span style={{ color: ACCENT }}>.es</span></span>
+            <img src="/openfactura-logo.png" alt="OpenFactura by GoRoky" className="h-7 w-auto" />
           </div>
           <nav className="hidden md:flex items-center gap-8 text-sm font-medium text-slate-600">
             <a href="#facturacion" className="hover:text-slate-900 transition-colors">Facturación</a>
@@ -472,8 +471,7 @@ export default function Landing() {
       <footer className="border-t border-slate-100 py-10 bg-white">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col sm:flex-row items-center justify-between gap-4 text-sm text-slate-500">
           <div className="flex items-center gap-2">
-            <div className="w-7 h-7 rounded-lg flex items-center justify-center" style={{ background: ACCENT }}><Sparkles className="w-3.5 h-3.5 text-white" strokeWidth={1.5} /></div>
-            <span className="font-bold text-slate-900">OpenFactura.es</span>
+            <img src="/openfactura-logo.png" alt="OpenFactura by GoRoky" className="h-6 w-auto" />
             <span className="text-slate-400">© {new Date().getFullYear()}</span>
           </div>
           <div className="flex gap-6">
