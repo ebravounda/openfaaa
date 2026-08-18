@@ -14,14 +14,15 @@ const fadeUp = {
 };
 const stagger = { show: { transition: { staggerChildren: 0.08 } } };
 
-function Reveal({ children, className, delay = 0 }) {
+function Reveal({ children, className, delay = 0, immediate = false }) {
+  const anim = immediate
+    ? { initial: "hidden", animate: "show" }
+    : { initial: "hidden", whileInView: "show", viewport: { once: true, margin: "-80px" } };
   return (
     <motion.div
       className={className}
       variants={fadeUp}
-      initial="hidden"
-      whileInView="show"
-      viewport={{ once: true, margin: "-80px" }}
+      {...anim}
       transition={{ delay }}
     >
       {children}
@@ -255,7 +256,7 @@ export default function Landing() {
       <header className="sticky top-0 z-40 bg-white/80 backdrop-blur-md border-b border-slate-100">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <img src="/openfactura-logo.png" alt="OpenFactura by GoRoky" className="h-7 w-auto" />
+            <img src="/openfactura-logo.png" alt="OpenFactura by GoRoky" width="131" height="28" className="h-7 w-auto" fetchpriority="high" />
           </div>
           <nav className="hidden md:flex items-center gap-8 text-sm font-medium text-slate-600">
             <a href="#facturacion" className="hover:text-slate-900 transition-colors">Facturación</a>
@@ -275,28 +276,28 @@ export default function Landing() {
       <section className="bg-[#F8FAFC] overflow-hidden">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-16 sm:pt-24 pb-20 grid lg:grid-cols-2 gap-12 lg:gap-16 items-center">
           <div>
-            <Reveal>
+            <Reveal immediate>
               <span className="inline-flex items-center gap-2 bg-[#0052FF]/10 text-[#0052FF] rounded-full px-4 py-1.5 text-sm font-medium mb-6">
                 <Sparkles className="w-4 h-4" strokeWidth={1.5} /> El software fiscal todo en uno para España
               </span>
             </Reveal>
-            <Reveal delay={0.05}>
+            <Reveal immediate delay={0.05}>
               <h1 className="text-4xl sm:text-5xl lg:text-6xl font-extrabold tracking-tight leading-[1.05]">
                 Facturación, impuestos <span style={{ color: ACCENT }}>y mucho más.</span>
               </h1>
             </Reveal>
-            <Reveal delay={0.1}>
+            <Reveal immediate delay={0.1}>
               <p className="text-base sm:text-lg text-slate-500 mt-6 max-w-xl leading-relaxed">
                 OpenFactura es la solución en la nube con todo lo que necesitas para gestionar tu negocio. Facturas, IVA, IRPF, VeriFactu y una IA que te ayuda, en una sola plataforma.
               </p>
             </Reveal>
-            <Reveal delay={0.15}>
+            <Reveal immediate delay={0.15}>
               <div className="flex flex-col sm:flex-row gap-3 mt-8">
                 <Link to="/registro"><Button size="lg" className="text-white rounded-full px-8 w-full sm:w-auto shadow-md hover:shadow-lg" style={{ background: ACCENT }} data-testid="hero-cta">Prueba gratis 14 días <ArrowRight className="w-4 h-4 ml-2" strokeWidth={2} /></Button></Link>
                 <Link to="/login"><Button size="lg" variant="outline" className="border-slate-200 rounded-full px-8 w-full sm:w-auto">Ya tengo cuenta</Button></Link>
               </div>
             </Reveal>
-            <Reveal delay={0.2}>
+            <Reveal immediate delay={0.2}>
               <p className="text-sm text-slate-400 mt-5 flex items-center gap-2"><Check className="w-4 h-4 text-emerald-500" strokeWidth={2} /> Sin tarjeta de crédito · Cancela cuando quieras</p>
             </Reveal>
           </div>
