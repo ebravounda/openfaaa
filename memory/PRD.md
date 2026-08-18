@@ -122,8 +122,10 @@ Sistema de facturación para España: crear facturas introduciendo datos (CIF/NI
 - ✅ **Panel de Ingresos (Super Admin)**: GET /api/admin/revenue (MRR, ARR, by_plan, altas_mes, trials_activos). Panel 'Ingresos y suscripciones' en /admin (revenue-panel) con tarjetas y badges por plan.
 - ✅ Bug crítico corregido: Layout.js referenciaba trialDays sin definir (pantalla en blanco en rutas autenticadas). Testing iteración 14: 7/7 backend + frontend 100% tras el fix.
 
+## Implemented — Iteración 15 (2026-06) Landing rediseñada estilo Holded
+- ✅ Landing.js reconstruida al estilo holded.com/es (petición explícita del usuario): fuente Outfit, acento cobalto #0052FF, secciones alternas claras/oscuras. Estructura: promo bar, nav sticky con blur, hero split con mockup de dashboard flotante + badge VeriFactu, franja de stats animadas, 5 módulos zig-zag con mockups de producto en HTML/Tailwind (dashboard, factura, Modelo 303, escáner OCR, chat FiscalBot), sección oscura "Por qué OpenFactura" (bento 6 razones), testimonios, audiencias (Autónomos/Pymes/Asesorías), franja de integraciones y CTA final azul. Animaciones con framer-motion (fade-up al hacer scroll, staggered, barras animadas). Sin fotos de stock. Verificado por screenshot (hero, features, sección oscura).
+
 ## Backlog (prioritized)
-- P2: Búsqueda por CIF también al registrar Gastos (autocompletar proveedor).
 - P2: Editar los límites/precios de los planes desde el panel admin (ahora son fijos en plans.py).
 - P2: Registro de actividad/logs de admin visible en UI (ya se guarda en db.admin_audit).
 - P2: Sugerir plantilla por defecto según tipo de actividad al registrarse.

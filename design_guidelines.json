@@ -1,97 +1,216 @@
 {
+  "project_name": "OpenFactura.es Landing Page Redesign",
   "theme": "light",
-  "typography": {
-    "headings": "Manrope, sans-serif",
-    "body": "IBM Plex Sans, sans-serif",
-    "mono": "IBM Plex Mono, monospace",
-    "rules": [
-      "Use tracking-tight for all headings larger than text-2xl.",
-      "Never use bold for large headings, use font-medium or font-semibold for Manrope to keep it clean.",
-      "Numbers in tables and financial summaries MUST use 'tabular-nums' utility class.",
-      "Hierarchy Gap Rule: Ensure contrast in font sizes. H1 should be text-3xl to text-4xl max for dashboards."
-    ]
-  },
+  "design_philosophy": "Holded.com clone style tailored for OpenFactura. Clean, modern, highly professional SaaS. Heavy use of whitespace, bold geometric typography, high-contrast dark sections alternating with pristine white sections. Vibrant cobalt blue as the primary action color. Use of floating 'fake UI' mockups built with HTML/CSS instead of stock photos to show product value directly.",
   "colors": {
-    "primary": "#0052FF",
-    "primary_hover": "#0040CC",
-    "background": "#F8FAFC",
-    "surface": "#FFFFFF",
-    "text_main": "#0F172A",
+    "primary_accent": "#0052FF",
+    "primary_accent_hover": "#0040CC",
+    "background_light": "#FFFFFF",
+    "background_off_white": "#F8FAFC",
+    "background_dark": "#020617",
+    "background_dark_secondary": "#0F172A",
+    "text_dark": "#0F172A",
     "text_muted": "#64748B",
-    "border": "#E2E8F0",
+    "text_light": "#F8FAFC",
+    "border_light": "#E2E8F0",
+    "border_dark": "#1E293B",
     "success": "#10B981",
-    "warning": "#F59E0B",
-    "danger": "#EF4444",
-    "rules": [
-      "Never use pure black #000000. Use text-slate-900 (#0F172A) for max contrast.",
-      "Backgrounds for app layout should be slate-50 to make white cards pop.",
-      "Use colors to denote financial status (green for paid/income, red for overdue/expense, amber for pending/tax)."
-    ]
+    "warning": "#F59E0B"
   },
-  "layouts": {
-    "dashboard": "High density grid for metrics. Top row: 4 columns for summary stats. Second row: Main chart (col-span-3) + Recent activity feed (col-span-1).",
-    "forms": "Use clean, stacked inputs. Use Shadcn Form components. Max width for forms should be max-w-2xl for better readability. Never full width.",
-    "sidebar": "Fixed left sidebar. White background, 1px right border. Active state should have a subtle slate-100 background and primary color text/icon.",
-    "data_tables": "Dense rows, no alternating background colors. 1px bottom border per row. Use right-alignment for all monetary columns.",
-    "document_scan_flow": "Two-pane layout. Left pane: PDF/Image preview (sticky). Right pane: Extracted data form for review and editing."
+  "typography": {
+    "headings": {
+      "font_family": "Outfit, sans-serif",
+      "weights": ["600", "700", "800"],
+      "import_url": "https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&display=swap",
+      "h1": "text-5xl md:text-6xl lg:text-7xl font-extrabold tracking-tight text-slate-900 leading-[1.1]",
+      "h2": "text-3xl md:text-4xl lg:text-5xl font-bold tracking-tight text-slate-900",
+      "h3": "text-xl md:text-2xl font-semibold text-slate-900"
+    },
+    "body": {
+      "font_family": "Inter, sans-serif",
+      "weights": ["400", "500"],
+      "import_url": "https://fonts.googleapis.com/css2?family=Inter:wght@400;500&display=swap",
+      "base": "text-base md:text-lg text-slate-600 leading-relaxed",
+      "small": "text-sm text-slate-500"
+    }
+  },
+  "spacing_and_layout": {
+    "section_padding": "py-20 md:py-32",
+    "container": "max-w-7xl mx-auto px-4 sm:px-6 lg:px-8",
+    "grid_gap": "gap-8 md:gap-16",
+    "border_radius": {
+      "cards": "rounded-2xl",
+      "buttons": "rounded-full",
+      "ui_mockups": "rounded-xl"
+    },
+    "shadows": {
+      "ui_mockup": "shadow-[0_20px_50px_-12px_rgba(0,0,0,0.1)]",
+      "card_hover": "hover:shadow-xl transition-shadow duration-300"
+    }
   },
   "components": {
-    "cards": "bg-white border border-slate-200 rounded-lg shadow-sm. No heavy drop shadows.",
-    "buttons": "rounded-lg. Primary button: bg-[#0052FF] text-white hover:bg-[#0040CC]. Secondary: bg-white border border-slate-200 text-slate-900 hover:bg-slate-50.",
-    "inputs": "rounded-lg border-slate-300 focus:ring-2 focus:ring-[#0052FF]/20 focus:border-[#0052FF].",
-    "badges": "rounded-full px-2.5 py-0.5 text-xs font-medium. Use subtle background with darker text (e.g., bg-green-100 text-green-800 for paid invoices)."
+    "buttons": {
+      "primary": "bg-[#0052FF] text-white hover:bg-[#0040CC] rounded-full px-8 py-3.5 font-medium transition-all shadow-md hover:shadow-lg flex items-center justify-center gap-2",
+      "secondary": "bg-white text-slate-900 border border-slate-200 hover:bg-slate-50 hover:border-slate-300 rounded-full px-8 py-3.5 font-medium transition-all flex items-center justify-center gap-2",
+      "dark": "bg-white text-[#020617] hover:bg-slate-100 rounded-full px-8 py-3.5 font-medium transition-all"
+    },
+    "badges": {
+      "verifactu": "inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-100 text-emerald-800 text-sm font-medium",
+      "standard": "inline-flex items-center px-3 py-1 rounded-full bg-blue-100 text-blue-800 text-sm font-medium"
+    },
+    "ui_mockups": {
+      "instruction": "DO NOT USE STOCK PHOTOS for the product interface. Build abstract UI mockups using raw HTML/Tailwind inside a 'browser window' wrapper. Use standard shadcn primitives (Cards, Badges, Progress bars) to simulate a dashboard or invoice. Add soft shadows and rounded borders.",
+      "browser_frame": "bg-white rounded-xl border border-slate-200 shadow-2xl overflow-hidden",
+      "browser_header": "bg-slate-50 border-b border-slate-200 px-4 py-3 flex gap-2 items-center (use 3 colored dots for mac window controls)"
+    }
   },
-  "motion": {
-    "rules": [
-      "Use extremely subtle transitions. duration-200 ease-in-out for hover states.",
-      "No bouncy or dramatic entrance animations. This is a professional financial tool.",
-      "Use skeleton loaders for data fetching, not spinners."
-    ]
-  },
-  "accessibility": {
-    "rules": [
-      "All monetary values must have proper aria-labels if abbreviated.",
-      "Use proper contrast ratios for all muted text (slate-500 is minimum for white bg).",
-      "Include data-testid on all interactive elements for testing."
-    ]
-  },
-  "visual_enhancers": {
-    "empty_states": "Use wide spacing (p-12), a dashed border (border-dashed border-2 border-slate-200), and a single lucide-react icon (size 48, text-slate-400) centered with a clear CTA.",
-    "icons": "lucide-react. Stroke width 1.5 for a professional, clean look.",
-    "glassmorphism": "Avoid glassmorphism for this financial dashboard. Stick to crisp solid surfaces (surface #FFFFFF) with 1px borders."
-  },
-  "image_urls": {
-    "avatars": [
-      {
-        "url": "https://images.unsplash.com/photo-1560250097-0b93528c311a?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjY2NzV8MHwxfHNlYXJjaHwxfHxwcm9mZXNzaW9uYWwlMjBoZWFkc2hvdHxlbnwwfHx8fDE3ODY4OTY0Nzh8MA&ixlib=rb-4.1.0&q=85",
-        "category": "user_avatar_male",
-        "description": "Professional male headshot for user profile"
-      },
-      {
-        "url": "https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjY2NzV8MHwxfHNlYXJjaHwzfHxwcm9mZXNzaW9uYWwlMjBoZWFkc2hvdHxlbnwwfHx8fDE3ODY4OTY0Nzh8MA&ixlib=rb-4.1.0&q=85",
-        "category": "user_avatar_female",
-        "description": "Professional female headshot for user profile"
+  "sections_blueprint": [
+    {
+      "name": "Promo Banner",
+      "type": "top-bar",
+      "background": "bg-slate-900",
+      "content": "Prueba gratis 14 días. Planes con opción anual (2 meses gratis)."
+    },
+    {
+      "name": "Header/Nav",
+      "type": "sticky-nav",
+      "background": "bg-white/80 backdrop-blur-md",
+      "layout": "Logo left. Links center (Facturación, Impuestos, Funcionalidades, Precios). CTA right (Entrar, Empieza gratis)."
+    },
+    {
+      "name": "Hero",
+      "type": "split-or-stack",
+      "background": "bg-slate-50",
+      "content": {
+        "headline": "Facturación, impuestos y mucho más.",
+        "subtitle": "OpenFactura es la solución en la nube con todo lo que necesitas para gestionar tu negocio. Facturas, IVA, IRPF y VeriFactu en una sola plataforma.",
+        "ctas": ["Prueba gratis 14 días", "Empieza gratis con Google"],
+        "trust_text": "Sin tarjeta de crédito · Cancela cuando quieras",
+        "visual": "Massive floating Dashboard UI Mockup showing 'Ingresos', 'Gastos', and a 'Factura' generation screen."
       }
-    ]
+    },
+    {
+      "name": "Social Proof & Stats",
+      "type": "grid",
+      "background": "bg-white",
+      "content": {
+        "trust_line": "La herramienta fiscal diseñada para autónomos y pymes en España",
+        "stats": [
+          {"value": "15h", "label": "ahorradas al mes en gestión"},
+          {"value": "100%", "label": "Compatible con VeriFactu AEAT"},
+          {"value": "0", "label": "errores en tus modelos de IVA"}
+        ]
+      }
+    },
+    {
+      "name": "Features - Alternating",
+      "type": "zig-zag",
+      "background": "bg-white",
+      "modules": [
+        {
+          "title": "Facturas en segundos",
+          "subtitle": "Crea, envía y cobra facturas profesionales al instante.",
+          "bullets": ["Series, rectificativas y PDF automático", "15+ plantillas adaptadas por sector"],
+          "visual_hint": "Invoice editor mockup"
+        },
+        {
+          "title": "IVA e IRPF automáticos",
+          "subtitle": "Tus impuestos se calculan solos mientras facturas.",
+          "bullets": ["Modelos 303, 130 y 390 anual listos para presentar", "Aplica el 7% de IRPF reducido si eres nuevo autónomo"],
+          "visual_hint": "Tax summary dashboard mockup (Modelo 303)"
+        },
+        {
+          "title": "Software compatible VeriFactu",
+          "subtitle": "Cumple con la normativa de la AEAT sin esfuerzo.",
+          "bullets": ["Registro y anulación con huella encadenada + QR", "Firma con tu certificado digital .pfx"],
+          "visual_hint": "VeriFactu certified badge and sync status UI mockup"
+        },
+        {
+          "title": "Escaneo de gastos con IA (OCR)",
+          "subtitle": "Haz una foto a tus tickets y olvídate de picar datos.",
+          "bullets": ["Extracción automática de proveedor, base e IVA", "Almacenamiento digital seguro"],
+          "visual_hint": "Mobile app scan mockup or receipt parsing animation"
+        },
+        {
+          "title": "Asistente con IA (FiscalBot)",
+          "subtitle": "Tu experto fiscal disponible 24/7.",
+          "bullets": ["Resuelve dudas de facturación e impuestos al instante", "Recomendaciones personalizadas para ahorrar"],
+          "visual_hint": "Chat interface mockup with an AI bot"
+        }
+      ]
+    },
+    {
+      "name": "Bento Grid - Por qué OpenFactura",
+      "type": "bento-grid",
+      "background": "bg-slate-900 text-white",
+      "headline": "Construido para hacerte la vida más fácil",
+      "subtitle": "Seis razones por las que los autónomos nos eligen.",
+      "items": [
+        {"title": "01. Setup rápido", "desc": "Envía tu primera factura en menos de 5 minutos."},
+        {"title": "02. Cumplimiento VeriFactu", "desc": "Adaptados a la nueva ley antifraude de la AEAT."},
+        {"title": "03. Escáner OCR", "desc": "Sube un ticket y la IA hace el resto."},
+        {"title": "04. Dashboard Fiscal", "desc": "Controla cuánto IVA tienes que pagar este trimestre."},
+        {"title": "05. Asistente IA", "desc": "No te quedes con dudas fiscales nunca más."},
+        {"title": "06. Diseñado para España", "desc": "Tipos de IVA e IRPF actualizados a la normativa española."}
+      ]
+    },
+    {
+      "name": "Target Audience",
+      "type": "3-col-cards",
+      "background": "bg-slate-50",
+      "headline": "Diseñado para cada etapa",
+      "items": [
+        {"title": "Autónomos", "desc": "Facturación, gastos e impuestos en un solo lugar. Olvídate del Excel."},
+        {"title": "Startups y pymes", "desc": "Facturación avanzada, control de caja y roles para tu equipo."},
+        {"title": "Asesorías", "desc": "Conecta con tus clientes en tiempo real y exporta sus datos."}
+      ]
+    },
+    {
+      "name": "Integrations",
+      "type": "logo-strip",
+      "background": "bg-white",
+      "headline": "Conecta con tus herramientas favoritas",
+      "logos": "Stripe, PayPal, WooCommerce, Shopify, Zapier (Use Lucide icons or simple text labels stylized as logos if SVGs aren't available)"
+    },
+    {
+      "name": "Final CTA",
+      "type": "centered-cta",
+      "background": "bg-[#0052FF] text-white",
+      "headline": "Prueba OpenFactura gratis durante 14 días",
+      "subtitle": "Sin tarjeta de crédito. Sin compromiso. Cancela cuando quieras.",
+      "button": "Empezar ahora gratis (White button, blue text)"
+    },
+    {
+      "name": "Footer",
+      "type": "standard-footer",
+      "background": "bg-white",
+      "content": "Logo, Copyright, Links (Términos, Privacidad, Contacto)"
+    }
+  ],
+  "motion_and_interactions": {
+    "scroll_reveal": "Use framer-motion for subtle fade-up animations on scroll. Viewport margin -100px.",
+    "hover_states": "All buttons should have a slight scale-up (scale-105) and shadow increase on hover. UI mockups can float gently using a looping y-axis animation.",
+    "staggered_lists": "Feature bullet points and bento grid items should animate in sequentially using staggerChildren."
   },
   "instructions_to_main_agent": [
-    "Redesign the UI to match top-tier SaaS like Holded or Quaderno. Keep it extremely clean, avoiding AI-slop gradients or dark themes. It must look like a high-end Spanish invoicing product.",
-    "Use Manrope for headings and IBM Plex Sans for body text. Enforce 'tabular-nums' for all numbers and tables.",
-    "Do NOT break any existing functionality. The app must continue to work as before, just with a new coat of professional paint.",
-    "Ensure the scanning/OCR UI feels like a professional two-pane review screen (preview on left, form on right).",
-    "Replace generic cards with crisp, border-driven designs (rounded-lg, border-slate-200, shadow-sm). Do not use heavy shadows.",
-    "Ensure all monetary amounts are right-aligned in tables.",
-    "Add 'data-testid' to all buttons and interactive elements.",
-    "The project uses .js/.jsx files (not .tsx). Do not write TypeScript syntax.",
-    "Do not use complete transparent background in header, overlays, or any surface that has content under it."
+    "You MUST build this entirely in /app/frontend/src/pages/Landing.js (or .jsx). You can create local components within the same file or in a components folder.",
+    "Follow the Holded.com aesthetic strictly: crisp white backgrounds, very dark slate sections, vibrant #0052FF accents, large geometric typography (Outfit font).",
+    "DO NOT USE STOCK PHOTOS. Use HTML/Tailwind to build abstract 'browser window' mockups for the dashboard, invoice, and tax features. This is critical for the high-end SaaS look.",
+    "Add 'data-testid' to all buttons and links.",
+    "Ensure perfect responsive design (mobile-first). The zig-zag feature sections should stack nicely on mobile.",
+    "Use Lucide-react for all icons (checkmarks, feature icons, integration logos if needed).",
+    "Do NOT change routing. Just replace the Landing page content.",
+    "Do not use complete transparent backgrounds for the sticky header. Ensure it has backdrop-blur and a semi-transparent white background."
   ],
   "UNIVERSAL_GUIDELINES_FOR_MAIN_AGENT": [
-    "You tend to converge toward generic, 'on distribution' outputs. Avoid this: make creative, distinctive frontends.",
+    "Don't make generic centered layouts, simplistic gradients, and uniform styling.",
     "Create depth through layered design elements with z-index hierarchy.",
-    "Use generous spacing (2-3x more than standard). Cramped designs look cheap.",
-    "You MUST NOT apply universal transition (e.g., transition: all).",
-    "Use sonner for toasts (located in /app/src/components/ui/sonner.js if it exists, or create it).",
-    "Prioritize using pre-existing components from src/components/ui.",
-    "Never use placeholder URLs for images."
+    "Use glass-morphism effects with backdrop filters (12-24px blur).",
+    "You MUST NOT apply universal transition. Eg: transition: all. Always add transitions for specific interactive elements.",
+    "Always use modern button styles like pill-shaped, or sharp button with interaction animations.",
+    "NEVER use AI assistant Emoji characters like 🤖🧠💭💡🔮🎯 etc for icons.",
+    "Every interaction needs micro-animations - hover states, transitions, parallax effects, and entrance animations. Static = dead.",
+    "Use 2-3x more spacing than feels comfortable. Cramped designs look cheap.",
+    "Subtle grain textures, noise overlays, custom cursors, selection states, and loading animations: separates good from extraordinary."
   ]
 }
