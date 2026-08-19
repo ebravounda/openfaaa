@@ -14,7 +14,7 @@ import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 
 export default function Settings() {
-  const [form, setForm] = useState({ name: "", nif: "", address: "", email: "", phone: "", tax_type: "autonomo", invoice_prefix: "", verifactu_enabled: false, verifactu_mode: "simulado", template_id: "clasico", accent_color: "", invoice_footer: "", legal_name: "", legal_notice: "", footer_message: "" });
+  const [form, setForm] = useState({ name: "", nif: "", address: "", email: "", phone: "", tax_type: "autonomo", invoice_prefix: "", rectify_prefix: "R", invoice_start_number: 1, invoice_due_days: 15, verifactu_enabled: false, verifactu_mode: "simulado", template_id: "clasico", accent_color: "", invoice_footer: "", legal_name: "", legal_notice: "", footer_message: "" });
   const [templates, setTemplates] = useState([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -99,7 +99,7 @@ export default function Settings() {
               <div className="space-y-2"><Label>NIF / CIF</Label><Input value={form.nif} onChange={(e) => setForm({ ...form, nif: e.target.value })} placeholder="B12345678 / 12345678Z" data-testid="company-nif" /></div>
             </div>
             <div className="space-y-2"><Label>Dirección fiscal</Label><Input value={form.address} onChange={(e) => setForm({ ...form, address: e.target.value })} data-testid="company-address" /></div>
-            <div className="space-y-2"><Label>Nombre legal (2ª línea, opcional)</Label><Input value={form.legal_name} onChange={(e) => setForm({ ...form, legal_name: e.target.value })} placeholder="TRAMILEX GLOBAL SERVICE SL" data-testid="company-legal-name" /></div>
+            <div className="space-y-2"><Label>Nombre legal (2ª línea, opcional)</Label><Input value={form.legal_name} onChange={(e) => setForm({ ...form, legal_name: e.target.value })} placeholder="Razón social (S.L., S.A., …)" data-testid="company-legal-name" /></div>
             <div className="space-y-2"><Label>Fecha de alta como autónomo (para el IRPF reducido del 7%)</Label><Input type="date" value={form.autonomo_start_date || ""} onChange={(e) => setForm({ ...form, autonomo_start_date: e.target.value })} data-testid="company-autonomo-start" /></div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="space-y-2"><Label>Email</Label><Input type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} data-testid="company-email" /></div>
@@ -120,8 +120,20 @@ export default function Settings() {
                 <Label>Serie de facturación</Label>
                 <Input value={form.invoice_prefix} onChange={(e) => setForm({ ...form, invoice_prefix: e.target.value })} placeholder="FAC" data-testid="company-invoice-prefix" />
                 <p className="text-xs text-slate-400">
-                  Ejemplo: <span className="font-mono text-slate-600">{`${form.invoice_prefix ? form.invoice_prefix + "-" : ""}${new Date().getFullYear()}-0001`}</span>
+                  Ejemplo: <span className="font-mono text-slate-600">{`${form.invoice_prefix ? form.invoice_prefix + "-" : ""}${new Date().getFullYear()}-${String(form.invoice_start_number || 1).padStart(4, "0")}`}</span>
                 </p>
+              </div>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label>Número inicial de factura</Label>
+                <Input type="number" min="1" value={form.invoice_start_number ?? 1} onChange={(e) => setForm({ ...form, invoice_start_number: Number(e.target.value) })} placeholder="1" data-testid="company-invoice-start" />
+                <p className="text-xs text-slate-400">La primera factura empezará en este número; las siguientes continúan automáticamente.</p>
+              </div>
+              <div className="space-y-2">
+                <Label>Días de vencimiento por defecto</Label>
+                <Input type="number" min="0" value={form.invoice_due_days ?? 15} onChange={(e) => setForm({ ...form, invoice_due_days: Number(e.target.value) })} placeholder="15" data-testid="company-invoice-due-days" />
+                <p className="text-xs text-slate-400">El vencimiento se rellenará automáticamente sumando estos días a la fecha de emisión.</p>
               </div>
             </div>
             <div className="border border-slate-200 rounded-lg p-4 space-y-3" data-testid="template-section">

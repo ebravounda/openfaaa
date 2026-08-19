@@ -30,12 +30,25 @@ def _autosize(ws, widths):
 def _repercutido_rows(invoices):
     rows = []
     for inv in invoices:
-        rows.append([
-            inv.get("issue_date", ""), inv.get("number", ""),
-            inv.get("client", {}).get("name", ""), inv.get("client", {}).get("nif", ""),
-            inv.get("base", 0), inv.get("iva_rate", 0), inv.get("iva_amount", 0),
-            inv.get("irpf_rate", 0), inv.get("irpf_amount", 0), inv.get("total", 0),
-        ])
+        cl = inv.get("client", {})
+        bd = inv.get("iva_breakdown")
+        if bd:
+            for i, b in enumerate(bd):
+                rows.append([
+                    inv.get("issue_date", ""), inv.get("number", ""),
+                    cl.get("name", ""), cl.get("nif", ""),
+                    b.get("base", 0), b.get("rate", 0), b.get("cuota", 0),
+                    inv.get("irpf_rate", 0) if i == 0 else "",
+                    inv.get("irpf_amount", 0) if i == 0 else "",
+                    inv.get("total", 0) if i == 0 else "",
+                ])
+        else:
+            rows.append([
+                inv.get("issue_date", ""), inv.get("number", ""),
+                cl.get("name", ""), cl.get("nif", ""),
+                inv.get("base", 0), inv.get("iva_rate", 0), inv.get("iva_amount", 0),
+                inv.get("irpf_rate", 0), inv.get("irpf_amount", 0), inv.get("total", 0),
+            ])
     return rows
 
 
@@ -143,10 +156,21 @@ def build_libros_csv(invoices, expenses, year) -> str:
     w.writerow(["Libro", "Fecha", "Documento", "Contraparte", "NIF/CIF",
                 "Base", "% IVA", "Cuota IVA", "% IRPF", "Ret. IRPF", "Total"])
     for inv in invoices:
-        w.writerow(["Repercutido", inv.get("issue_date", ""), inv.get("number", ""),
-                    inv.get("client", {}).get("name", ""), inv.get("client", {}).get("nif", ""),
-                    inv.get("base", 0), inv.get("iva_rate", 0), inv.get("iva_amount", 0),
-                    inv.get("irpf_rate", 0), inv.get("irpf_amount", 0), inv.get("total", 0)])
+        cl = inv.get("client", {})
+        bd = inv.get("iva_breakdown")
+        if bd:
+            for i, b in enumerate(bd):
+                w.writerow(["Repercutido", inv.get("issue_date", ""), inv.get("number", ""),
+                            cl.get("name", ""), cl.get("nif", ""),
+                            b.get("base", 0), b.get("rate", 0), b.get("cuota", 0),
+                            inv.get("irpf_rate", 0) if i == 0 else "",
+                            inv.get("irpf_amount", 0) if i == 0 else "",
+                            inv.get("total", 0) if i == 0 else ""])
+        else:
+            w.writerow(["Repercutido", inv.get("issue_date", ""), inv.get("number", ""),
+                        cl.get("name", ""), cl.get("nif", ""),
+                        inv.get("base", 0), inv.get("iva_rate", 0), inv.get("iva_amount", 0),
+                        inv.get("irpf_rate", 0), inv.get("irpf_amount", 0), inv.get("total", 0)])
     for exp in expenses:
         w.writerow(["Soportado", exp.get("date", ""), exp.get("category", ""),
                     exp.get("vendor_name", ""), exp.get("vendor_nif", ""),

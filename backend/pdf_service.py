@@ -22,6 +22,37 @@ def _eur(v):
     return f"{v:,.2f} €".replace(",", "X").replace(".", ",").replace("X", ".")
 
 
+def _iva_label(it):
+    t = (it.get("iva_type", "general") or "general")
+    if t == "exento":
+        return "Exento"
+    if t == "no_sujeto":
+        return "No sujeto"
+    if t == "suplido":
+        return "Suplido"
+    return f"{it.get('iva_rate', 21):g}%"
+
+
+def _totals_rows(invoice):
+    """Filas de totales con desglose de IVA por tipo, recargo y suplidos."""
+    rows = [("Base imponible", _eur(invoice.get("base", 0)), False)]
+    bd = invoice.get("iva_breakdown") or []
+    if bd:
+        for b in bd:
+            rows.append((f"IVA ({b['rate']:g}%)", _eur(b.get("cuota", 0)), False))
+        for b in bd:
+            if b.get("re_cuota"):
+                rows.append((f"Recargo equiv. ({b['re_rate']:g}%)", _eur(b.get("re_cuota", 0)), False))
+    else:
+        rows.append((f"IVA ({invoice.get('iva_rate', 0):g}%)", _eur(invoice.get("iva_amount", 0)), False))
+    if invoice.get("suplidos_total"):
+        rows.append(("Suplidos", _eur(invoice.get("suplidos_total", 0)), False))
+    if invoice.get("irpf_rate"):
+        rows.append((f"Retención IRPF (-{invoice['irpf_rate']}%)", f"-{_eur(invoice.get('irpf_amount', 0))}", False))
+    rows.append(("TOTAL", _eur(invoice.get("total", 0)), True))
+    return rows
+
+
 def _stamp_anulada(canvas, doc, anulada: bool):
     if not anulada:
         return
@@ -69,7 +100,8 @@ def build_invoice_pdf(invoice: dict, company: dict, qr_png: bytes = None, verifa
     header_right = [
         Paragraph("FACTURA RECTIFICATIVA" if is_rect else "FACTURA",
                   ParagraphStyle("t", parent=styles["Normal"], fontName="Helvetica-Bold",
-                                 fontSize=16 if is_rect else 22, textColor=DARK, alignment=2, leading=19)),
+                                 fontSize=16 if is_rect else 22, textColor=DARK, alignment=2,
+                                 leading=20 if is_rect else 27, spaceAfter=4)),
         Paragraph(f"Nº {invoice['number']}", ParagraphStyle("n", parent=styles["Normal"],
                   fontSize=11, textColor=DARK, alignment=2, leading=16)),
         Paragraph(f"Fecha: {invoice['issue_date']}", ParagraphStyle("d", parent=styles["Normal"],
@@ -101,16 +133,17 @@ def build_invoice_pdf(invoice: dict, company: dict, qr_png: bytes = None, verifa
     story.append(Spacer(1, 8 * mm))
 
     # Line items
-    data = [["Descripción", "Cant.", "Precio", "Importe"]]
+    data = [["Descripción", "Cant.", "Precio", "IVA", "Importe"]]
     for it in invoice.get("line_items", []):
         amount = it["quantity"] * it["unit_price"]
         data.append([
             Paragraph(it["description"], normal),
             str(it["quantity"]),
             _eur(it["unit_price"]),
+            _iva_label(it),
             _eur(amount),
         ])
-    tbl = Table(data, colWidths=[95 * mm, 20 * mm, 30 * mm, 29 * mm])
+    tbl = Table(data, colWidths=[78 * mm, 16 * mm, 28 * mm, 20 * mm, 32 * mm])
     tbl.setStyle(TableStyle([
         ("BACKGROUND", (0, 0), (-1, 0), accent),
         ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
@@ -127,12 +160,7 @@ def build_invoice_pdf(invoice: dict, company: dict, qr_png: bytes = None, verifa
     story.append(Spacer(1, 6 * mm))
 
     # Totals
-    totals = [["Base imponible", _eur(invoice["base"])]]
-    if invoice.get("iva_rate") is not None:
-        totals.append([f"IVA ({invoice['iva_rate']}%)", _eur(invoice["iva_amount"])])
-    if invoice.get("irpf_rate"):
-        totals.append([f"Retención IRPF (-{invoice['irpf_rate']}%)", f"-{_eur(invoice['irpf_amount'])}"])
-    totals.append(["TOTAL", _eur(invoice["total"])])
+    totals = [[lbl, val] for (lbl, val, _bold) in _totals_rows(invoice)]
 
     tt = Table(totals, colWidths=[54 * mm, 40 * mm], hAlign="RIGHT")
     tt.setStyle(TableStyle([
@@ -369,20 +397,20 @@ def build_goroky_invoice_pdf(invoice: dict, company: dict, qr_png: bytes = None,
         left_block.append(Paragraph(f"IBAN: <b>{invoice.get('iban')}</b>", normal))
     for it in invoice.get("line_items", []):
         if it.get("description"):
-            left_block.append(Paragraph(it["description"], normal))
+            left_block.append(Paragraph(f"{it['description']} · {_iva_label(it)}", normal))
 
     # Importes (derecha)
     amt_l = ParagraphStyle("grkal", parent=styles["Normal"], fontSize=9.5, textColor=GRK_BODY, leading=14)
     amt_r = ParagraphStyle("grkar", parent=amt_l, alignment=2)
-    rows = [[Paragraph("Base imponible", amt_l), Paragraph(_eur(invoice.get("base", 0)), amt_r)],
-            [Paragraph(f"IVA ({invoice.get('iva_rate', 21)}%)", amt_l), Paragraph(_eur(invoice.get("iva_amount", 0)), amt_r)]]
-    if invoice.get("irpf_rate"):
-        rows.append([Paragraph(f"Retención IRPF (-{invoice.get('irpf_rate')}%)", amt_l),
-                     Paragraph(f"-{_eur(invoice.get('irpf_amount', 0))}", amt_r)])
-    rows.append([Paragraph("TOTAL", ParagraphStyle("grktl", parent=amt_l, fontName="Helvetica-Bold",
-                 fontSize=13, textColor=GRK_BLUE)),
-                 Paragraph(_eur(invoice.get("total", 0)), ParagraphStyle("grktr", parent=amt_r,
-                 fontName="Helvetica-Bold", fontSize=13, textColor=GRK_BLUE))])
+    rows = []
+    for lbl, val, is_total in _totals_rows(invoice):
+        if is_total:
+            rows.append([Paragraph("TOTAL", ParagraphStyle("grktl", parent=amt_l, fontName="Helvetica-Bold",
+                         fontSize=13, textColor=GRK_BLUE)),
+                         Paragraph(val, ParagraphStyle("grktr", parent=amt_r,
+                         fontName="Helvetica-Bold", fontSize=13, textColor=GRK_BLUE))])
+        else:
+            rows.append([Paragraph(lbl, amt_l), Paragraph(val, amt_r)])
     amt_tbl = Table(rows, colWidths=[50 * mm, 34 * mm])
     amt_tbl.setStyle(TableStyle([
         ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),

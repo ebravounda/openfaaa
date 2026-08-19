@@ -52,6 +52,8 @@ class LineItem(BaseModel):
     description: str
     quantity: float = 1
     unit_price: float = 0.0
+    iva_rate: float = 21
+    iva_type: str = "general"  # general | exento | no_sujeto | suplido
 
 
 class Client(BaseModel):
@@ -67,6 +69,7 @@ class InvoiceInput(BaseModel):
     line_items: List[LineItem]
     iva_rate: float = 21
     irpf_rate: float = 0
+    recargo_equivalencia: bool = False
     status: str = "pending"
     notes: str = ""
     series: str = ""
@@ -100,6 +103,8 @@ class CompanyInput(BaseModel):
     tax_type: str = "autonomo"
     invoice_prefix: str = ""
     rectify_prefix: str = "R"
+    invoice_start_number: int = 1
+    invoice_due_days: int = 15
     verifactu_enabled: bool = False
     verifactu_mode: str = "simulado"
     template_id: str = "clasico"
@@ -138,15 +143,64 @@ class ContactInput(BaseModel):
 
 
 # ---------- Helpers ----------
+# Recargo de equivalencia asociado a cada tipo de IVA (España)
+RE_MAP = {21: 5.2, 10: 1.4, 4: 0.5, 0: 0.0}
+
+
 def compute_invoice(inv: dict) -> dict:
-    base = round(sum(i["quantity"] * i["unit_price"] for i in inv["line_items"]), 2)
-    iva_amount = round(base * inv["iva_rate"] / 100, 2)
-    irpf_amount = round(base * inv.get("irpf_rate", 0) / 100, 2)
-    total = round(base + iva_amount - irpf_amount, 2)
+    recargo = bool(inv.get("recargo_equivalencia"))
+    fallback_rate = inv.get("iva_rate", 21)
+    breakdown = {}
+    base_general = base_exenta = base_no_sujeta = suplidos = 0.0
+    for it in inv["line_items"]:
+        lb = round((it.get("quantity") or 0) * (it.get("unit_price") or 0), 2)
+        itype = it.get("iva_type", "general") or "general"
+        if itype == "suplido":
+            suplidos += lb
+            continue
+        if itype == "no_sujeto":
+            base_no_sujeta += lb
+            continue
+        if itype == "exento":
+            base_exenta += lb
+            continue
+        rate = it.get("iva_rate")
+        rate = float(fallback_rate if rate is None else rate)
+        base_general += lb
+        breakdown.setdefault(rate, {"base": 0.0})["base"] += lb
+
+    iva_amount = re_amount = 0.0
+    bd_list = []
+    for rate in sorted(breakdown.keys(), reverse=True):
+        b = round(breakdown[rate]["base"], 2)
+        cuota = round(b * rate / 100, 2)
+        re_rate = RE_MAP.get(int(rate), 0.0) if recargo else 0.0
+        re_cuota = round(b * re_rate / 100, 2)
+        iva_amount += cuota
+        re_amount += re_cuota
+        bd_list.append({"rate": rate, "base": b, "cuota": cuota,
+                        "re_rate": re_rate, "re_cuota": re_cuota})
+
+    iva_amount = round(iva_amount, 2)
+    re_amount = round(re_amount, 2)
+    base = round(base_general + base_exenta + base_no_sujeta, 2)
+    irpf_base = round(base_general + base_exenta, 2)
+    irpf_rate = inv.get("irpf_rate", 0) or 0
+    irpf_amount = round(irpf_base * irpf_rate / 100, 2)
+    total = round(base + suplidos + iva_amount + re_amount - irpf_amount, 2)
+
     inv["base"] = base
+    inv["base_exenta"] = round(base_exenta, 2)
+    inv["base_no_sujeta"] = round(base_no_sujeta, 2)
+    inv["suplidos_total"] = round(suplidos, 2)
     inv["iva_amount"] = iva_amount
+    inv["re_amount"] = re_amount
+    inv["irpf_base"] = irpf_base
     inv["irpf_amount"] = irpf_amount
     inv["total"] = total
+    inv["iva_breakdown"] = bd_list
+    inv["recargo_equivalencia"] = recargo
+    inv["iva_rate"] = max(bd_list, key=lambda x: x["base"])["rate"] if bd_list else 0
     return inv
 
 
@@ -161,15 +215,19 @@ def _validate_invoice(data) -> None:
         errors.append(f"El NIF/CIF '{cl.nif}' no es válido (revisa la letra de control).")
     if not data.line_items:
         errors.append("Añade al menos un concepto a la factura.")
+    valid_types = {"general", "exento", "no_sujeto", "suplido"}
     for i, it in enumerate(data.line_items, 1):
         if not (it.description or "").strip():
             errors.append(f"El concepto {i} necesita una descripción.")
         if it.quantity is None or it.quantity <= 0:
             errors.append(f"La cantidad del concepto {i} debe ser mayor que 0.")
-        if it.unit_price is None or it.unit_price < 0:
-            errors.append(f"El precio del concepto {i} no puede ser negativo.")
-    if data.iva_rate not in (0, 4, 10, 21):
-        errors.append("El tipo de IVA debe ser 0, 4, 10 o 21%.")
+        if it.unit_price is None:
+            errors.append(f"El precio del concepto {i} no es válido.")
+        itype = (getattr(it, "iva_type", "general") or "general")
+        if itype not in valid_types:
+            errors.append(f"El tipo fiscal del concepto {i} no es válido.")
+        if itype == "general" and it.iva_rate not in (0, 4, 10, 21):
+            errors.append(f"El IVA del concepto {i} debe ser 0, 4, 10 o 21%.")
     if data.irpf_rate < 0 or data.irpf_rate > 47:
         errors.append("El IRPF debe estar entre 0% y 47%.")
     if errors:
@@ -282,6 +340,22 @@ async def list_invoices(user=Depends(get_current_user)):
     return docs
 
 
+async def _next_seq(user_id: str, prefix: str, year: str, start_number) -> int:
+    """Siguiente número de secuencia: max(mayor existente + 1, número de inicio configurado)."""
+    pat = f"^{re.escape(prefix)}{year}-"
+    max_seq = 0
+    async for n in db.invoices.find({"user_id": user_id, "number": {"$regex": pat}}, {"_id": 0, "number": 1}):
+        try:
+            max_seq = max(max_seq, int(n["number"].rsplit("-", 1)[-1]))
+        except Exception:
+            pass
+    try:
+        start = int(start_number or 1)
+    except (TypeError, ValueError):
+        start = 1
+    return max(max_seq + 1, start)
+
+
 @api.post("/invoices")
 async def create_invoice(data: InvoiceInput, user=Depends(get_current_user)):
     _validate_invoice(data)
@@ -299,8 +373,7 @@ async def create_invoice(data: InvoiceInput, user=Depends(get_current_user)):
     else:
         series = (data.series or company.get("invoice_prefix", "") or "").strip()
     prefix = f"{series}-" if series else ""
-    pat = f"^{re.escape(prefix)}{year}-"
-    seq = await db.invoices.count_documents({"user_id": user["id"], "number": {"$regex": pat}}) + 1
+    seq = await _next_seq(user["id"], prefix, year, company.get("invoice_start_number", 1))
     number = f"{prefix}{year}-{seq:04d}"
     doc = data.model_dump()
     doc["series"] = series
@@ -330,6 +403,21 @@ async def create_invoice(data: InvoiceInput, user=Depends(get_current_user)):
     await db.invoices.insert_one(doc)
     doc.pop("_id", None)
     return doc
+
+
+@api.get("/invoices/next-number")
+async def next_invoice_number(invoice_type: str = "normal", series: str = "",
+                              issue_date: str = "", user=Depends(get_current_user)):
+    company = await db.companies.find_one({"user_id": user["id"]}, {"_id": 0}) or {}
+    year = (issue_date[:4] if issue_date else str(datetime.now(timezone.utc).year))
+    if invoice_type == "rectificativa":
+        s = (series or company.get("rectify_prefix", "") or "R").strip()
+    else:
+        s = (series or company.get("invoice_prefix", "") or "").strip()
+    prefix = f"{s}-" if s else ""
+    seq = await _next_seq(user["id"], prefix, year, company.get("invoice_start_number", 1))
+    return {"number": f"{prefix}{year}-{seq:04d}", "series": s,
+            "due_days": company.get("invoice_due_days", 15)}
 
 
 @api.get("/invoices/{invoice_id}")
@@ -674,7 +762,13 @@ async def lookup_nif(nif: str, user=Depends(get_current_user)):
                     "email": c.get("email", ""), "phone": c.get("phone", ""),
                     "nif": num, "source": "Contactos guardados"}
 
-    # 2) VIES (valida y, para no-ES, suele devolver nombre/dirección)
+    # 2) Validación local (DNI/NIE/CIF). VIES solo valida IVA de empresas, así que
+    # un NIE/DNI de autónomo es válido aunque VIES no lo reconozca.
+    local_valid = spanish_tax.validate_nif(num)
+
+    # 3) VIES (valida y, para no-ES, suele devolver nombre/dirección)
+    name = address = ""
+    vies_valid = False
     try:
         async with httpx.AsyncClient(timeout=12) as http_client:
             r = await http_client.post(
@@ -682,17 +776,21 @@ async def lookup_nif(nif: str, user=Depends(get_current_user)):
                 json={"countryCode": "ES", "vatNumber": num})
         r.raise_for_status()
         d = r.json()
+        vies_valid = bool(d.get("valid"))
+        name = (d.get("name") or "").strip()
+        address = (d.get("address") or "").strip()
+        if name in ("---", "MS_UNAVAILABLE"):
+            name = ""
+        if address in ("---",):
+            address = ""
     except Exception as e:
         logger.error(f"VIES lookup failed: {e}")
-        raise HTTPException(status_code=502, detail="No se pudo consultar el NIF en VIES. Inténtalo más tarde.")
-    name = (d.get("name") or "").strip()
-    address = (d.get("address") or "").strip()
-    if name in ("---", "MS_UNAVAILABLE"):
-        name = ""
-    if address in ("---",):
-        address = ""
-    return {"valid": bool(d.get("valid")), "name": name, "address": address, "email": "",
-            "phone": "", "nif": num, "source": "VIES (Comisión Europea)"}
+        if not local_valid:
+            raise HTTPException(status_code=502, detail="No se pudo consultar el NIF en VIES. Inténtalo más tarde.")
+
+    source = "VIES (Comisión Europea)" if vies_valid else ("Validación local (DNI/NIE/CIF)" if local_valid else "No válido")
+    return {"valid": vies_valid or local_valid, "name": name, "address": address, "email": "",
+            "phone": "", "nif": num, "source": source}
 
 
 @api.post("/invoices/{invoice_id}/send-email")
@@ -896,13 +994,26 @@ async def annual_summary(year: Optional[int] = None, user=Depends(get_current_us
         {"user_id": user["id"], "date": {"$regex": f"^{ys}"}}, {"_id": 0}).to_list(10000)
 
     rates = [21, 10, 4, 0]
+    rep_map = {r: {"base": 0.0, "cuota": 0.0} for r in rates}
+    for inv in invoices:
+        bd = inv.get("iva_breakdown")
+        if bd:
+            for b in bd:
+                r = int(b.get("rate", 0))
+                if r in rep_map:
+                    rep_map[r]["base"] += b.get("base", 0)
+                    rep_map[r]["cuota"] += b.get("cuota", 0)
+        else:
+            r = int(inv.get("iva_rate", 0) or 0)
+            if r in rep_map:
+                rep_map[r]["base"] += inv.get("base", 0)
+                rep_map[r]["cuota"] += inv.get("iva_amount", 0)
     iva_repercutido, iva_soportado = [], []
     for r in rates:
-        rep_base = round(sum(i.get("base", 0) for i in invoices if i.get("iva_rate") == r), 2)
-        rep_cuota = round(sum(i.get("iva_amount", 0) for i in invoices if i.get("iva_rate") == r), 2)
+        iva_repercutido.append({"rate": r, "base": round(rep_map[r]["base"], 2),
+                                "cuota": round(rep_map[r]["cuota"], 2)})
         sop_base = round(sum(e.get("base", 0) for e in expenses if e.get("iva_rate") == r), 2)
         sop_cuota = round(sum(e.get("iva_amount", 0) for e in expenses if e.get("iva_rate") == r), 2)
-        iva_repercutido.append({"rate": r, "base": rep_base, "cuota": rep_cuota})
         iva_soportado.append({"rate": r, "base": sop_base, "cuota": sop_cuota})
 
     total_cuota_rep = round(sum(x["cuota"] for x in iva_repercutido), 2)

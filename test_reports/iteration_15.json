@@ -1,0 +1,34 @@
+{
+  "summary": "Iter 15 – IVA por línea (feature nueva). Backend: 9/9 pytest OK cubriendo POST/PUT invoices con múltiples iva_type e iva_rate distintos, validaciones 422 (iva_rate no permitido y iva_type inválido), aceptación de tipos 0/4/10/21, PDF 200 con desglose por línea + recargo + suplidos, /api/annual-summary agregando por iva_breakdown y export libros xlsx+csv. Cálculos verificados: base excluye suplidos e incluye general+exenta+no_sujeta, iva_amount por tipo, re 21→5.2 / 10→1.4 / 4→0.5, irpf sobre general+exenta, total = base + suplidos + iva + re - irpf, iva_breakdown correcto. Frontend: login como admin, /facturas → 'Nueva factura'. El selector global antiguo 'iva-select' NO existe (correcto). Cada línea tiene data-testid line-iva-{idx} con las 7 opciones (IVA 21/10/4/0, Exento, No sujeto, Suplido). irpf-select global presente. Creada factura con 2 líneas (1000€ IVA21 + 200€ IVA10) y recargo-checkbox marcado: summary-base=1200,00€ y summary-total=1484,80€ (esperado 1200 + 230 IVA + 54,80 RE = 1484,80). save-invoice guardó y la factura aparece en la lista (111→112).",
+  "backend_issues": { "critical": [], "minor": [] },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Diálogo Nueva factura", "issues": ["Warning Radix a11y: 'Missing Description or aria-describedby for DialogContent' (ya reportado en iter 14, no bloqueante)."]}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iter15_line_iva.py",
+    "/app/test_reports/pytest/iter15.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "compute_invoice usa RE_MAP={21:5.2,10:1.4,4:0.5,0:0.0} — coincide con la normativa española del recargo de equivalencia.",
+    "_validate_invoice restringe iva_rate a {0,4,10,21} solo cuando iva_type=='general' y valida iva_type contra {general,exento,no_sujeto,suplido} — correcto.",
+    "Base imponible incluye general+exenta+no_sujeta y EXCLUYE suplidos; suplidos_total se suma al total. IRPF se calcula sobre general+exenta (correcto, no se aplica a suplidos ni no_sujeta).",
+    "annual_summary implementa fallback por iva_rate cuando la factura no tiene iva_breakdown (compatibilidad con facturas históricas) — verificado.",
+    "server.py sigue creciendo (~1220 líneas). Sería recomendable separar rutas y helpers en módulos (invoices_routes.py, tax_calc.py) — deuda técnica.",
+    "En compute_invoice se sobreescribe inv['iva_rate'] con el tipo dominante; puede resultar engañoso para consumidores que aún leen iva_rate como campo escalar. Documentar/deprecar en API."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iter15_line_iva.py (new)"
+  ],
+  "success_rate": { "backend": "100% (9/9)", "frontend": "100% (flow completo Nueva factura con 2 IVAs distintos + recargo + save)" },
+  "test_credentials": "admin@fiscalhub.es / admin123",
+  "seed_data_creation": "Backend pytest crea ~6 facturas TEST (cliente 'TEST Cliente Iter15') que se borran en teardown module. La factura UI 'TEST UI Iter15 Cliente' quedó como FAC-2026-0075 (no auto-eliminada).",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "La feature de IVA por línea está funcional end-to-end. Modelo LineItem tiene iva_type ∈ {general,exento,no_sujeto,suplido} y iva_rate (solo aplica cuando general). InvoiceInput.recargo_equivalencia booleano. compute_invoice devuelve iva_breakdown[]. Frontend Invoices.js usa emptyLine().iva_sel + lineToSel/selToTax para mapear el select 'line-iva-{idx}' al par (iva_type,iva_rate). No hay iva-select global (deprecado). Facturas antiguas sin iva_breakdown siguen funcionando en annual-summary por fallback.",
+  "rca of the issue": "N/A – verification-only run, feature implementada correctamente."
+}
