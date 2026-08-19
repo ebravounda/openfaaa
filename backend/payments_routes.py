@@ -11,12 +11,21 @@ from database import db
 from auth import get_current_user
 from plans import load_plans
 import stripe_service as ss
+from integrations_config import get_stripe
 
 logger = logging.getLogger("payments")
 stripe.api_key = os.environ.get("STRIPE_SECRET_KEY") or "sk_test_emergent"
 STRIPE_WEBHOOK_SECRET = os.environ.get("STRIPE_WEBHOOK_SECRET", "")
 
 payments = APIRouter(prefix="/api")
+
+
+async def _apply_stripe() -> str:
+    """Aplica la clave de Stripe configurada en el panel (prioridad sobre .env). Devuelve el webhook secret."""
+    cfg = await get_stripe()
+    if cfg.get("secret_key"):
+        stripe.api_key = cfg["secret_key"]
+    return cfg.get("webhook_secret") or STRIPE_WEBHOOK_SECRET
 
 
 class CheckoutReq(BaseModel):
@@ -46,6 +55,7 @@ async def _upgrade_user(user_id: str, plan: str, session_obj):
 
 @payments.post("/payments/checkout")
 async def create_checkout(req: CheckoutReq, user=Depends(get_current_user)):
+    await _apply_stripe()
     if req.plan not in ss.PLAN_LOOKUP:
         raise HTTPException(status_code=400, detail="Este plan no requiere pago")
     plans = await load_plans()
@@ -72,6 +82,7 @@ async def create_checkout(req: CheckoutReq, user=Depends(get_current_user)):
 
 @payments.post("/payments/portal")
 async def customer_portal(req: PortalReq, user=Depends(get_current_user)):
+    await _apply_stripe()
     u = await db.users.find_one({"_id": ObjectId(user["id"])})
     cust = (u or {}).get("stripe_customer_id")
     if not cust:
@@ -86,6 +97,7 @@ async def customer_portal(req: PortalReq, user=Depends(get_current_user)):
 
 @payments.get("/payments/history")
 async def payment_history(user=Depends(get_current_user)):
+    await _apply_stripe()
     u = await db.users.find_one({"_id": ObjectId(user["id"])})
     cust = (u or {}).get("stripe_customer_id")
     if not cust:
@@ -111,6 +123,7 @@ async def payment_history(user=Depends(get_current_user)):
 
 @payments.get("/payments/status/{session_id}")
 async def get_status(session_id: str):
+    await _apply_stripe()
     record = await db.payment_transactions.find_one({"session_id": session_id})
     if not record:
         raise HTTPException(status_code=404, detail="Transacción no encontrada")
@@ -134,10 +147,11 @@ async def get_status(session_id: str):
 
 @payments.post("/stripe/webhook")
 async def stripe_webhook(request: Request):
+    webhook_secret = await _apply_stripe()
     payload = await request.body()
     sig = request.headers.get("stripe-signature", "")
     try:
-        event = stripe.Webhook.construct_event(payload, sig, STRIPE_WEBHOOK_SECRET)
+        event = stripe.Webhook.construct_event(payload, sig, webhook_secret)
     except (stripe.error.SignatureVerificationError, ValueError):
         raise HTTPException(status_code=400, detail="Firma inválida")
     obj, t = event["data"]["object"], event["type"]

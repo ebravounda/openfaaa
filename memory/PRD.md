@@ -138,9 +138,18 @@ Sistema de facturación para España: crear facturas introduciendo datos (CIF/NI
 - ✅ **SEO por página (react-helmet-async@3.0.0)**: componente `Seo` (`components/Seo.jsx`) con title/description/canonical/OG/Twitter únicos. Aplicado a Landing (/), Login, Registro, Términos y Privacidad (indexables) y noindex en páginas privadas (vía Layout + Welcome). index.html limpiado: solo etiquetas globales (keywords, geo, JSON-LD, fuentes, favicon, manifest); las per-page las gestiona Helmet (sin duplicados). Verificado en navegador: 1 sola meta description por página, canonical y robots correctos.
 - ✅ **Preparación de despliegue (independiente en Plesk)**: guía completa en `/app/DEPLOYMENT.md` (BD Mongo propia `openfactura_prod`, usuario dedicado, systemd con puerto exclusivo, build React, proxy nginx solo del vhost, HTTPS, cron con secreto, webhook Stripe, checklist de independencia). Fix bloqueadores del deployment_agent: (1) cron purge-verifactu-log ahora borra SOLO registros >60 días (ya no `delete_many({})`); (2) CORS usa `CORS_ORIGINS` (multi-origen, coma) con fallback `FRONTEND_URL`. NOTA: CORS NO se pone en `"*"` a propósito (rompería cookies con credentials).
 
+## Implemented — Iteración 18 (2026-06) Producción Plesk + IVA por línea + Fixes + Panel Integraciones
+- ✅ **Despliegue backend en Plesk (SELinux)**: resuelto el fallo de `openfactura-api.service`. Causa: `EnvironmentFile` dentro del vhost + SELinux Enforcing. Solución: `.env` movido a `/etc/openfactura/openfactura.env` (contexto etc_t legible por systemd) + reetiquetado del venv a `bin_t` (`semanage fcontext`) para permitir la transición del servicio. Backend VIVO en 127.0.0.1:8712. Frontend build publicado en httpdocs + `.htaccess` (fallback SPA) + proxy nginx `/api`→8712. Admin producción: soporte@goroky.com.
+- ✅ **IVA por línea (conjunto legal ES)**: `LineItem` con `iva_rate` + `iva_type` (general|exento|no_sujeto|suplido) e `InvoiceInput.recargo_equivalencia`. `compute_invoice` recalcula base (excluye suplidos), `iva_breakdown` por tipo, recargo de equivalencia (21→5,2 / 10→1,4 / 4→0,5), IRPF sobre base general+exenta. PDF (estándar + GoRoky), Modelo 303/390 y libros (xlsx/csv) agregando por `iva_breakdown`. IRPF sigue GLOBAL. Testing iter 15: 9/9 backend + frontend 100%.
+- ✅ **Fixes**: (1) PDF cabecera "FACTURA" ya no se solapa con Nº/fecha (leading). (2) NIE/DNI aceptado en `/api/lookup/nif` aunque VIES no lo devuelva (validación local; VIES solo para nombre/dirección). (3) Numeración: `_next_seq` (max secuencia+1 o `invoice_start_number`), endpoint `GET /api/invoices/next-number`, número siguiente mostrado en el formulario; vencimiento automático (+`invoice_due_days`, def. 15). Campos nuevos en Configuración. (4) Placeholder "TRAMILEX…" eliminado.
+- ✅ **Panel Integraciones (Super Admin)** `GET/PUT /api/admin/integrations` (secretos cifrados con Fernet/CERT_ENCRYPTION_KEY, enmascarados al leer): 
+  - **Resend (self-hosted, API propia)**: `email_service.send_email` usa Resend directo (api.resend.com) cuando hay api_key configurada; fallback al email gestionado Emergent si no. Campos: api_key, from_email (dominio verificado), from_name, reply_to. (Soporte confirmó que en self-hosted SÍ se permite API propia.)
+  - **Stripe (API propia)**: secret/publishable/webhook/mode; `payments_routes` aplica la clave de BD con prioridad sobre `.env` (incl. webhook secret dinámico).
+  - **Asistente IA (proveedor a elección)**: emergent (universal key) | openai (LlmChat, clave propia) | groq (API directa OpenAI-compatible). `ai_service._complete` unificado. Modelo configurable.
+- ⚠️ **Pendiente de REDESPLIEGUE en producción**: los errores de "Anular" y "enviar por correo" en openfactura.es (Cloudflare 5xx) se deben a que el servidor tenía código anterior; en preview funcionan. Hay que hacer git pull + `yarn build` + `systemctl restart openfactura-api` para aplicar todos estos cambios.
+
 ## Backlog (prioritized)
-- P2: Editar los límites/precios de los planes desde el panel admin (ahora son fijos en plans.py).
-- P2: Registro de actividad/logs de admin visible en UI (ya se guarda en db.admin_audit).
-- P2: Sugerir plantilla por defecto según tipo de actividad al registrarse.
-- P3: Refactor server.py (960+ líneas) en routers (verifactu, invoices, contacts).
-- P3: Validación defensiva de ObjectId en admin_routes (evitar 500 con id malformado).
+- P1: Campos tipo Holded en factura: descuentos (línea/global), concepto+descripción separados, total por línea, número editable.
+- P2: Editar límites/precios de planes desde admin (ahora fijos en plans.py).
+- P2: Vista previa en vivo del PDF al cambiar colores/plantilla.
+- P3: Refactor server.py en routers (verifactu, invoices, contacts).

@@ -10,8 +10,8 @@ from urllib.parse import urlparse
 logger = logging.getLogger(__name__)
 
 EMAIL_BASE_URL = "https://integrations.emergentagent.com"
-EMAIL_KEY = os.environ["EMERGENT_EMAIL_KEY"]
-EMAIL_FROM_NAME = os.environ["EMAIL_FROM_NAME"]
+EMAIL_KEY = os.environ.get("EMERGENT_EMAIL_KEY")
+EMAIL_FROM_NAME = os.environ.get("EMAIL_FROM_NAME", "OpenFactura")
 EMAIL_REPLY_TO = os.environ.get("EMAIL_REPLY_TO")
 
 _SHORTENERS = ("bit.ly", "tinyurl.com", "t.co", "is.gd", "cutt.ly", "goo.gl", "rebrand.ly")
@@ -87,12 +87,44 @@ def _assert_safe_email(subject: str, html: str) -> None:
                 raise ValueError(f"Anchor text {m.group(1)!r} != real link host {real!r} (G3)")
 
 
+async def _send_via_resend(rc: dict, to: str, subject: str, html: str, reply_to: str | None):
+    from fastapi import HTTPException
+    if not rc.get("from_email"):
+        raise HTTPException(status_code=400, detail="Configura el email remitente (dominio verificado) en Integraciones.")
+    payload = {"from": f'{rc.get("from_name") or "OpenFactura"} <{rc["from_email"]}>',
+               "to": [to], "subject": subject, "html": html}
+    rt = reply_to or rc.get("reply_to")
+    if rt:
+        payload["reply_to"] = rt
+    try:
+        async with httpx.AsyncClient(timeout=30) as client:
+            resp = await client.post("https://api.resend.com/emails",
+                                     headers={"Authorization": f"Bearer {rc['api_key']}"},
+                                     json=payload)
+        resp.raise_for_status()
+        return resp.json().get("id")
+    except httpx.HTTPStatusError as e:
+        logger.error(f"Resend send failed: {e.response.status_code} {e.response.text}")
+        raise HTTPException(status_code=502, detail=f"Resend rechazó el envío: {e.response.text[:200]}")
+    except Exception as e:
+        logger.error(f"Resend send error: {e}")
+        raise HTTPException(status_code=500, detail="No se pudo enviar el email con Resend")
+
+
 async def send_email(*, to: str, subject: str, html: str, reply_to: str | None = None):
     _assert_safe_email(subject, html)
+    # 1) Resend propio del usuario (self-hosted) si está configurado en Integraciones
+    from integrations_config import get_resend
+    rc = await get_resend()
+    if rc.get("api_key"):
+        return await _send_via_resend(rc, to, subject, html, reply_to)
+    # 2) Fallback: servicio de email gestionado por Emergent
+    from fastapi import HTTPException
+    if not EMAIL_KEY:
+        raise HTTPException(status_code=400, detail="El email no está configurado. Añade tu API key de Resend en Integraciones.")
     payload = {"to": [to], "subject": subject, "html": html, "from_name": EMAIL_FROM_NAME}
     if reply_to or EMAIL_REPLY_TO:
         payload["contact_email"] = reply_to or EMAIL_REPLY_TO
-    from fastapi import HTTPException
     try:
         async with httpx.AsyncClient(timeout=30) as client:
             resp = await client.post(

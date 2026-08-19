@@ -28,17 +28,44 @@ REVIEW_SYSTEM = (
 )
 
 
-def _chat(system_message: str, session_id: str):
+def _chat(system_message: str, session_id: str, api_key: str, model: str):
     from emergentintegrations.llm.chat import LlmChat
-    return LlmChat(api_key=EMERGENT_LLM_KEY, session_id=session_id,
-                   system_message=system_message).with_model("openai", "gpt-5.4")
+    return LlmChat(api_key=api_key, session_id=session_id,
+                   system_message=system_message).with_model("openai", model or "gpt-5.4")
+
+
+async def _groq_complete(system_message: str, user_text: str, cfg: dict) -> str:
+    from openai import AsyncOpenAI
+    client = AsyncOpenAI(api_key=cfg["groq_key"], base_url="https://api.groq.com/openai/v1")
+    r = await client.chat.completions.create(
+        model=cfg.get("model") or "llama-3.3-70b-versatile",
+        messages=[{"role": "system", "content": system_message},
+                  {"role": "user", "content": user_text}])
+    return r.choices[0].message.content or ""
+
+
+async def _complete(system_message: str, user_text: str, session_id: str) -> str:
+    from integrations_config import get_ai
+    cfg = await get_ai()
+    provider = cfg.get("provider", "emergent")
+    if provider == "groq":
+        if not cfg.get("groq_key"):
+            raise RuntimeError("Falta la API key de Groq en Integraciones.")
+        return await _groq_complete(system_message, user_text, cfg)
+    from emergentintegrations.llm.chat import UserMessage
+    if provider == "openai":
+        if not cfg.get("openai_key"):
+            raise RuntimeError("Falta la API key de OpenAI en Integraciones.")
+        key, model = cfg["openai_key"], (cfg.get("model") or "gpt-5.4")
+    else:  # emergent (universal key)
+        key, model = EMERGENT_LLM_KEY, "gpt-5.4"
+    chat = _chat(system_message, session_id, key, model)
+    resp = await chat.send_message(UserMessage(text=user_text))
+    return resp if isinstance(resp, str) else str(resp)
 
 
 async def assistant_reply(session_id: str, message: str) -> str:
-    from emergentintegrations.llm.chat import UserMessage
-    chat = _chat(ASSISTANT_SYSTEM, session_id or f"assist-{uuid.uuid4()}")
-    resp = await chat.send_message(UserMessage(text=message))
-    return resp if isinstance(resp, str) else str(resp)
+    return await _complete(ASSISTANT_SYSTEM, message, session_id or f"assist-{uuid.uuid4()}")
 
 
 def _parse_json(text: str) -> dict:
@@ -54,11 +81,10 @@ def _parse_json(text: str) -> dict:
 
 
 async def review_invoice(draft: dict) -> dict:
-    from emergentintegrations.llm.chat import UserMessage
-    chat = _chat(REVIEW_SYSTEM, f"review-{uuid.uuid4()}")
-    resp = await chat.send_message(UserMessage(
-        text="Revisa esta factura y devuelve solo el JSON:\n" + json.dumps(draft, ensure_ascii=False)))
-    text = resp if isinstance(resp, str) else str(resp)
+    text = await _complete(
+        REVIEW_SYSTEM,
+        "Revisa esta factura y devuelve solo el JSON:\n" + json.dumps(draft, ensure_ascii=False),
+        f"review-{uuid.uuid4()}")
     try:
         data = _parse_json(text)
         if not isinstance(data.get("issues"), list):

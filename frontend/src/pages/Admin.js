@@ -48,6 +48,9 @@ export default function Admin() {
   const [savingPlans, setSavingPlans] = useState(false);
   const [audit, setAudit] = useState([]);
   const [revenue, setRevenue] = useState(null);
+  const [integ, setInteg] = useState(null);
+  const [integForm, setIntegForm] = useState({ resend: {}, stripe: {}, ai: {} });
+  const [savingInteg, setSavingInteg] = useState(false);
 
   const load = (query = "") => {
     setLoading(true);
@@ -66,11 +69,39 @@ export default function Admin() {
     api.get("/admin/plans").then((r) => setPlans(r.data)).catch(() => {});
     api.get("/admin/audit").then((r) => setAudit(r.data)).catch(() => {});
     api.get("/admin/revenue").then((r) => setRevenue(r.data)).catch(() => {});
+    api.get("/admin/integrations").then((r) => {
+      setInteg(r.data);
+      setIntegForm({
+        resend: { from_email: r.data.resend.from_email || "", from_name: r.data.resend.from_name || "", reply_to: r.data.resend.reply_to || "", api_key: "" },
+        stripe: { publishable_key: r.data.stripe.publishable_key || "", mode: r.data.stripe.mode || "test", secret_key: "", webhook_secret: "" },
+        ai: { provider: r.data.ai.provider || "emergent", model: r.data.ai.model || "", openai_key: "", groq_key: "" },
+      });
+    }).catch(() => {});
   }, []);
 
   if (user && (user.role !== "admin" || user.is_impersonating)) return <Navigate to="/" replace />;
 
   const search = (e) => { e.preventDefault(); load(q); };
+
+  const saveInteg = async () => {
+    setSavingInteg(true);
+    try {
+      await api.put("/admin/integrations", integForm);
+      toast.success("Integraciones guardadas");
+      const { data } = await api.get("/admin/integrations");
+      setInteg(data);
+      setIntegForm((f) => ({
+        resend: { ...f.resend, api_key: "" },
+        stripe: { ...f.stripe, secret_key: "", webhook_secret: "" },
+        ai: { ...f.ai, openai_key: "", groq_key: "" },
+      }));
+    } catch (e) {
+      toast.error(formatApiErrorDetail(e.response?.data?.detail));
+    } finally { setSavingInteg(false); }
+  };
+  const setR = (k, v) => setIntegForm((f) => ({ ...f, resend: { ...f.resend, [k]: v } }));
+  const setS = (k, v) => setIntegForm((f) => ({ ...f, stripe: { ...f.stripe, [k]: v } }));
+  const setA = (k, v) => setIntegForm((f) => ({ ...f, ai: { ...f.ai, [k]: v } }));
 
   const setPlan = async (u, plan) => {
     setBusyId(u.id);
@@ -340,6 +371,109 @@ export default function Admin() {
               </Button>
             )}
           </div>
+        </div>
+      </div>
+
+      <div className="bg-white border border-slate-200 rounded-lg shadow-sm max-w-3xl overflow-hidden mt-8" data-testid="integrations-section">
+        <div className="px-5 py-4 border-b border-slate-100 flex items-center gap-2">
+          <CreditCard className="w-4 h-4 text-[#0052FF]" strokeWidth={1.5} />
+          <div>
+            <div className="font-medium text-slate-900">Integraciones</div>
+            <div className="text-sm text-slate-500">Configura tus propias claves. Se guardan cifradas y tienen prioridad sobre el servidor.</div>
+          </div>
+        </div>
+        <div className="p-5 space-y-8">
+          {/* RESEND */}
+          <div className="space-y-3">
+            <div className="font-medium text-slate-800">Email · Resend</div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="space-y-2 sm:col-span-2">
+                <Label>API Key de Resend {integ?.resend?.api_key_set && <span className="text-xs text-emerald-600">· configurada {integ.resend.api_key_hint}</span>}</Label>
+                <Input type="password" placeholder={integ?.resend?.api_key_set ? "•••• (dejar vacío para no cambiar)" : "re_..."} value={integForm.resend.api_key || ""} onChange={(e) => setR("api_key", e.target.value)} data-testid="integ-resend-key" />
+              </div>
+              <div className="space-y-2">
+                <Label>Email remitente (dominio verificado)</Label>
+                <Input placeholder="facturas@openfactura.es" value={integForm.resend.from_email || ""} onChange={(e) => setR("from_email", e.target.value)} data-testid="integ-resend-from-email" />
+              </div>
+              <div className="space-y-2">
+                <Label>Nombre remitente</Label>
+                <Input placeholder="OpenFactura" value={integForm.resend.from_name || ""} onChange={(e) => setR("from_name", e.target.value)} data-testid="integ-resend-from-name" />
+              </div>
+              <div className="space-y-2 sm:col-span-2">
+                <Label>Responder a (opcional)</Label>
+                <Input placeholder="soporte@openfactura.es" value={integForm.resend.reply_to || ""} onChange={(e) => setR("reply_to", e.target.value)} data-testid="integ-resend-reply" />
+              </div>
+            </div>
+            <p className="text-xs text-slate-400">Verifica tu dominio en Resend antes de enviar. Si dejas la API key vacía, se usará el email gestionado por defecto.</p>
+          </div>
+
+          {/* STRIPE */}
+          <div className="space-y-3 border-t border-slate-100 pt-6">
+            <div className="font-medium text-slate-800">Pagos · Stripe</div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label>Clave secreta {integ?.stripe?.secret_key_set && <span className="text-xs text-emerald-600">· {integ.stripe.secret_key_hint}</span>}</Label>
+                <Input type="password" placeholder={integ?.stripe?.secret_key_set ? "•••• (dejar vacío para no cambiar)" : "sk_live_..."} value={integForm.stripe.secret_key || ""} onChange={(e) => setS("secret_key", e.target.value)} data-testid="integ-stripe-secret" />
+              </div>
+              <div className="space-y-2">
+                <Label>Clave publicable</Label>
+                <Input placeholder="pk_live_..." value={integForm.stripe.publishable_key || ""} onChange={(e) => setS("publishable_key", e.target.value)} data-testid="integ-stripe-pub" />
+              </div>
+              <div className="space-y-2">
+                <Label>Webhook secret {integ?.stripe?.webhook_secret_set && <span className="text-xs text-emerald-600">· configurado</span>}</Label>
+                <Input type="password" placeholder={integ?.stripe?.webhook_secret_set ? "•••• (dejar vacío para no cambiar)" : "whsec_..."} value={integForm.stripe.webhook_secret || ""} onChange={(e) => setS("webhook_secret", e.target.value)} data-testid="integ-stripe-webhook" />
+              </div>
+              <div className="space-y-2">
+                <Label>Modo</Label>
+                <Select value={integForm.stripe.mode || "test"} onValueChange={(v) => setS("mode", v)}>
+                  <SelectTrigger data-testid="integ-stripe-mode"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="test">Test</SelectItem>
+                    <SelectItem value="live">Live (producción)</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            <p className="text-xs text-slate-400">Webhook: apunta a <span className="font-mono">https://openfactura.es/api/stripe/webhook</span></p>
+          </div>
+
+          {/* IA */}
+          <div className="space-y-3 border-t border-slate-100 pt-6">
+            <div className="font-medium text-slate-800">Asistente IA</div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label>Proveedor</Label>
+                <Select value={integForm.ai.provider || "emergent"} onValueChange={(v) => setA("provider", v)}>
+                  <SelectTrigger data-testid="integ-ai-provider"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="emergent">Emergent (incluido)</SelectItem>
+                    <SelectItem value="openai">OpenAI (tu clave)</SelectItem>
+                    <SelectItem value="groq">Groq (tu clave)</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label>Modelo</Label>
+                <Input placeholder={integForm.ai.provider === "groq" ? "llama-3.3-70b-versatile" : "gpt-5.4"} value={integForm.ai.model || ""} onChange={(e) => setA("model", e.target.value)} data-testid="integ-ai-model" />
+              </div>
+              {integForm.ai.provider === "openai" && (
+                <div className="space-y-2 sm:col-span-2">
+                  <Label>API Key de OpenAI {integ?.ai?.openai_key_set && <span className="text-xs text-emerald-600">· {integ.ai.openai_key_hint}</span>}</Label>
+                  <Input type="password" placeholder={integ?.ai?.openai_key_set ? "•••• (dejar vacío para no cambiar)" : "sk-..."} value={integForm.ai.openai_key || ""} onChange={(e) => setA("openai_key", e.target.value)} data-testid="integ-ai-openai-key" />
+                </div>
+              )}
+              {integForm.ai.provider === "groq" && (
+                <div className="space-y-2 sm:col-span-2">
+                  <Label>API Key de Groq {integ?.ai?.groq_key_set && <span className="text-xs text-emerald-600">· {integ.ai.groq_key_hint}</span>}</Label>
+                  <Input type="password" placeholder={integ?.ai?.groq_key_set ? "•••• (dejar vacío para no cambiar)" : "gsk_..."} value={integForm.ai.groq_key || ""} onChange={(e) => setA("groq_key", e.target.value)} data-testid="integ-ai-groq-key" />
+                </div>
+              )}
+            </div>
+          </div>
+
+          <Button onClick={saveInteg} disabled={savingInteg} className="bg-[#0052FF] hover:bg-[#0040CC] text-white" data-testid="save-integrations">
+            {savingInteg ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Save className="w-4 h-4 mr-2" strokeWidth={1.5} />}Guardar integraciones
+          </Button>
         </div>
       </div>
 

@@ -261,3 +261,90 @@ async def _audit(actor_id: str, action: str, target_id):
         })
     except Exception:
         pass
+
+
+# ---------- Integraciones (Resend, Stripe, IA) ----------
+import integrations_config as ic
+
+
+class IntegrationsInput(BaseModel):
+    resend: dict = {}   # {api_key?, from_email, from_name, reply_to}
+    stripe: dict = {}   # {secret_key?, publishable_key, webhook_secret?, mode}
+    ai: dict = {}       # {provider, model, openai_key?, groq_key?}
+
+
+def _mask(v: str) -> str:
+    if not v:
+        return ""
+    return "••••" + v[-4:] if len(v) > 4 else "••••"
+
+
+@admin.get("/integrations")
+async def get_integrations(admin_user=Depends(require_admin)):
+    """Devuelve la config con los secretos ENMASCARADOS (nunca en claro)."""
+    doc = await db.global_settings.find_one({"_id": "integrations"}) or {}
+    r = doc.get("resend", {}); s = doc.get("stripe", {}); a = doc.get("ai", {})
+    return {
+        "resend": {
+            "api_key_set": bool(r.get("api_key")),
+            "api_key_hint": _mask(ic._dec(r.get("api_key"))),
+            "from_email": r.get("from_email", ""),
+            "from_name": r.get("from_name", ""),
+            "reply_to": r.get("reply_to", ""),
+        },
+        "stripe": {
+            "secret_key_set": bool(s.get("secret_key")),
+            "secret_key_hint": _mask(ic._dec(s.get("secret_key"))),
+            "publishable_key": s.get("publishable_key", ""),
+            "webhook_secret_set": bool(s.get("webhook_secret")),
+            "mode": s.get("mode", "test"),
+        },
+        "ai": {
+            "provider": a.get("provider", "emergent"),
+            "model": a.get("model", ""),
+            "openai_key_set": bool(a.get("openai_key")),
+            "openai_key_hint": _mask(ic._dec(a.get("openai_key"))),
+            "groq_key_set": bool(a.get("groq_key")),
+            "groq_key_hint": _mask(ic._dec(a.get("groq_key"))),
+        },
+    }
+
+
+@admin.put("/integrations")
+async def set_integrations(data: IntegrationsInput, admin_user=Depends(require_admin)):
+    doc = await db.global_settings.find_one({"_id": "integrations"}) or {}
+    resend = dict(doc.get("resend", {}))
+    stripe = dict(doc.get("stripe", {}))
+    ai = dict(doc.get("ai", {}))
+
+    # Resend
+    resend["from_email"] = data.resend.get("from_email", resend.get("from_email", ""))
+    resend["from_name"] = data.resend.get("from_name", resend.get("from_name", ""))
+    resend["reply_to"] = data.resend.get("reply_to", resend.get("reply_to", ""))
+    if data.resend.get("api_key"):  # solo si envían una nueva clave
+        resend["api_key"] = ic.enc(data.resend["api_key"])
+    if data.resend.get("clear_api_key"):
+        resend["api_key"] = ""
+
+    # Stripe
+    stripe["publishable_key"] = data.stripe.get("publishable_key", stripe.get("publishable_key", ""))
+    stripe["mode"] = data.stripe.get("mode", stripe.get("mode", "test"))
+    if data.stripe.get("secret_key"):
+        stripe["secret_key"] = ic.enc(data.stripe["secret_key"])
+    if data.stripe.get("webhook_secret"):
+        stripe["webhook_secret"] = ic.enc(data.stripe["webhook_secret"])
+
+    # IA
+    ai["provider"] = data.ai.get("provider", ai.get("provider", "emergent"))
+    ai["model"] = data.ai.get("model", ai.get("model", ""))
+    if data.ai.get("openai_key"):
+        ai["openai_key"] = ic.enc(data.ai["openai_key"])
+    if data.ai.get("groq_key"):
+        ai["groq_key"] = ic.enc(data.ai["groq_key"])
+
+    await db.global_settings.update_one(
+        {"_id": "integrations"},
+        {"$set": {"resend": resend, "stripe": stripe, "ai": ai}}, upsert=True)
+    await _audit(admin_user["id"], "edit_integrations", None)
+    return {"status": "ok"}
+
