@@ -148,6 +148,12 @@ Sistema de facturación para España: crear facturas introduciendo datos (CIF/NI
   - **Asistente IA (proveedor a elección)**: emergent (universal key) | openai (LlmChat, clave propia) | groq (API directa OpenAI-compatible). `ai_service._complete` unificado. Modelo configurable.
 - ⚠️ **Pendiente de REDESPLIEGUE en producción**: los errores de "Anular" y "enviar por correo" en openfactura.es (Cloudflare 5xx) se deben a que el servidor tenía código anterior; en preview funcionan. Hay que hacer git pull + `yarn build` + `systemctl restart openfactura-api` para aplicar todos estos cambios.
 
+## Implemented — Iteración 19 (2026-06) Holded fields + Vista previa PDF + Email de prueba + DESPLIEGUE PRODUCCIÓN
+- ✅ **Campos tipo Holded en factura**: descuento por línea (`LineItem.discount`), descuento global (`InvoiceInput.global_discount`), concepto + descripción larga (`LineItem.detail`), total por línea. `compute_invoice` calcula `subtotal`, `discount_total` y bases netas (suplidos sin descuento). PDF con columna Dto. + filas Subtotal/Descuento. Testing iter 16: 100% backend + frontend.
+- ✅ **Vista previa PDF real** en Configuración: `POST /api/company/preview-pdf` genera miniatura PNG (pymupdf) de una factura de muestra con los ajustes actuales; se actualiza (debounce) al cambiar plantilla/color/textos.
+- ✅ **Email de prueba** en panel admin: `POST /api/admin/test-email` (usa la config de Resend guardada o el email gestionado como fallback).
+- ✅ **DESPLEGADO EN PRODUCCIÓN (openfactura.es)**: git pull + pip install + restart backend (systemd `active`) + `yarn build` + publicado en httpdocs. Verificado end-to-end: frontend 200, API viva por dominio (Cloudflare→Nginx→uvicorn:8712), login admin OK (soporte@goroky.com). Falta que el usuario configure sus claves reales (Resend/Stripe/OpenAI/Groq) en /admin → Integraciones y validar anular/correo en el dominio real.
+
 ## Backlog (prioritized)
 - P1: Campos tipo Holded en factura: descuentos (línea/global), concepto+descripción separados, total por línea, número editable.
 - P2: Editar límites/precios de planes desde admin (ahora fijos en plans.py).
