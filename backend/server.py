@@ -12,7 +12,7 @@ import hmac
 from datetime import datetime, timezone, date, timedelta
 from typing import List, Optional
 
-from fastapi import FastAPI, APIRouter, HTTPException, Depends, UploadFile, File, Header, Query, Form, Request, BackgroundTasks
+from fastapi import FastAPI, APIRouter, HTTPException, Depends, UploadFile, File, Header, Query, Form, Request, BackgroundTasks, Body
 from fastapi.responses import Response
 from starlette.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
@@ -50,8 +50,10 @@ api = APIRouter(prefix="/api")
 # ---------- Models ----------
 class LineItem(BaseModel):
     description: str
+    detail: str = ""
     quantity: float = 1
     unit_price: float = 0.0
+    discount: float = 0
     iva_rate: float = 21
     iva_type: str = "general"  # general | exento | no_sujeto | suplido
 
@@ -70,6 +72,7 @@ class InvoiceInput(BaseModel):
     iva_rate: float = 21
     irpf_rate: float = 0
     recargo_equivalencia: bool = False
+    global_discount: float = 0
     status: str = "pending"
     notes: str = ""
     series: str = ""
@@ -150,14 +153,22 @@ RE_MAP = {21: 5.2, 10: 1.4, 4: 0.5, 0: 0.0}
 def compute_invoice(inv: dict) -> dict:
     recargo = bool(inv.get("recargo_equivalencia"))
     fallback_rate = inv.get("iva_rate", 21)
+    gd = float(inv.get("global_discount") or 0)
     breakdown = {}
     base_general = base_exenta = base_no_sujeta = suplidos = 0.0
+    subtotal_gross = discount_total = 0.0
     for it in inv["line_items"]:
-        lb = round((it.get("quantity") or 0) * (it.get("unit_price") or 0), 2)
+        qty = it.get("quantity") or 0
+        price = it.get("unit_price") or 0
+        gross = round(qty * price, 2)
+        subtotal_gross += gross
         itype = it.get("iva_type", "general") or "general"
         if itype == "suplido":
-            suplidos += lb
+            suplidos += gross  # los suplidos no llevan descuento
             continue
+        ld = float(it.get("discount") or 0)
+        lb = round(round(gross * (1 - ld / 100), 2) * (1 - gd / 100), 2)
+        discount_total += round(gross - lb, 2)
         if itype == "no_sujeto":
             base_no_sujeta += lb
             continue
@@ -189,6 +200,9 @@ def compute_invoice(inv: dict) -> dict:
     irpf_amount = round(irpf_base * irpf_rate / 100, 2)
     total = round(base + suplidos + iva_amount + re_amount - irpf_amount, 2)
 
+    inv["subtotal"] = round(subtotal_gross, 2)
+    inv["discount_total"] = round(discount_total, 2)
+    inv["global_discount"] = gd
     inv["base"] = base
     inv["base_exenta"] = round(base_exenta, 2)
     inv["base_no_sujeta"] = round(base_no_sujeta, 2)
@@ -325,6 +339,40 @@ async def upsert_company(data: CompanyInput, user=Depends(get_current_user)):
     doc["user_id"] = user["id"]
     await db.companies.update_one({"user_id": user["id"]}, {"$set": doc}, upsert=True)
     return doc
+
+
+@api.post("/company/preview-pdf")
+async def preview_company_pdf(overrides: dict = Body(default={}), user=Depends(get_current_user)):
+    """Genera una miniatura PNG del PDF real con los ajustes de aspecto indicados (sin guardar)."""
+    company = await db.companies.find_one({"user_id": user["id"]}, {"_id": 0}) or {}
+    for k in ("template_id", "accent_color", "name", "legal_name", "nif", "address",
+              "email", "phone", "invoice_footer", "legal_notice", "footer_message"):
+        if overrides.get(k) is not None:
+            company[k] = overrides[k]
+    year = datetime.now(timezone.utc).year
+    pfx = company.get("invoice_prefix") or ""
+    sample = compute_invoice({
+        "number": f"{pfx + '-' if pfx else ''}{year}-0001",
+        "issue_date": datetime.now(timezone.utc).date().isoformat(),
+        "due_date": "", "status": "pending",
+        "client": {"name": "Cliente de ejemplo S.L.", "nif": "B12345674",
+                   "address": "Calle Ejemplo 1, 28001 Madrid"},
+        "line_items": [
+            {"description": "Servicio de ejemplo", "detail": "Descripción detallada del concepto",
+             "quantity": 2, "unit_price": 150, "discount": 10, "iva_rate": 21, "iva_type": "general"},
+            {"description": "Producto a tipo reducido", "quantity": 1, "unit_price": 80,
+             "iva_rate": 10, "iva_type": "general"},
+        ],
+        "irpf_rate": 15, "recargo_equivalencia": False, "global_discount": 0,
+        "notes": "Factura de muestra para la vista previa.",
+    })
+    pdf = build_invoice_pdf(sample, company)
+    import pymupdf
+    pdoc = pymupdf.open(stream=pdf, filetype="pdf")
+    png = pdoc.load_page(0).get_pixmap(dpi=110).tobytes("png")
+    pdoc.close()
+    return Response(content=png, media_type="image/png",
+                    headers={"Cache-Control": "no-store"})
 
 
 @api.get("/templates")

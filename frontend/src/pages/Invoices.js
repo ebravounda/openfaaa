@@ -38,11 +38,12 @@ const IRPF_OPTIONS = [
   { v: "15", l: "IRPF 15% (general)" },
 ];
 
-const emptyLine = () => ({ description: "", quantity: 1, unit_price: 0, iva_sel: "21" });
+const emptyLine = () => ({ description: "", detail: "", quantity: 1, unit_price: 0, discount: 0, iva_sel: "21" });
 const lineToSel = (i) => (i.iva_type && i.iva_type !== "general") ? i.iva_type : String(i.iva_rate ?? 21);
 const selToTax = (sel) => (["exento", "no_sujeto", "suplido"].includes(sel))
   ? { iva_type: sel, iva_rate: 0 }
   : { iva_type: "general", iva_rate: Number(sel) };
+const round2 = (n) => Math.round((n + Number.EPSILON) * 100) / 100;
 
 const emptyForm = () => ({
   issue_date: new Date().toISOString().slice(0, 10),
@@ -50,6 +51,7 @@ const emptyForm = () => ({
   line_items: [emptyLine()],
   irpf_rate: "0",
   recargo_equivalencia: false,
+  global_discount: 0,
   notes: "",
   series: "",
   invoice_type: "normal",
@@ -118,16 +120,26 @@ export default function Invoices() {
     });
   }, []);
 
+  const gd = Number(form.global_discount) || 0;
+  const lineNet = (it) => {
+    const gross = (Number(it.quantity) || 0) * (Number(it.unit_price) || 0);
+    if ((it.iva_sel ?? "21") === "suplido") return round2(gross);
+    const ld = Number(it.discount) || 0;
+    return round2(round2(gross * (1 - ld / 100)) * (1 - gd / 100));
+  };
   const calc = (() => {
     const bd = {};
-    let baseGeneral = 0, baseExenta = 0, baseNoSujeta = 0, suplidos = 0;
+    let baseGeneral = 0, baseExenta = 0, baseNoSujeta = 0, suplidos = 0, subtotal = 0, discountTotal = 0;
     form.line_items.forEach((it) => {
-      const lb = (Number(it.quantity) || 0) * (Number(it.unit_price) || 0);
+      const gross = (Number(it.quantity) || 0) * (Number(it.unit_price) || 0);
+      subtotal += gross;
       const sel = it.iva_sel ?? "21";
-      if (sel === "suplido") { suplidos += lb; return; }
-      if (sel === "no_sujeto") { baseNoSujeta += lb; return; }
-      if (sel === "exento") { baseExenta += lb; return; }
-      const r = Number(sel); baseGeneral += lb; bd[r] = (bd[r] || 0) + lb;
+      if (sel === "suplido") { suplidos += gross; return; }
+      const net = lineNet(it);
+      discountTotal += (gross - net);
+      if (sel === "no_sujeto") { baseNoSujeta += net; return; }
+      if (sel === "exento") { baseExenta += net; return; }
+      const r = Number(sel); baseGeneral += net; bd[r] = (bd[r] || 0) + net;
     });
     let ivaAmount = 0, reAmount = 0;
     const breakdown = Object.keys(bd).map(Number).sort((a, b) => b - a).map((r) => {
@@ -141,7 +153,7 @@ export default function Invoices() {
     const irpfBase = baseGeneral + baseExenta;
     const irpfAmount = (irpfBase * Number(form.irpf_rate)) / 100;
     const total = base + suplidos + ivaAmount + reAmount - irpfAmount;
-    return { base, baseExenta, baseNoSujeta, suplidos, breakdown, ivaAmount, reAmount, irpfAmount, total };
+    return { subtotal, discountTotal, base, baseExenta, baseNoSujeta, suplidos, breakdown, ivaAmount, reAmount, irpfAmount, total };
   })();
 
   const updateItem = (idx, field, value) => {
@@ -178,9 +190,10 @@ export default function Invoices() {
       issue_date: new Date().toISOString().slice(0, 10),
       client: { name: inv.client?.name || "", nif: inv.client?.nif || "", address: inv.client?.address || "", email: inv.client?.email || "" },
       line_items: (inv.line_items?.length ? inv.line_items : [emptyLine()])
-        .map((i) => ({ description: i.description, quantity: i.quantity, unit_price: -Math.abs(i.unit_price), iva_sel: lineToSel(i) })),
+        .map((i) => ({ description: i.description, detail: i.detail || "", quantity: i.quantity, unit_price: -Math.abs(i.unit_price), discount: i.discount || 0, iva_sel: lineToSel(i) })),
       irpf_rate: String(inv.irpf_rate || 0),
       recargo_equivalencia: !!inv.recargo_equivalencia,
+      global_discount: inv.global_discount || 0,
       notes: `Rectifica a la factura ${inv.number}`,
       series: rectifyPrefix,
       invoice_type: "rectificativa",
@@ -196,9 +209,10 @@ export default function Invoices() {
     setForm({
       issue_date: inv.issue_date,
       client: { name: inv.client?.name || "", nif: inv.client?.nif || "", address: inv.client?.address || "", email: inv.client?.email || "" },
-      line_items: inv.line_items?.length ? inv.line_items.map((i) => ({ description: i.description, quantity: i.quantity, unit_price: i.unit_price, iva_sel: lineToSel(i) })) : [emptyLine()],
+      line_items: inv.line_items?.length ? inv.line_items.map((i) => ({ description: i.description, detail: i.detail || "", quantity: i.quantity, unit_price: i.unit_price, discount: i.discount || 0, iva_sel: lineToSel(i) })) : [emptyLine()],
       irpf_rate: String(inv.irpf_rate || 0),
       recargo_equivalencia: !!inv.recargo_equivalencia,
+      global_discount: inv.global_discount || 0,
       notes: inv.notes || "",
       series: inv.series || "",
       save_client: false,
@@ -218,9 +232,10 @@ export default function Invoices() {
     const payload = {
       issue_date: form.issue_date,
       client: form.client,
-      line_items: form.line_items.map((i) => ({ description: i.description, quantity: Number(i.quantity), unit_price: Number(i.unit_price), ...selToTax(i.iva_sel ?? "21") })),
+      line_items: form.line_items.map((i) => ({ description: i.description, detail: i.detail || "", quantity: Number(i.quantity), unit_price: Number(i.unit_price), discount: Number(i.discount) || 0, ...selToTax(i.iva_sel ?? "21") })),
       irpf_rate: Number(form.irpf_rate),
       recargo_equivalencia: !!form.recargo_equivalencia,
+      global_discount: Number(form.global_discount) || 0,
       notes: form.notes,
       series: form.series,
       invoice_type: form.invoice_type,
@@ -318,7 +333,7 @@ export default function Invoices() {
     try {
       const { data } = await api.post("/invoices/review", {
         client: form.client,
-        line_items: form.line_items.map((i) => ({ description: i.description, quantity: Number(i.quantity), unit_price: Number(i.unit_price), ...selToTax(i.iva_sel ?? "21") })),
+        line_items: form.line_items.map((i) => ({ description: i.description, detail: i.detail || "", quantity: Number(i.quantity), unit_price: Number(i.unit_price), discount: Number(i.discount) || 0, ...selToTax(i.iva_sel ?? "21") })),
         iva_rate: Number(form.line_items[0]?.iva_sel) || 0,
         irpf_rate: Number(form.irpf_rate),
         issue_date: form.issue_date,
@@ -483,22 +498,29 @@ export default function Invoices() {
                 <Button variant="outline" size="sm" onClick={addItem} className="border-slate-200" data-testid="add-line-item"><Plus className="w-3.5 h-3.5 mr-1" strokeWidth={1.5} /> Añadir línea</Button>
               </div>
               {form.line_items.map((it, idx) => (
-                <div key={idx} className="grid grid-cols-12 gap-2 items-end" data-testid={`line-item-${idx}`}>
-                  <div className="col-span-4 space-y-1">{idx === 0 && <Label className="text-xs">Descripción</Label>}<Input value={it.description} onChange={(e) => updateItem(idx, "description", e.target.value)} data-testid={`line-desc-${idx}`} /></div>
-                  <div className="col-span-2 space-y-1">{idx === 0 && <Label className="text-xs">Cant.</Label>}<Input type="number" step="0.01" value={it.quantity} onChange={(e) => updateItem(idx, "quantity", e.target.value)} data-testid={`line-qty-${idx}`} /></div>
-                  <div className="col-span-2 space-y-1">{idx === 0 && <Label className="text-xs">Precio (€)</Label>}<Input type="number" step="0.01" value={it.unit_price} onChange={(e) => updateItem(idx, "unit_price", e.target.value)} data-testid={`line-price-${idx}`} /></div>
-                  <div className="col-span-3 space-y-1">{idx === 0 && <Label className="text-xs">Impuesto</Label>}
-                    <Select value={it.iva_sel ?? "21"} onValueChange={(v) => updateItem(idx, "iva_sel", v)}>
-                      <SelectTrigger data-testid={`line-iva-${idx}`}><SelectValue /></SelectTrigger>
-                      <SelectContent>{LINE_IVA_OPTIONS.map((o) => <SelectItem key={o.v} value={o.v}>{o.l}</SelectItem>)}</SelectContent>
-                    </Select>
+                <div key={idx} className="rounded-lg border border-slate-100 p-3 space-y-2" data-testid={`line-item-${idx}`}>
+                  <div className="grid grid-cols-12 gap-2 items-end">
+                    <div className="col-span-4 space-y-1">{idx === 0 && <Label className="text-xs">Concepto</Label>}<Input value={it.description} onChange={(e) => updateItem(idx, "description", e.target.value)} data-testid={`line-desc-${idx}`} /></div>
+                    <div className="col-span-1 space-y-1">{idx === 0 && <Label className="text-xs">Cant.</Label>}<Input type="number" step="0.01" value={it.quantity} onChange={(e) => updateItem(idx, "quantity", e.target.value)} data-testid={`line-qty-${idx}`} /></div>
+                    <div className="col-span-2 space-y-1">{idx === 0 && <Label className="text-xs">Precio (€)</Label>}<Input type="number" step="0.01" value={it.unit_price} onChange={(e) => updateItem(idx, "unit_price", e.target.value)} data-testid={`line-price-${idx}`} /></div>
+                    <div className="col-span-1 space-y-1">{idx === 0 && <Label className="text-xs">Dto.%</Label>}<Input type="number" step="0.01" min="0" max="100" value={it.discount} onChange={(e) => updateItem(idx, "discount", e.target.value)} data-testid={`line-discount-${idx}`} /></div>
+                    <div className="col-span-3 space-y-1">{idx === 0 && <Label className="text-xs">Impuesto</Label>}
+                      <Select value={it.iva_sel ?? "21"} onValueChange={(v) => updateItem(idx, "iva_sel", v)}>
+                        <SelectTrigger data-testid={`line-iva-${idx}`}><SelectValue /></SelectTrigger>
+                        <SelectContent>{LINE_IVA_OPTIONS.map((o) => <SelectItem key={o.v} value={o.v}>{o.l}</SelectItem>)}</SelectContent>
+                      </Select>
+                    </div>
+                    <div className="col-span-1"><Button variant="ghost" size="icon" onClick={() => removeItem(idx)} disabled={form.line_items.length === 1} className="h-9 w-9 text-slate-400 hover:text-red-600"><Trash2 className="w-4 h-4" strokeWidth={1.5} /></Button></div>
                   </div>
-                  <div className="col-span-1"><Button variant="ghost" size="icon" onClick={() => removeItem(idx)} disabled={form.line_items.length === 1} className="h-9 w-9 text-slate-400 hover:text-red-600"><Trash2 className="w-4 h-4" strokeWidth={1.5} /></Button></div>
+                  <div className="flex items-center gap-3">
+                    <Input className="text-sm h-8 flex-1" placeholder="Descripción (opcional)" value={it.detail || ""} onChange={(e) => updateItem(idx, "detail", e.target.value)} data-testid={`line-detail-${idx}`} />
+                    <div className="text-sm text-slate-500 whitespace-nowrap">Total: <span className="font-medium text-slate-800 tabular" data-testid={`line-total-${idx}`}>{eur(lineNet(it))}</span></div>
+                  </div>
                 </div>
               ))}
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
               <div className="space-y-2">
                 <Label>Retención IRPF (global)</Label>
                 <Select value={form.irpf_rate} onValueChange={(v) => setForm({ ...form, irpf_rate: v })}>
@@ -518,12 +540,17 @@ export default function Invoices() {
                 )}
               </div>
               <div className="space-y-2">
+                <Label>Descuento global (%)</Label>
+                <Input type="number" step="0.01" min="0" max="100" value={form.global_discount} onChange={(e) => setForm({ ...form, global_discount: e.target.value })} data-testid="global-discount" />
+                <p className="text-xs text-slate-400">Se aplica a todas las líneas (excepto suplidos).</p>
+              </div>
+              <div className="space-y-2">
                 <Label>Recargo de equivalencia</Label>
                 <div className="flex items-center gap-2 h-9 px-3 border border-slate-200 rounded-md bg-white">
                   <Checkbox id="recargo_eq" checked={form.recargo_equivalencia} onCheckedChange={(v) => setForm({ ...form, recargo_equivalencia: !!v })} data-testid="recargo-checkbox" />
-                  <label htmlFor="recargo_eq" className="text-sm text-slate-600 cursor-pointer">Aplicar recargo (cliente en régimen de RE)</label>
+                  <label htmlFor="recargo_eq" className="text-sm text-slate-600 cursor-pointer">Cliente en RE</label>
                 </div>
-                <p className="text-xs text-slate-400">Añade el recargo correspondiente a cada tipo de IVA (21%→5,2% · 10%→1,4% · 4%→0,5%).</p>
+                <p className="text-xs text-slate-400">Añade el recargo por tipo (21→5,2 · 10→1,4 · 4→0,5).</p>
               </div>
             </div>
 
@@ -554,6 +581,8 @@ export default function Invoices() {
             </div>
 
             <div className="bg-slate-50 border border-slate-200 rounded-lg p-4 space-y-1.5 text-sm">
+              {calc.discountTotal > 0 && <div className="flex justify-between text-slate-500"><span>Subtotal</span><span className="tabular">{eur(calc.subtotal)}</span></div>}
+              {calc.discountTotal > 0 && <div className="flex justify-between text-slate-500"><span>Descuento{gd ? ` global (-${gd}%)` : ""}</span><span className="tabular">-{eur(calc.discountTotal)}</span></div>}
               <div className="flex justify-between text-slate-500"><span>Base imponible</span><span className="tabular" data-testid="summary-base">{eur(calc.base)}</span></div>
               {calc.breakdown.map((b) => (
                 <div key={b.rate} className="flex justify-between text-slate-500"><span>IVA ({b.rate}%)</span><span className="tabular">{eur(b.cuota)}</span></div>

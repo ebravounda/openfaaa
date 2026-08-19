@@ -1,0 +1,32 @@
+{
+  "summary": "Iter 16 – Descuentos (línea + global), concepto+detalle+total por línea, vista previa PDF y email de prueba. Backend pytest 9/9 OK: crear factura con descuentos por línea (10%) + global (5%) + suplido (sin descuento) verifica subtotal 450, discount_total 39, base 361, iva_breakdown {21%: base 171 cuota 35.91, 10%: base 190 cuota 19}, suplidos_total 50, total 465.91; PUT recomputa (base 400, total 512 sin descuentos); GET /invoices/{id}/pdf devuelve application/pdf; POST /company/preview-pdf devuelve image/png para 'clasico' y 'goroky'; POST /admin/test-email devuelve {status:ok,to,id,provider} (usa email gestionado); /annual-summary y /export/libros?year=2026&format=xlsx siguen 200. Frontend: login admin OK. /facturas → Nueva factura, línea con concept (line-desc-0), descripción (line-detail-0), qty, precio 100, dto 10% → line-total-0=90€, summary-base=90€, summary-total=108,90€ (correcto). save-invoice creó factura 2026-0013 (visible en lista con base 90€ / IVA 18,90€ / total 108,90€) tras rellenar client-nif válido (B12345674). /configuracion: pdf-preview + pdf-preview-img cargan blob PNG; cambiar plantilla tpl-goroky→tpl-clasico y accent-color regenera la imagen (src cambia). /admin: test-email-to + send-test-email dispara toast 'Email de prueba enviado a test@example.com (vía email gestionado)'.",
+  "backend_issues": { "critical": [], "minor": [] },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Dialogo Nueva factura", "issues": ["Warning Radix a11y persistente: 'Missing Description or aria-describedby for DialogContent' (heredado de iter 14/15, no bloqueante)."]}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iter16_discounts.py",
+    "/app/test_reports/pytest/iter16.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "compute_invoice: fórmula descuentos correcta — lb = round(round(gross*(1-ld/100),2)*(1-gd/100),2). Suplidos NO reciben ni descuento de línea ni global (correcto).",
+    "discount_total se acumula por línea usando gross-lb (incluye impacto del descuento global), lo que ES coherente con la UI que muestra 'Descuento global (-X%)' en el resumen.",
+    "El endpoint /company/preview-pdf carga pymupdf dentro del handler (import local) — funciona pero podría subirse a top-level para evitar overhead por request. Menor.",
+    "server.py ya son 1308 líneas; sigue creciendo. Deuda técnica ya reportada en iter 15 (separar rutas de invoices/company/admin en módulos).",
+    "En Invoices.js la validación de NIF cliente parece rechazar (silenciosamente vía 422) cuando el NIF/CIF es vacío o inválido. No hay feedback visible al usuario cuando el backend responde 422 en save-invoice — recomendable mostrar toast de error con los mensajes de detail para mejorar UX (bug menor UX, no bloquea)."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iter16_discounts.py (new)"
+  ],
+  "success_rate": { "backend": "100% (9/9)", "frontend": "100% (invoice + settings preview + admin test-email)" },
+  "test_credentials": "admin@fiscalhub.es / admin123",
+  "seed_data_creation": "Backend pytest crea 1 factura TEST Iter16 Cliente y la borra en teardown. Frontend UI dejó FAC 2026-0013 con 'TEST Iter16 UI Cliente' (no auto-eliminada).",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Feature de descuentos (línea + global) totalmente funcional. LineItem admite description/detail/quantity/unit_price/discount/iva_rate/iva_type. InvoiceInput.global_discount %. compute_invoice devuelve subtotal, discount_total, base, base_exenta, base_no_sujeta, suplidos_total, iva_breakdown[{rate,base,cuota,re_rate,re_cuota}], irpf_amount, total. PDF muestra columna Dto., detail y filas Subtotal/Descuento/Base. POST /company/preview-pdf recibe {template_id, accent_color, ...} y devuelve PNG (image/png). POST /admin/test-email {to} usa email gestionado si no hay Resend. Cabecera X-OF-Client: web obligatoria en POST/PUT/DELETE. Frontend: cliente NIF es requerido en save (backend valida). Los testids relevantes: line-desc-{i}, line-detail-{i}, line-qty-{i}, line-price-{i}, line-discount-{i}, line-iva-{i}, line-total-{i}, global-discount, summary-base, summary-total, save-invoice, pdf-preview, pdf-preview-img, tpl-{id}, accent-color, test-email-to, send-test-email."
+}

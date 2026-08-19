@@ -348,3 +348,24 @@ async def set_integrations(data: IntegrationsInput, admin_user=Depends(require_a
     await _audit(admin_user["id"], "edit_integrations", None)
     return {"status": "ok"}
 
+
+class TestEmailInput(BaseModel):
+    to: str = ""
+
+
+@admin.post("/test-email")
+async def send_test_email(data: TestEmailInput, admin_user=Depends(require_admin)):
+    import email_service
+    to = (data.to or admin_user.get("email") or "").strip()
+    if not to:
+        raise HTTPException(status_code=400, detail="Indica un email de destino.")
+    rc = await ic.get_resend()
+    provider = "Resend (tu API)" if rc.get("api_key") else "email gestionado"
+    html = ("<div style='font-family:Arial,sans-serif;max-width:520px;margin:auto'>"
+            "<h2 style='color:#0052FF'>Email de prueba · OpenFactura</h2>"
+            "<p>Si estás leyendo esto, tu configuración de envío funciona correctamente. 🎉</p>"
+            f"<p style='color:#666;font-size:13px'>Enviado mediante: {provider}.</p></div>")
+    mid = await email_service.send_email(
+        to=to, subject="Prueba de configuración · OpenFactura", html=html)
+    return {"status": "ok", "to": to, "id": mid, "provider": provider}
+

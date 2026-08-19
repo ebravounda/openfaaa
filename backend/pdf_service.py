@@ -33,9 +33,23 @@ def _iva_label(it):
     return f"{it.get('iva_rate', 21):g}%"
 
 
+def _line_net(it, gd=0):
+    gross = (it.get("quantity") or 0) * (it.get("unit_price") or 0)
+    if (it.get("iva_type", "general") or "general") == "suplido":
+        return round(gross, 2)
+    ld = float(it.get("discount") or 0)
+    return round(round(gross * (1 - ld / 100), 2) * (1 - float(gd or 0) / 100), 2)
+
+
 def _totals_rows(invoice):
-    """Filas de totales con desglose de IVA por tipo, recargo y suplidos."""
-    rows = [("Base imponible", _eur(invoice.get("base", 0)), False)]
+    """Filas de totales con subtotal/descuento, desglose de IVA por tipo, recargo y suplidos."""
+    rows = []
+    if invoice.get("discount_total"):
+        rows.append(("Subtotal", _eur(invoice.get("subtotal", 0)), False))
+        gd = invoice.get("global_discount") or 0
+        lbl = f"Descuento global (-{gd:g}%)" if gd else "Descuento"
+        rows.append((lbl, f"-{_eur(invoice.get('discount_total', 0))}", False))
+    rows.append(("Base imponible", _eur(invoice.get("base", 0)), False))
     bd = invoice.get("iva_breakdown") or []
     if bd:
         for b in bd:
@@ -133,17 +147,23 @@ def build_invoice_pdf(invoice: dict, company: dict, qr_png: bytes = None, verifa
     story.append(Spacer(1, 8 * mm))
 
     # Line items
-    data = [["Descripción", "Cant.", "Precio", "IVA", "Importe"]]
+    gd = invoice.get("global_discount") or 0
+    detail_style = ParagraphStyle("det", parent=normal, fontSize=8, textColor=MUTED, leading=10)
+    data = [["Descripción", "Cant.", "Precio", "Dto.", "IVA", "Importe"]]
     for it in invoice.get("line_items", []):
-        amount = it["quantity"] * it["unit_price"]
+        desc_cell = [Paragraph(it["description"], normal)]
+        if it.get("detail"):
+            desc_cell.append(Paragraph(it["detail"], detail_style))
+        ld = float(it.get("discount") or 0)
         data.append([
-            Paragraph(it["description"], normal),
-            str(it["quantity"]),
+            desc_cell,
+            f"{it['quantity']:g}",
             _eur(it["unit_price"]),
+            f"{ld:g}%" if ld else "—",
             _iva_label(it),
-            _eur(amount),
+            _eur(_line_net(it, gd)),
         ])
-    tbl = Table(data, colWidths=[78 * mm, 16 * mm, 28 * mm, 20 * mm, 32 * mm])
+    tbl = Table(data, colWidths=[66 * mm, 14 * mm, 24 * mm, 16 * mm, 22 * mm, 32 * mm])
     tbl.setStyle(TableStyle([
         ("BACKGROUND", (0, 0), (-1, 0), accent),
         ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
@@ -397,7 +417,11 @@ def build_goroky_invoice_pdf(invoice: dict, company: dict, qr_png: bytes = None,
         left_block.append(Paragraph(f"IBAN: <b>{invoice.get('iban')}</b>", normal))
     for it in invoice.get("line_items", []):
         if it.get("description"):
-            left_block.append(Paragraph(f"{it['description']} · {_iva_label(it)}", normal))
+            ld = float(it.get("discount") or 0)
+            extra = f" · Dto. {ld:g}%" if ld else ""
+            left_block.append(Paragraph(f"{it['description']} · {_iva_label(it)}{extra}", normal))
+            if it.get("detail"):
+                left_block.append(Paragraph(f"<i>{it['detail']}</i>", normal))
 
     # Importes (derecha)
     amt_l = ParagraphStyle("grkal", parent=styles["Normal"], fontSize=9.5, textColor=GRK_BODY, leading=14)

@@ -17,7 +17,7 @@ import {
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
-import { Users, ShieldOff, FileText, Search, UserCog, Ban, CheckCircle2, Loader2, Save, CreditCard, History, TrendingUp, Euro, Rocket, UserPlus } from "lucide-react";
+import { Users, ShieldOff, FileText, Search, UserCog, Ban, CheckCircle2, Loader2, Save, CreditCard, History, TrendingUp, Euro, Rocket, UserPlus, Mail } from "lucide-react";
 
 const PLAN_LABEL = { basico: "Básico", medio: "Medio", platino: "Platino" };
 const actionLabel = (a) => {
@@ -51,6 +51,8 @@ export default function Admin() {
   const [integ, setInteg] = useState(null);
   const [integForm, setIntegForm] = useState({ resend: {}, stripe: {}, ai: {} });
   const [savingInteg, setSavingInteg] = useState(false);
+  const [testTo, setTestTo] = useState("");
+  const [sendingTest, setSendingTest] = useState(false);
 
   const load = (query = "") => {
     setLoading(true);
@@ -102,6 +104,15 @@ export default function Admin() {
   const setR = (k, v) => setIntegForm((f) => ({ ...f, resend: { ...f.resend, [k]: v } }));
   const setS = (k, v) => setIntegForm((f) => ({ ...f, stripe: { ...f.stripe, [k]: v } }));
   const setA = (k, v) => setIntegForm((f) => ({ ...f, ai: { ...f.ai, [k]: v } }));
+  const sendTestEmail = async () => {
+    setSendingTest(true);
+    try {
+      const { data } = await api.post("/admin/test-email", { to: testTo });
+      toast.success(`Email de prueba enviado a ${data.to} (vía ${data.provider})`);
+    } catch (e) {
+      toast.error(formatApiErrorDetail(e.response?.data?.detail));
+    } finally { setSendingTest(false); }
+  };
 
   const setPlan = async (u, plan) => {
     setBusyId(u.id);
@@ -405,6 +416,16 @@ export default function Admin() {
               </div>
             </div>
             <p className="text-xs text-slate-400">Verifica tu dominio en Resend antes de enviar. Si dejas la API key vacía, se usará el email gestionado por defecto.</p>
+            <div className="flex flex-wrap items-end gap-2 pt-1">
+              <div className="space-y-1 flex-1 min-w-[220px]">
+                <Label className="text-xs">Enviar email de prueba a</Label>
+                <Input type="email" placeholder="tu@correo.com (vacío = tu email admin)" value={testTo} onChange={(e) => setTestTo(e.target.value)} data-testid="test-email-to" />
+              </div>
+              <Button variant="outline" onClick={sendTestEmail} disabled={sendingTest} className="border-slate-200" data-testid="send-test-email">
+                {sendingTest ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Mail className="w-4 h-4 mr-2" strokeWidth={1.5} />}Enviar prueba
+              </Button>
+            </div>
+            <p className="text-xs text-amber-600">Guarda las integraciones antes de enviar la prueba (usa la configuración guardada).</p>
           </div>
 
           {/* STRIPE */}

@@ -22,6 +22,8 @@ export default function Settings() {
   const [certPwd, setCertPwd] = useState("");
   const [uploadingCert, setUploadingCert] = useState(false);
   const [gkGlobal, setGkGlobal] = useState({ legal_notice: "", footer_message: "" });
+  const [preview, setPreview] = useState("");
+  const [previewLoading, setPreviewLoading] = useState(false);
   const certRef = useRef(null);
 
   useEffect(() => {
@@ -32,6 +34,28 @@ export default function Settings() {
     api.get("/templates").then((r) => setTemplates(r.data));
     api.get("/global-templates/goroky").then((r) => setGkGlobal(r.data)).catch(() => {});
   }, []);
+
+  // Vista previa del PDF real (miniatura) al cambiar plantilla/color/textos
+  useEffect(() => {
+    if (loading) return;
+    let active = true;
+    setPreviewLoading(true);
+    const t = setTimeout(async () => {
+      try {
+        const { data } = await api.post("/company/preview-pdf", {
+          template_id: form.template_id, accent_color: form.accent_color,
+          name: form.name, nif: form.nif, address: form.address,
+          legal_name: form.legal_name, legal_notice: form.legal_notice,
+          footer_message: form.footer_message, invoice_footer: form.invoice_footer,
+        }, { responseType: "blob" });
+        if (!active) return;
+        setPreview((old) => { if (old) URL.revokeObjectURL(old); return URL.createObjectURL(data); });
+      } catch (e) { /* noop */ }
+      finally { if (active) setPreviewLoading(false); }
+    }, 600);
+    return () => { active = false; clearTimeout(t); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loading, form.template_id, form.accent_color, form.name, form.nif, form.address, form.legal_name, form.legal_notice, form.footer_message, form.invoice_footer]);
 
   const uploadCert = async (e) => {
     const file = e.target.files?.[0];
@@ -160,6 +184,18 @@ export default function Settings() {
                   <Label>Pie de factura</Label>
                   <Input value={form.invoice_footer} onChange={(e) => setForm({ ...form, invoice_footer: e.target.value })} placeholder="Forma de pago, IBAN, condiciones…" data-testid="invoice-footer" />
                 </div>
+              </div>
+              <div className="border-t border-slate-100 pt-4 mt-2" data-testid="pdf-preview">
+                <div className="flex items-center justify-between mb-2">
+                  <div className="text-[11px] font-semibold uppercase tracking-wider text-slate-500">Vista previa</div>
+                  {previewLoading && <Loader2 className="w-4 h-4 text-slate-400 animate-spin" />}
+                </div>
+                <div className="bg-slate-100 rounded-lg p-3 flex justify-center">
+                  {preview
+                    ? <img src={preview} alt="Vista previa de la factura" className="w-full max-w-[420px] rounded shadow-sm border border-slate-200" data-testid="pdf-preview-img" />
+                    : <div className="text-sm text-slate-400 py-10">Generando vista previa…</div>}
+                </div>
+                <p className="text-xs text-slate-400 mt-2">Factura de muestra generada con tus ajustes actuales. Se actualiza al cambiar plantilla, color o textos.</p>
               </div>
               {form.template_id === "goroky" && (
                 <div className="border-t border-slate-100 pt-4 mt-2 space-y-4" data-testid="goroky-texts">
