@@ -213,16 +213,19 @@ def build_invoice_pdf(invoice: dict, company: dict, qr_png: bytes = None, verifa
         story.append(Spacer(1, 12 * mm))
         story.append(HRFlowable(width="100%", thickness=0.5, color=BORDER))
         story.append(Spacer(1, 4 * mm))
-        qr_img = Image(_BytesIO(qr_png), width=26 * mm, height=26 * mm)
-        vf_style = ParagraphStyle("vf", parent=small, fontSize=8, leading=11)
-        vf_text = [
-            Paragraph("<b>Factura verificable en la sede electrónica de la AEAT</b>", vf_style),
-            Paragraph("VERI*FACTU", ParagraphStyle("vfb", parent=vf_style, fontName="Helvetica-Bold", fontSize=10)),
-            Paragraph(f"Huella: {verifactu.get('huella','')[:32]}…", vf_style),
+        qr_col = [
+            Paragraph("QR tributario", ParagraphStyle("qrt", parent=small, fontSize=7, alignment=1, textColor=MUTED)),
+            Spacer(1, 1 * mm),
+            Image(_BytesIO(qr_png), width=35 * mm, height=35 * mm),
+            Spacer(1, 1.5 * mm),
+            Paragraph("VERI*FACTU", ParagraphStyle("qrl", parent=small, fontName="Helvetica-Bold", fontSize=8.5, alignment=1)),
+            Paragraph("Factura verificable en la sede electrónica de la AEAT", ParagraphStyle("qrl2", parent=small, fontSize=6.5, alignment=1, textColor=MUTED)),
         ]
+        vf_style = ParagraphStyle("vf", parent=small, fontSize=8, leading=11)
+        info_col = [Paragraph(f"Huella: {verifactu.get('huella','')[:40]}…", vf_style)]
         if verifactu.get("csv"):
-            vf_text.append(Paragraph(f"CSV AEAT: {verifactu.get('csv')}", vf_style))
-        vt = Table([[qr_img, vf_text]], colWidths=[30 * mm, 144 * mm])
+            info_col.append(Paragraph(f"CSV AEAT: {verifactu.get('csv')}", vf_style))
+        vt = Table([[qr_col, info_col]], colWidths=[44 * mm, 130 * mm])
         vt.setStyle(TableStyle([("VALIGN", (0, 0), (-1, -1), "MIDDLE")]))
         story.append(vt)
 
@@ -460,11 +463,18 @@ def build_goroky_invoice_pdf(invoice: dict, company: dict, qr_png: bytes = None,
         story.append(HRFlowable(width="100%", thickness=0.5, color=GRK_LINE))
         story.append(Spacer(1, 3 * mm))
         vf_style = ParagraphStyle("grkvf", parent=normal, fontSize=8, leading=11)
-        vt = Table([[Image(_BytesIO(qr_png), width=24 * mm, height=24 * mm), [
-            Paragraph("<b>Factura verificable en la sede electrónica de la AEAT</b>", vf_style),
-            Paragraph("VERI*FACTU", ParagraphStyle("grkvfb", parent=vf_style, fontName="Helvetica-Bold", fontSize=10)),
-            Paragraph(f"Huella: {verifactu.get('huella','')[:32]}…", vf_style),
-        ]]], colWidths=[28 * mm, 146 * mm])
+        grk_qr_col = [
+            Paragraph("QR tributario", ParagraphStyle("grkqrt", parent=normal, fontSize=7, alignment=1, textColor=colors.grey)),
+            Spacer(1, 1 * mm),
+            Image(_BytesIO(qr_png), width=35 * mm, height=35 * mm),
+            Spacer(1, 1.5 * mm),
+            Paragraph("VERI*FACTU", ParagraphStyle("grkqrl", parent=normal, fontName="Helvetica-Bold", fontSize=8.5, alignment=1)),
+            Paragraph("Factura verificable en la sede electrónica de la AEAT", ParagraphStyle("grkqrl2", parent=normal, fontSize=6.5, alignment=1, textColor=colors.grey)),
+        ]
+        grk_info = [Paragraph(f"Huella: {verifactu.get('huella','')[:40]}…", vf_style)]
+        if verifactu.get("csv"):
+            grk_info.append(Paragraph(f"CSV AEAT: {verifactu.get('csv')}", vf_style))
+        vt = Table([[grk_qr_col, grk_info]], colWidths=[44 * mm, 130 * mm])
         vt.setStyle(TableStyle([("VALIGN", (0, 0), (-1, -1), "MIDDLE")]))
         story.append(vt)
 

@@ -444,7 +444,7 @@ async def create_invoice(data: InvoiceInput, user=Depends(get_current_user)):
         huella = vf.compute_fingerprint(nif, number, fecha, tipo, doc["iva_amount"], doc["total"], prev, ts)
         doc["verifactu"] = {
             "enabled": True, "tipo": tipo, "huella": huella, "huella_anterior": prev,
-            "timestamp": ts, "qr_url": vf.build_qr_url(nif, number, fecha, doc["total"]),
+            "timestamp": ts, "qr_url": vf.build_qr_url(nif, number, fecha, doc["total"], produccion=(company.get("verifactu_mode") == "produccion")),
             "submitted": False, "status": "Registrado (pendiente de envío)",
             "submitted_at": None, "csv": None,
         }

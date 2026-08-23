@@ -9,8 +9,9 @@ try:
 except Exception:
     _MADRID = timezone(timedelta(hours=1))
 
-# Producción AEAT (el QR es un enlace a la sede; NO se llama en tiempo de ejecución)
-QR_BASE = "https://www1.agenciatributaria.gob.es/wlpl/TIKE-CONT/ValidarQR"
+# URLs oficiales del servicio de cotejo QR (Orden HAC/1177/2024)
+QR_BASE_TEST = "https://prewww2.aeat.es/wlpl/TIKE-CONT/ValidarQR"
+QR_BASE_PROD = "https://www2.agenciatributaria.gob.es/wlpl/TIKE-CONT/ValidarQR"
 LEGEND = "Factura verificable en la sede electrónica de la AEAT · VERI*FACTU"
 
 
@@ -54,10 +55,51 @@ def compute_fingerprint_anulacion(nif, numserie, fecha, prev, ts) -> str:
     return hashlib.sha256(chain.encode("utf-8")).hexdigest().upper()
 
 
-def build_qr_url(nif, numserie, fecha, importe) -> str:
-    return QR_BASE + "?" + urlencode({
-        "nif": nif, "numserie": numserie, "fecha": fecha, "importe": _fmt_num(importe),
+def build_qr_url(nif, numserie, fecha, importe, produccion: bool = False) -> str:
+    base = QR_BASE_PROD if produccion else QR_BASE_TEST
+    f = fecha
+    if len(f) >= 10 and f[4] == "-":  # ISO YYYY-MM-DD -> DD-MM-YYYY
+        f = to_ddmmyyyy(f)
+    return base + "?" + urlencode({
+        "nif": nif, "numserie": numserie, "fecha": f, "importe": _fmt_num(importe),
     })
+
+
+def _build_desglose(invoice: dict) -> str:
+    """Desglose por cada tipo impositivo (multi-IVA), operaciones exentas y recargo."""
+    bd = invoice.get("iva_breakdown") or []
+    parts = []
+    for b in bd:
+        re_xml = (f"<sf:TipoRecargoEquivalencia>{_fmt_num(b.get('re_rate', 0))}</sf:TipoRecargoEquivalencia>"
+                  f"<sf:CuotaRecargoEquivalencia>{_fmt_num(b.get('re_cuota', 0))}</sf:CuotaRecargoEquivalencia>"
+                  if b.get("re_cuota") else "")
+        parts.append(
+            "<sf:DetalleDesglose>"
+            "<sf:Impuesto>01</sf:Impuesto>"
+            "<sf:ClaveRegimen>01</sf:ClaveRegimen>"
+            "<sf:CalificacionOperacion>S1</sf:CalificacionOperacion>"
+            f"<sf:TipoImpositivo>{_fmt_num(b.get('rate', 0))}</sf:TipoImpositivo>"
+            f"<sf:BaseImponibleOimporteNoSujeto>{_fmt_num(b.get('base', 0))}</sf:BaseImponibleOimporteNoSujeto>"
+            f"<sf:CuotaRepercutida>{_fmt_num(b.get('cuota', 0))}</sf:CuotaRepercutida>"
+            f"{re_xml}</sf:DetalleDesglose>")
+    if invoice.get("base_exenta"):
+        parts.append(
+            "<sf:DetalleDesglose>"
+            "<sf:Impuesto>01</sf:Impuesto>"
+            "<sf:ClaveRegimen>01</sf:ClaveRegimen>"
+            "<sf:OperacionExenta>E1</sf:OperacionExenta>"
+            f"<sf:BaseImponibleOimporteNoSujeto>{_fmt_num(invoice.get('base_exenta', 0))}</sf:BaseImponibleOimporteNoSujeto>"
+            "</sf:DetalleDesglose>")
+    if not parts:  # compatibilidad con facturas antiguas (un solo tipo)
+        parts.append(
+            "<sf:DetalleDesglose>"
+            "<sf:Impuesto>01</sf:Impuesto><sf:ClaveRegimen>01</sf:ClaveRegimen>"
+            "<sf:CalificacionOperacion>S1</sf:CalificacionOperacion>"
+            f"<sf:TipoImpositivo>{_fmt_num(invoice.get('iva_rate', 0))}</sf:TipoImpositivo>"
+            f"<sf:BaseImponibleOimporteNoSujeto>{_fmt_num(invoice.get('base', 0))}</sf:BaseImponibleOimporteNoSujeto>"
+            f"<sf:CuotaRepercutida>{_fmt_num(invoice.get('iva_amount', 0))}</sf:CuotaRepercutida>"
+            "</sf:DetalleDesglose>")
+    return "".join(parts)
 
 
 def generate_qr_png(url: str) -> bytes:
@@ -103,11 +145,7 @@ def build_registro_alta_xml(company: dict, invoice: dict, prev_number: str, prev
         f"<sf:DescripcionOperacion>{_xesc((invoice.get('line_items') or [{}])[0].get('description','Prestacion de servicios'))}</sf:DescripcionOperacion>"
         f"<sf:Destinatario><sf:NombreRazon>{_xesc(cl.get('name',''))}</sf:NombreRazon>"
         f"<sf:NIF>{_xesc(cl.get('nif',''))}</sf:NIF></sf:Destinatario>"
-        f"<sf:Desglose><sf:DetalleDesglose>"
-        f"<sf:TipoImpositivo>{_fmt_num(invoice.get('iva_rate',0))}</sf:TipoImpositivo>"
-        f"<sf:BaseImponibleOimporteNoSujeto>{_fmt_num(invoice.get('base',0))}</sf:BaseImponibleOimporteNoSujeto>"
-        f"<sf:CuotaRepercutida>{_fmt_num(invoice.get('iva_amount',0))}</sf:CuotaRepercutida>"
-        f"</sf:DetalleDesglose></sf:Desglose>"
+        f"<sf:Desglose>{_build_desglose(invoice)}</sf:Desglose>"
         f"<sf:CuotaTotal>{_fmt_num(invoice.get('iva_amount',0))}</sf:CuotaTotal>"
         f"<sf:ImporteTotal>{_fmt_num(invoice.get('total',0))}</sf:ImporteTotal>"
         f"<sf:Encadenamiento>{encad}</sf:Encadenamiento>"
