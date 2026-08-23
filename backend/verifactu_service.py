@@ -70,36 +70,63 @@ def _build_desglose(invoice: dict) -> str:
     bd = invoice.get("iva_breakdown") or []
     parts = []
     for b in bd:
-        re_xml = (f"<sf:TipoRecargoEquivalencia>{_fmt_num(b.get('re_rate', 0))}</sf:TipoRecargoEquivalencia>"
-                  f"<sf:CuotaRecargoEquivalencia>{_fmt_num(b.get('re_cuota', 0))}</sf:CuotaRecargoEquivalencia>"
+        re_xml = (f"<sum1:TipoRecargoEquivalencia>{_fmt_num(b.get('re_rate', 0))}</sum1:TipoRecargoEquivalencia>"
+                  f"<sum1:CuotaRecargoEquivalencia>{_fmt_num(b.get('re_cuota', 0))}</sum1:CuotaRecargoEquivalencia>"
                   if b.get("re_cuota") else "")
         parts.append(
-            "<sf:DetalleDesglose>"
-            "<sf:Impuesto>01</sf:Impuesto>"
-            "<sf:ClaveRegimen>01</sf:ClaveRegimen>"
-            "<sf:CalificacionOperacion>S1</sf:CalificacionOperacion>"
-            f"<sf:TipoImpositivo>{_fmt_num(b.get('rate', 0))}</sf:TipoImpositivo>"
-            f"<sf:BaseImponibleOimporteNoSujeto>{_fmt_num(b.get('base', 0))}</sf:BaseImponibleOimporteNoSujeto>"
-            f"<sf:CuotaRepercutida>{_fmt_num(b.get('cuota', 0))}</sf:CuotaRepercutida>"
-            f"{re_xml}</sf:DetalleDesglose>")
+            "<sum1:DetalleDesglose>"
+            "<sum1:Impuesto>01</sum1:Impuesto>"
+            "<sum1:ClaveRegimen>01</sum1:ClaveRegimen>"
+            "<sum1:CalificacionOperacion>S1</sum1:CalificacionOperacion>"
+            f"<sum1:TipoImpositivo>{_fmt_num(b.get('rate', 0))}</sum1:TipoImpositivo>"
+            f"<sum1:BaseImponibleOimporteNoSujeto>{_fmt_num(b.get('base', 0))}</sum1:BaseImponibleOimporteNoSujeto>"
+            f"<sum1:CuotaRepercutida>{_fmt_num(b.get('cuota', 0))}</sum1:CuotaRepercutida>"
+            f"{re_xml}</sum1:DetalleDesglose>")
     if invoice.get("base_exenta"):
         parts.append(
-            "<sf:DetalleDesglose>"
-            "<sf:Impuesto>01</sf:Impuesto>"
-            "<sf:ClaveRegimen>01</sf:ClaveRegimen>"
-            "<sf:OperacionExenta>E1</sf:OperacionExenta>"
-            f"<sf:BaseImponibleOimporteNoSujeto>{_fmt_num(invoice.get('base_exenta', 0))}</sf:BaseImponibleOimporteNoSujeto>"
-            "</sf:DetalleDesglose>")
+            "<sum1:DetalleDesglose>"
+            "<sum1:Impuesto>01</sum1:Impuesto>"
+            "<sum1:ClaveRegimen>01</sum1:ClaveRegimen>"
+            "<sum1:OperacionExenta>E1</sum1:OperacionExenta>"
+            f"<sum1:BaseImponibleOimporteNoSujeto>{_fmt_num(invoice.get('base_exenta', 0))}</sum1:BaseImponibleOimporteNoSujeto>"
+            "</sum1:DetalleDesglose>")
     if not parts:  # compatibilidad con facturas antiguas (un solo tipo)
         parts.append(
-            "<sf:DetalleDesglose>"
-            "<sf:Impuesto>01</sf:Impuesto><sf:ClaveRegimen>01</sf:ClaveRegimen>"
-            "<sf:CalificacionOperacion>S1</sf:CalificacionOperacion>"
-            f"<sf:TipoImpositivo>{_fmt_num(invoice.get('iva_rate', 0))}</sf:TipoImpositivo>"
-            f"<sf:BaseImponibleOimporteNoSujeto>{_fmt_num(invoice.get('base', 0))}</sf:BaseImponibleOimporteNoSujeto>"
-            f"<sf:CuotaRepercutida>{_fmt_num(invoice.get('iva_amount', 0))}</sf:CuotaRepercutida>"
-            "</sf:DetalleDesglose>")
+            "<sum1:DetalleDesglose>"
+            "<sum1:Impuesto>01</sum1:Impuesto><sum1:ClaveRegimen>01</sum1:ClaveRegimen>"
+            "<sum1:CalificacionOperacion>S1</sum1:CalificacionOperacion>"
+            f"<sum1:TipoImpositivo>{_fmt_num(invoice.get('iva_rate', 0))}</sum1:TipoImpositivo>"
+            f"<sum1:BaseImponibleOimporteNoSujeto>{_fmt_num(invoice.get('base', 0))}</sum1:BaseImponibleOimporteNoSujeto>"
+            f"<sum1:CuotaRepercutida>{_fmt_num(invoice.get('iva_amount', 0))}</sum1:CuotaRepercutida>"
+            "</sum1:DetalleDesglose>")
     return "".join(parts)
+
+
+def _sistema_informatico(nif: str) -> str:
+    return (
+        "<sum1:SistemaInformatico>"
+        "<sum1:NombreRazon>OpenFactura</sum1:NombreRazon>"
+        f"<sum1:NIF>{_xesc(nif)}</sum1:NIF>"
+        "<sum1:NombreSistemaInformatico>OpenFactura</sum1:NombreSistemaInformatico>"
+        "<sum1:IdSistemaInformatico>OF</sum1:IdSistemaInformatico>"
+        "<sum1:Version>1.0</sum1:Version>"
+        "<sum1:NumeroInstalacion>1</sum1:NumeroInstalacion>"
+        "<sum1:TipoUsoPosibleSoloVerifactu>S</sum1:TipoUsoPosibleSoloVerifactu>"
+        "<sum1:TipoUsoPosibleMultiOT>N</sum1:TipoUsoPosibleMultiOT>"
+        "<sum1:IndicadorMultiplesOT>N</sum1:IndicadorMultiplesOT>"
+        "</sum1:SistemaInformatico>")
+
+
+def _encadenamiento(nif, prev_number, prev_huella, prev_fecha) -> str:
+    if not prev_huella:
+        return "<sum1:Encadenamiento><sum1:PrimerRegistro>S</sum1:PrimerRegistro></sum1:Encadenamiento>"
+    return (
+        "<sum1:Encadenamiento><sum1:RegistroAnterior>"
+        f"<sum1:IDEmisorFactura>{_xesc(nif)}</sum1:IDEmisorFactura>"
+        f"<sum1:NumSerieFactura>{_xesc(prev_number)}</sum1:NumSerieFactura>"
+        f"<sum1:FechaExpedicionFactura>{_xesc(prev_fecha or '')}</sum1:FechaExpedicionFactura>"
+        f"<sum1:Huella>{_xesc(prev_huella)}</sum1:Huella>"
+        "</sum1:RegistroAnterior></sum1:Encadenamiento>")
 
 
 def generate_qr_png(url: str) -> bytes:
@@ -121,84 +148,79 @@ def _xesc(v) -> str:
 
 
 def build_registro_alta_xml(company: dict, invoice: dict, prev_number: str, prev_huella: str,
-                            ts: str, huella: str) -> str:
-    """RegistroAlta según SuministroLR de VeriFactu (representativo del XSD de la AEAT)."""
+                            ts: str, huella: str, prev_fecha: str = "") -> str:
+    """RegistroAlta VeriFactu (namespace sum1, sin envelope)."""
     tipo = "R1" if invoice.get("invoice_type") == "rectificativa" else "F1"
     nif = company.get("nif", "")
     fecha = to_ddmmyyyy(invoice["issue_date"])
     cl = invoice.get("client", {})
-    encad = (f"<sf:RegistroAnterior><sf:IDEmisorFactura>{_xesc(nif)}</sf:IDEmisorFactura>"
-             f"<sf:NumSerieFactura>{_xesc(prev_number)}</sf:NumSerieFactura>"
-             f"<sf:Huella>{_xesc(prev_huella)}</sf:Huella></sf:RegistroAnterior>"
-             if prev_huella else "<sf:PrimerRegistro>S</sf:PrimerRegistro>")
     return (
-        '<?xml version="1.0" encoding="UTF-8"?>\n'
-        '<sf:RegistroAlta xmlns:sf="https://www2.agenciatributaria.gob.es/static_files/common/internet/dep/aplicaciones/es/aeat/tikeV1.0/SistemaFacturacion.xsd">'
-        f"<sf:IDVersion>1.0</sf:IDVersion>"
-        f"<sf:IDFactura>"
-        f"<sf:IDEmisorFactura>{_xesc(nif)}</sf:IDEmisorFactura>"
-        f"<sf:NumSerieFactura>{_xesc(invoice['number'])}</sf:NumSerieFactura>"
-        f"<sf:FechaExpedicionFactura>{fecha}</sf:FechaExpedicionFactura>"
-        f"</sf:IDFactura>"
-        f"<sf:NombreRazonEmisor>{_xesc(company.get('name',''))}</sf:NombreRazonEmisor>"
-        f"<sf:TipoFactura>{tipo}</sf:TipoFactura>"
-        f"<sf:DescripcionOperacion>{_xesc((invoice.get('line_items') or [{}])[0].get('description','Prestacion de servicios'))}</sf:DescripcionOperacion>"
-        f"<sf:Destinatario><sf:NombreRazon>{_xesc(cl.get('name',''))}</sf:NombreRazon>"
-        f"<sf:NIF>{_xesc(cl.get('nif',''))}</sf:NIF></sf:Destinatario>"
-        f"<sf:Desglose>{_build_desglose(invoice)}</sf:Desglose>"
-        f"<sf:CuotaTotal>{_fmt_num(invoice.get('iva_amount',0))}</sf:CuotaTotal>"
-        f"<sf:ImporteTotal>{_fmt_num(invoice.get('total',0))}</sf:ImporteTotal>"
-        f"<sf:Encadenamiento>{encad}</sf:Encadenamiento>"
-        f"<sf:SistemaInformatico><sf:NombreSistemaInformatico>FiscalHub</sf:NombreSistemaInformatico>"
-        f"<sf:IdSistemaInformatico>FH</sf:IdSistemaInformatico><sf:Version>1.0</sf:Version></sf:SistemaInformatico>"
-        f"<sf:FechaHoraHusoGenRegistro>{ts}</sf:FechaHoraHusoGenRegistro>"
-        f"<sf:TipoHuella>01</sf:TipoHuella>"
-        f"<sf:Huella>{huella}</sf:Huella>"
-        f"</sf:RegistroAlta>"
+        "<sum1:RegistroAlta>"
+        "<sum1:IDVersion>1.0</sum1:IDVersion>"
+        "<sum1:IDFactura>"
+        f"<sum1:IDEmisorFactura>{_xesc(nif)}</sum1:IDEmisorFactura>"
+        f"<sum1:NumSerieFactura>{_xesc(invoice['number'])}</sum1:NumSerieFactura>"
+        f"<sum1:FechaExpedicionFactura>{fecha}</sum1:FechaExpedicionFactura>"
+        "</sum1:IDFactura>"
+        f"<sum1:NombreRazonEmisor>{_xesc(company.get('name',''))}</sum1:NombreRazonEmisor>"
+        f"<sum1:TipoFactura>{tipo}</sum1:TipoFactura>"
+        f"<sum1:DescripcionOperacion>{_xesc((invoice.get('line_items') or [{}])[0].get('description','Prestacion de servicios'))}</sum1:DescripcionOperacion>"
+        f"<sum1:Destinatarios><sum1:IDDestinatario>"
+        f"<sum1:NombreRazon>{_xesc(cl.get('name',''))}</sum1:NombreRazon>"
+        f"<sum1:NIF>{_xesc(cl.get('nif',''))}</sum1:NIF>"
+        f"</sum1:IDDestinatario></sum1:Destinatarios>"
+        f"<sum1:Desglose>{_build_desglose(invoice)}</sum1:Desglose>"
+        f"<sum1:CuotaTotal>{_fmt_num(invoice.get('iva_amount',0))}</sum1:CuotaTotal>"
+        f"<sum1:ImporteTotal>{_fmt_num(invoice.get('total',0))}</sum1:ImporteTotal>"
+        f"{_encadenamiento(nif, prev_number, prev_huella, prev_fecha)}"
+        f"{_sistema_informatico(nif)}"
+        f"<sum1:FechaHoraHusoGenRegistro>{ts}</sum1:FechaHoraHusoGenRegistro>"
+        f"<sum1:TipoHuella>01</sum1:TipoHuella>"
+        f"<sum1:Huella>{huella}</sum1:Huella>"
+        "</sum1:RegistroAlta>"
     )
 
 
 def build_registro_anulacion_xml(company: dict, invoice: dict, prev_number: str, prev_huella: str,
-                                 ts: str, huella: str) -> str:
-    """RegistroAnulacion según SuministroLR de VeriFactu (representativo del XSD de la AEAT)."""
+                                 ts: str, huella: str, prev_fecha: str = "") -> str:
+    """RegistroAnulacion VeriFactu (namespace sum1, sin envelope)."""
     nif = company.get("nif", "")
     fecha = to_ddmmyyyy(invoice["issue_date"])
-    encad = (f"<sf:RegistroAnterior><sf:IDEmisorFactura>{_xesc(nif)}</sf:IDEmisorFactura>"
-             f"<sf:NumSerieFactura>{_xesc(prev_number)}</sf:NumSerieFactura>"
-             f"<sf:Huella>{_xesc(prev_huella)}</sf:Huella></sf:RegistroAnterior>"
-             if prev_huella else "<sf:PrimerRegistro>S</sf:PrimerRegistro>")
     return (
-        '<?xml version="1.0" encoding="UTF-8"?>\n'
-        '<sf:RegistroAnulacion xmlns:sf="https://www2.agenciatributaria.gob.es/static_files/common/internet/dep/aplicaciones/es/aeat/tikeV1.0/SistemaFacturacion.xsd">'
-        f"<sf:IDVersion>1.0</sf:IDVersion>"
-        f"<sf:IDFactura>"
-        f"<sf:IDEmisorFacturaAnulada>{_xesc(nif)}</sf:IDEmisorFacturaAnulada>"
-        f"<sf:NumSerieFacturaAnulada>{_xesc(invoice['number'])}</sf:NumSerieFacturaAnulada>"
-        f"<sf:FechaExpedicionFacturaAnulada>{fecha}</sf:FechaExpedicionFacturaAnulada>"
-        f"</sf:IDFactura>"
-        f"<sf:Encadenamiento>{encad}</sf:Encadenamiento>"
-        f"<sf:SistemaInformatico><sf:NombreSistemaInformatico>FiscalHub</sf:NombreSistemaInformatico>"
-        f"<sf:IdSistemaInformatico>FH</sf:IdSistemaInformatico><sf:Version>1.0</sf:Version></sf:SistemaInformatico>"
-        f"<sf:FechaHoraHusoGenRegistro>{ts}</sf:FechaHoraHusoGenRegistro>"
-        f"<sf:TipoHuella>01</sf:TipoHuella>"
-        f"<sf:Huella>{huella}</sf:Huella>"
-        f"</sf:RegistroAnulacion>"
+        "<sum1:RegistroAnulacion>"
+        "<sum1:IDVersion>1.0</sum1:IDVersion>"
+        "<sum1:IDFactura>"
+        f"<sum1:IDEmisorFacturaAnulada>{_xesc(nif)}</sum1:IDEmisorFacturaAnulada>"
+        f"<sum1:NumSerieFacturaAnulada>{_xesc(invoice['number'])}</sum1:NumSerieFacturaAnulada>"
+        f"<sum1:FechaExpedicionFacturaAnulada>{fecha}</sum1:FechaExpedicionFacturaAnulada>"
+        "</sum1:IDFactura>"
+        f"{_encadenamiento(nif, prev_number, prev_huella, prev_fecha)}"
+        f"{_sistema_informatico(nif)}"
+        f"<sum1:FechaHoraHusoGenRegistro>{ts}</sum1:FechaHoraHusoGenRegistro>"
+        f"<sum1:TipoHuella>01</sum1:TipoHuella>"
+        f"<sum1:Huella>{huella}</sum1:Huella>"
+        "</sum1:RegistroAnulacion>"
     )
 
 
-def build_soap_request(registro_xml: str, nif: str, signature_b64: str = None) -> str:
-    firma = f'\n    <!-- Firma XAdES (RSA-SHA256): {signature_b64[:64]}... -->' if signature_b64 else ''
+NS_SUM = "https://www2.agenciatributaria.gob.es/static_files/common/internet/dep/aplicaciones/es/aeat/tike/cont/ws/SuministroLR.xsd"
+NS_SUM1 = "https://www2.agenciatributaria.gob.es/static_files/common/internet/dep/aplicaciones/es/aeat/tike/cont/ws/SuministroInformacion.xsd"
+
+
+def build_soap_request(registro_xml: str, nif: str, nombre_razon: str = "", signature: str = None) -> str:
     body = registro_xml.split("?>", 1)[-1].strip()
     return (
-        '<soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/">\n'
-        '  <soapenv:Header/>\n'
-        '  <soapenv:Body>\n'
-        '    <sf:RegFactuSistemaFacturacion>\n'
-        f'      <sf:Cabecera><sf:ObligadoEmision><sf:NIF>{_xesc(nif)}</sf:NIF></sf:ObligadoEmision></sf:Cabecera>\n'
-        f'      {body}{firma}\n'
-        '    </sf:RegFactuSistemaFacturacion>\n'
-        '  </soapenv:Body>\n'
-        '</soapenv:Envelope>'
+        '<soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/" '
+        f'xmlns:sum="{NS_SUM}" xmlns:sum1="{NS_SUM1}">'
+        '<soapenv:Header/><soapenv:Body>'
+        '<sum:RegFactuSistemaFacturacion>'
+        '<sum:Cabecera><sum1:ObligadoEmision>'
+        f'<sum1:NombreRazon>{_xesc(nombre_razon)}</sum1:NombreRazon>'
+        f'<sum1:NIF>{_xesc(nif)}</sum1:NIF>'
+        '</sum1:ObligadoEmision></sum:Cabecera>'
+        f'<sum:RegistroFactura>{body}</sum:RegistroFactura>'
+        '</sum:RegFactuSistemaFacturacion>'
+        '</soapenv:Body></soapenv:Envelope>'
     )
 
 

@@ -543,7 +543,7 @@ async def anular_invoice(invoice_id: str, user=Depends(get_current_user)):
             except Exception as e:
                 logger.error(f"Cert signing (anulacion) failed: {e}")
 
-        soap_request = vf.build_soap_request(registro_xml, nif, signature)
+        soap_request = vf.build_soap_request(registro_xml, nif, company.get("name", ""))
         mode = company.get("verifactu_mode", "simulado")
         if mode == "preproduccion" and cert_bytes:
             real = await vf.send_to_aeat(cert_bytes, cert_pwd, soap_request)
@@ -686,7 +686,7 @@ async def verifactu_submit(invoice_id: str, user=Depends(get_current_user)):
         except Exception as e:
             logger.error(f"Cert signing failed: {e}")
 
-    soap_request = vf.build_soap_request(registro_xml, nif, signature)
+    soap_request = vf.build_soap_request(registro_xml, nif, company.get("name", ""))
     resp_ts = datetime.now(timezone.utc).isoformat()
     mode = company.get("verifactu_mode", "simulado")
 
