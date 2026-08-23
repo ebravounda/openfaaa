@@ -306,7 +306,11 @@ export default function Invoices() {
   };
 
   const anular = async (inv) => {
-    if (!window.confirm(`¿Anular la factura ${inv.number}? Esta acción registra la anulación en VeriFactu y no se puede deshacer.`)) return;
+    const cobrada = ["paid", "pagada", "cobrada"].includes(String(inv.status).toLowerCase());
+    const aviso = cobrada
+      ? `⚠️ La factura ${inv.number} consta como COBRADA/PAGADA.\n\nSegún la normativa española, una factura ya válida NO debe anularse: lo correcto es emitir una FACTURA RECTIFICATIVA (abono).\n\nLa anulación de VeriFactu es para registros emitidos por error. ¿Aún así quieres anularla?`
+      : `¿Anular la factura ${inv.number}?\n\nSi ya la enviaste al cliente o la cobraste, lo correcto legalmente es emitir una RECTIFICATIVA (abono) en lugar de anular.\n\nEsta acción registra la anulación en VeriFactu y no se puede deshacer.`;
+    if (!window.confirm(aviso)) return;
     try {
       const { data } = await api.post(`/invoices/${inv.id}/anular`);
       toast.success(data.verifactu ? `Factura anulada · ${data.verifactu.status}` : "Factura anulada");
