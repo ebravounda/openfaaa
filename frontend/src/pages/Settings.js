@@ -24,7 +24,9 @@ export default function Settings() {
   const [gkGlobal, setGkGlobal] = useState({ legal_notice: "", footer_message: "" });
   const [preview, setPreview] = useState("");
   const [previewLoading, setPreviewLoading] = useState(false);
+  const [uploadingLogo, setUploadingLogo] = useState(false);
   const certRef = useRef(null);
+  const logoRef = useRef(null);
 
   useEffect(() => {
     api.get("/company").then((r) => {
@@ -47,6 +49,7 @@ export default function Settings() {
           name: form.name, nif: form.nif, address: form.address,
           legal_name: form.legal_name, legal_notice: form.legal_notice,
           footer_message: form.footer_message, invoice_footer: form.invoice_footer,
+          logo: form.logo,
         }, { responseType: "blob" });
         if (!active) return;
         setPreview((old) => { if (old) URL.revokeObjectURL(old); return URL.createObjectURL(data); });
@@ -55,7 +58,7 @@ export default function Settings() {
     }, 600);
     return () => { active = false; clearTimeout(t); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [loading, form.template_id, form.accent_color, form.name, form.nif, form.address, form.legal_name, form.legal_notice, form.footer_message, form.invoice_footer]);
+  }, [loading, form.template_id, form.accent_color, form.name, form.nif, form.address, form.legal_name, form.legal_notice, form.footer_message, form.invoice_footer, form.logo]);
 
   const uploadCert = async (e) => {
     const file = e.target.files?.[0];
@@ -82,6 +85,30 @@ export default function Settings() {
     await api.delete("/verifactu/certificate");
     setCert(null);
     toast.success("Certificado eliminado");
+  };
+
+  const uploadLogo = async (e) => {
+    const file = e.target.files?.[0];
+    if (logoRef.current) logoRef.current.value = "";
+    if (!file) return;
+    setUploadingLogo(true);
+    try {
+      const fd = new FormData();
+      fd.append("file", file);
+      const { data } = await api.post("/company/logo", fd, { headers: { "Content-Type": "multipart/form-data" } });
+      setForm((f) => ({ ...f, logo: data.logo }));
+      toast.success("Logo subido correctamente");
+    } catch (err) {
+      toast.error(formatApiErrorDetail(err.response?.data?.detail) || "No se pudo subir el logo");
+    } finally {
+      setUploadingLogo(false);
+    }
+  };
+
+  const removeLogo = async () => {
+    await api.delete("/company/logo");
+    setForm((f) => ({ ...f, logo: "" }));
+    toast.success("Logo eliminado");
   };
 
   const save = async () => {
@@ -162,6 +189,31 @@ export default function Settings() {
             </div>
             <div className="border border-slate-200 rounded-lg p-4 space-y-3" data-testid="template-section">
               <div className="font-medium text-slate-900">Plantilla de factura</div>
+
+              <div className="space-y-2" data-testid="logo-section">
+                <Label>Logo de tu empresa</Label>
+                <div className="flex items-center gap-4">
+                  <div className="w-28 h-16 rounded-lg border border-slate-200 bg-slate-50 flex items-center justify-center overflow-hidden shrink-0">
+                    {form.logo
+                      ? <img src={form.logo} alt="Logo" className="max-w-full max-h-full object-contain" data-testid="logo-preview" />
+                      : <span className="text-[11px] text-slate-400 px-2 text-center">Sin logo</span>}
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    <input ref={logoRef} type="file" accept="image/png,image/jpeg,image/webp" onChange={uploadLogo} className="hidden" data-testid="logo-file-input" />
+                    <Button type="button" variant="outline" size="sm" className="border-slate-200" disabled={uploadingLogo} onClick={() => logoRef.current?.click()} data-testid="upload-logo">
+                      {uploadingLogo ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Upload className="w-4 h-4 mr-2" strokeWidth={1.5} />}
+                      {form.logo ? "Cambiar logo" : "Subir logo"}
+                    </Button>
+                    {form.logo && (
+                      <Button type="button" variant="outline" size="sm" className="border-slate-200 text-red-600 hover:text-red-700" onClick={removeLogo} data-testid="remove-logo">
+                        <Trash2 className="w-4 h-4 mr-2" strokeWidth={1.5} /> Quitar
+                      </Button>
+                    )}
+                  </div>
+                </div>
+                <p className="text-xs text-slate-400">Aparecerá en todas las plantillas del PDF. PNG o JPG, máx. 2 MB.</p>
+              </div>
+
               <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
                 {templates.map((t) => (
                   <button type="button" key={t.id} onClick={() => setForm({ ...form, template_id: t.id, accent_color: "" })} data-testid={`tpl-${t.id}`}

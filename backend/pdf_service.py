@@ -18,6 +18,49 @@ BORDER = colors.HexColor("#E5E5E5")
 LIGHT = colors.HexColor("#FAFAFA")
 
 
+import base64 as _b64
+
+
+def _logo_bytes(company):
+    logo = (company or {}).get("logo") or ""
+    if not logo:
+        return None
+    try:
+        if logo.startswith("data:"):
+            logo = logo.split(",", 1)[1]
+        return _b64.b64decode(logo)
+    except Exception:
+        return None
+
+
+def _logo_reader(company):
+    raw = _logo_bytes(company)
+    if not raw:
+        return None
+    try:
+        return ImageReader(BytesIO(raw))
+    except Exception:
+        return None
+
+
+def _logo_flowable(company, max_h=15 * mm, max_w=58 * mm):
+    raw = _logo_bytes(company)
+    if not raw:
+        return None
+    try:
+        iw, ih = ImageReader(BytesIO(raw)).getSize()
+    except Exception:
+        return None
+    h = max_h
+    w = h * iw / ih
+    if w > max_w:
+        w = max_w
+        h = w * ih / iw
+    img = Image(BytesIO(raw), width=w, height=h)
+    img.hAlign = "LEFT"
+    return img
+
+
 def _eur(v):
     return f"{v:,.2f} €".replace(",", "X").replace(".", ",").replace("X", ".")
 
@@ -110,6 +153,9 @@ def build_invoice_pdf(invoice: dict, company: dict, qr_png: bytes = None, verifa
         Paragraph(f"{comp.get('address','')}", small),
         Paragraph(f"{comp.get('email','')} {comp.get('phone','')}", small),
     ]
+    _lg = _logo_flowable(comp)
+    if _lg:
+        header_left = [_lg, Spacer(1, 3 * mm)] + header_left
     is_rect = invoice.get("invoice_type") == "rectificativa"
     header_right = [
         Paragraph("FACTURA RECTIFICATIVA" if is_rect else "FACTURA",
@@ -285,9 +331,11 @@ def _grk_header_footer(canvas, doc, comp, footer_msg):
     lm, rm = 18 * mm, 18 * mm
     right = w - rm
     top = h - 12 * mm
-    # Logo
+    # Logo (personalizado del usuario si existe; si no, el de GoRoky)
     try:
-        img = ImageReader(LOGO_PATH)
+        img = _logo_reader(comp)
+        if img is None:
+            img = ImageReader(LOGO_PATH)
         iw, ih = img.getSize()
         logo_w = 44 * mm
         logo_h = logo_w * ih / iw

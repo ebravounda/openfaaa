@@ -154,6 +154,9 @@ Sistema de facturación para España: crear facturas introduciendo datos (CIF/NI
 - ✅ **Email de prueba** en panel admin: `POST /api/admin/test-email` (usa la config de Resend guardada o el email gestionado como fallback).
 - ✅ **DESPLEGADO EN PRODUCCIÓN (openfactura.es)**: git pull + pip install + restart backend (systemd `active`) + `yarn build` + publicado en httpdocs. Verificado end-to-end: frontend 200, API viva por dominio (Cloudflare→Nginx→uvicorn:8712), login admin OK (soporte@goroky.com). Falta que el usuario configure sus claves reales (Resend/Stripe/OpenAI/Groq) en /admin → Integraciones y validar anular/correo en el dominio real.
 
+## Implemented — Iteración 21 (2026-06) Logo propio por empresa en todas las plantillas PDF
+- ✅ **Logo de empresa en el PDF (todas las plantillas)**: el usuario sube su logo en Configuración → sección Plantilla. `CompanyInput.logo` (data URL base64). Endpoints `POST /api/company/logo` (valida imagen, normaliza a PNG con Pillow, thumbnail ≤700px, máx 2 MB) y `DELETE /api/company/logo`. `PUT /api/company` conserva el logo si el form no lo reenvía. `pdf_service` renderiza el logo: en la plantilla estándar (cabecera izquierda, sobre el nombre, helpers `_logo_bytes/_logo_reader/_logo_flowable`) y en GoRoky (usa el logo del usuario si existe, si no el fijo de GoRoky). `preview-pdf` incluye `logo`. Frontend `Settings.js`: uploader con preview, botones Subir/Cambiar/Quitar, integrado en la vista previa en vivo. Verificado por PDF real (logo visible en plantilla clásica y GoRoky).
+
 ## Backlog (prioritized)
 - P1: Campos tipo Holded en factura: descuentos (línea/global), concepto+descripción separados, total por línea, número editable.
 - P2: Editar límites/precios de planes desde admin (ahora fijos en plans.py).

@@ -112,6 +112,7 @@ class CompanyInput(BaseModel):
     verifactu_mode: str = "simulado"
     template_id: str = "clasico"
     accent_color: str = ""
+    logo: str = ""
     invoice_footer: str = ""
     legal_name: str = ""
     legal_notice: str = ""
@@ -337,15 +338,50 @@ async def get_company(user=Depends(get_current_user)):
 async def upsert_company(data: CompanyInput, user=Depends(get_current_user)):
     doc = data.model_dump()
     doc["user_id"] = user["id"]
+    existing = await db.companies.find_one({"user_id": user["id"]}, {"_id": 0, "logo": 1})
+    if not doc.get("logo") and existing and existing.get("logo"):
+        doc["logo"] = existing["logo"]  # no perder el logo si el form no lo reenvía
     await db.companies.update_one({"user_id": user["id"]}, {"$set": doc}, upsert=True)
     return doc
+
+
+@api.post("/company/logo")
+async def upload_company_logo(file: UploadFile = File(...), user=Depends(get_current_user)):
+    data = await file.read()
+    if not data:
+        raise HTTPException(status_code=400, detail="Archivo vacío")
+    if len(data) > 2 * 1024 * 1024:
+        raise HTTPException(status_code=413, detail="El logo no puede superar 2 MB")
+    ct = (file.content_type or "").lower()
+    if not ct.startswith("image/"):
+        raise HTTPException(status_code=400, detail="El logo debe ser una imagen (PNG o JPG)")
+    from io import BytesIO as _BIO
+    from PIL import Image as _PILImage
+    try:
+        im = _PILImage.open(_BIO(data))
+        im.thumbnail((700, 700))
+        im = im.convert("RGBA")
+        out = _BIO()
+        im.save(out, format="PNG")
+        png = out.getvalue()
+    except Exception:
+        raise HTTPException(status_code=400, detail="No se pudo procesar la imagen. Usa PNG o JPG.")
+    data_url = "data:image/png;base64," + base64.b64encode(png).decode()
+    await db.companies.update_one({"user_id": user["id"]}, {"$set": {"logo": data_url}}, upsert=True)
+    return {"logo": data_url}
+
+
+@api.delete("/company/logo")
+async def delete_company_logo(user=Depends(get_current_user)):
+    await db.companies.update_one({"user_id": user["id"]}, {"$set": {"logo": ""}})
+    return {"status": "ok"}
 
 
 @api.post("/company/preview-pdf")
 async def preview_company_pdf(overrides: dict = Body(default={}), user=Depends(get_current_user)):
     """Genera una miniatura PNG del PDF real con los ajustes de aspecto indicados (sin guardar)."""
     company = await db.companies.find_one({"user_id": user["id"]}, {"_id": 0}) or {}
-    for k in ("template_id", "accent_color", "name", "legal_name", "nif", "address",
+    for k in ("template_id", "accent_color", "logo", "name", "legal_name", "nif", "address",
               "email", "phone", "invoice_footer", "legal_notice", "footer_message"):
         if overrides.get(k) is not None:
             company[k] = overrides[k]
