@@ -19,8 +19,9 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import {
-  Plus, Trash2, FileText, Mail, Download, CheckCircle2, Loader2, Pencil, Undo2, ShieldCheck, ShieldAlert, Search, Ban, Sparkles,
+  Plus, Trash2, FileText, Mail, Download, CheckCircle2, Loader2, Pencil, Undo2, ShieldCheck, ShieldAlert, Search, Ban, Sparkles, HelpCircle,
 } from "lucide-react";
+import RectificativaGuide, { RECTIFY_GUIDE_KEY } from "@/components/RectificativaGuide";
 
 const LINE_IVA_OPTIONS = [
   { v: "21", l: "IVA 21%" },
@@ -78,6 +79,8 @@ export default function Invoices() {
   const [saving, setSaving] = useState(false);
   const [sendingId, setSendingId] = useState(null);
   const [lookingUp, setLookingUp] = useState(false);
+  const [guideOpen, setGuideOpen] = useState(false);
+  const [pendingRectify, setPendingRectify] = useState(null);
 
   const lookupNif = async () => {
     const nif = form.client.nif.trim();
@@ -180,7 +183,7 @@ export default function Invoices() {
     } catch (e) { /* sin bloqueo si falla */ }
     setForm(base); setOpen(true);
   };
-  const openRectify = async (inv) => {
+  const doRectify = async (inv) => {
     setEditingId(null); setNextNumber("");
     try {
       const { data } = await api.get("/invoices/next-number", { params: { invoice_type: "rectificativa", series: rectifyPrefix } });
@@ -202,6 +205,13 @@ export default function Invoices() {
       save_client: false,
     });
     setOpen(true);
+  };
+  const openRectify = (inv) => {
+    let dismissed = false;
+    try { dismissed = localStorage.getItem(RECTIFY_GUIDE_KEY) === "1"; } catch (e) {}
+    if (dismissed) return doRectify(inv);
+    setPendingRectify(inv);
+    setGuideOpen(true);
   };
   const openEdit = (inv) => {
     setEditingId(inv.id);
@@ -357,10 +367,21 @@ export default function Invoices() {
           <h1 className="font-display text-[28px] font-semibold tracking-tight text-slate-900">Facturas</h1>
           <p className="text-sm text-slate-500 mt-0.5">Emite y gestiona tus facturas de venta</p>
         </div>
-        <Button onClick={openNew} className="bg-[#0052FF] hover:bg-[#0040CC] text-white" data-testid="new-invoice-button">
-          <Plus className="w-4 h-4 mr-2" strokeWidth={1.5} /> Nueva factura
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button variant="outline" onClick={() => { setPendingRectify(null); setGuideOpen(true); }} className="border-slate-200 text-slate-600" title="Cómo generar una factura rectificativa" data-testid="rectify-help-button">
+            <HelpCircle className="w-4 h-4 mr-2" strokeWidth={1.5} /> Guía rectificativa
+          </Button>
+          <Button onClick={openNew} className="bg-[#0052FF] hover:bg-[#0040CC] text-white" data-testid="new-invoice-button">
+            <Plus className="w-4 h-4 mr-2" strokeWidth={1.5} /> Nueva factura
+          </Button>
+        </div>
       </div>
+
+      <RectificativaGuide
+        open={guideOpen}
+        onOpenChange={setGuideOpen}
+        onContinue={() => { if (pendingRectify) { doRectify(pendingRectify); setPendingRectify(null); } }}
+      />
 
       <div className="bg-white border border-slate-200 rounded-lg shadow-sm overflow-hidden">
         {loading ? (

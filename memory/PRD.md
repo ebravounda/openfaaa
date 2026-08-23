@@ -159,3 +159,12 @@ Sistema de facturación para España: crear facturas introduciendo datos (CIF/NI
 - P2: Editar límites/precios de planes desde admin (ahora fijos en plans.py).
 - P2: Vista previa en vivo del PDF al cambiar colores/plantilla.
 - P3: Refactor server.py en routers (verifactu, invoices, contacts).
+
+## Implemented — Iteración 20 (2026-06) Guía Factura Rectificativa + PWA
+- ✅ **Guía paso a paso de Factura Rectificativa** (petición explícita del usuario): componente `components/RectificativaGuide.jsx` — modal de 6 pasos con base legal (RD 1619/2012 art. 15, art. 80 Ley IVA), cuándo emitirla, datos obligatorios, formas (diferencias vs sustitución), tipos R1–R5 de VeriFactu, y cómo hacerlo en la app. Checkbox **"No mostrar más"** (persistido en localStorage `of_rectify_guide_dismissed`). Se abre automáticamente al pulsar "Crear rectificativa" (si no está descartada; si lo está, va directo) y desde el botón **"Guía rectificativa"** en la cabecera de /facturas. `openRectify` → guía → `doRectify`. Verificado por screenshot.
+- ✅ **PWA instalable**: `public/service-worker.js` (cache app-shell, network-first en navegación SPA, cache-first estáticos, ignora /api y orígenes externos), registrado en `index.js`. `manifest.json` con iconos 192/512 maskable (`pwa-icon-192.png`/`pwa-icon-512.png` generados con marca cobalto), scope, orientation y categories. index.html con apple-touch-icon 192 + metas apple/mobile-web-app. Verificado: SW/manifest/iconos responden 200 en preview.
+
+## PENDIENTE DE USUARIO (no bloqueante para lo anterior)
+- 🟠 **VeriFactu XML (AEAT preproducción, error 4103)**: a la espera de que el usuario envíe una factura en modo Preproducción y pegue la respuesta SOAP literal de la AEAT para seguir depurando `verifactu_service.py`. NO activar endpoint de PRODUCCIÓN hasta recibir `<EstadoRegistro>Correcto</EstadoRegistro>`.
+- 🔵 **Logos dinámicos por plantilla PDF**: requiere decisión de qué logos/assets por sector (actualmente solo GoRoky tiene logo fijo).
+- 🟣 **eInforma/Axesor**: requiere API key de pago del usuario para autocompletar nombre/dirección por CIF.

@@ -7,11 +7,26 @@
       "src": "openfactura-logo.png",
       "type": "image/png",
       "sizes": "449x96"
+    },
+    {
+      "src": "pwa-icon-192.png",
+      "type": "image/png",
+      "sizes": "192x192",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "pwa-icon-512.png",
+      "type": "image/png",
+      "sizes": "512x512",
+      "purpose": "any maskable"
     }
   ],
   "start_url": "/",
+  "scope": "/",
   "display": "standalone",
+  "orientation": "portrait-primary",
   "theme_color": "#0052FF",
   "background_color": "#FFFFFF",
-  "lang": "es-ES"
+  "lang": "es-ES",
+  "categories": ["business", "finance", "productivity"]
 }
