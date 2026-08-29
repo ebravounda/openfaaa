@@ -22,6 +22,8 @@ export default function Connection() {
   }, []);
 
   const preprod = company?.verifactu_mode === "preproduccion";
+  const prod = company?.verifactu_mode === "produccion";
+  const realMode = preprod || prod;
 
   const toggle = (id) => setOpen((o) => ({ ...o, [id]: !o[id] }));
 
@@ -48,10 +50,10 @@ export default function Connection() {
         <div className="bg-white border border-slate-200 rounded-lg shadow-sm p-5">
           <div className="text-[11px] font-semibold uppercase tracking-wider text-slate-500 flex items-center gap-1.5"><Activity className="w-3.5 h-3.5" strokeWidth={1.5} /> Estado del servicio</div>
           <div className="flex items-center gap-2 mt-2">
-            <span className={`w-2.5 h-2.5 rounded-full ${preprod ? "bg-blue-500" : "bg-amber-400"} animate-pulse`} />
-            <span className="font-medium text-slate-900 text-sm">{preprod ? "Preproducción AEAT (mTLS)" : "Simulado (pruebas locales)"}</span>
+            <span className={`w-2.5 h-2.5 rounded-full ${prod ? "bg-emerald-500" : preprod ? "bg-blue-500" : "bg-amber-400"} animate-pulse`} />
+            <span className="font-medium text-slate-900 text-sm">{prod ? "Producción AEAT (mTLS)" : preprod ? "Preproducción AEAT (mTLS)" : "Simulado (pruebas locales)"}</span>
           </div>
-          <div className="text-xs text-slate-400 mt-0.5">{preprod ? "Envío real con tu certificado" : "Cámbialo en Configuración → Modo de envío"}</div>
+          <div className="text-xs text-slate-400 mt-0.5">{realMode ? "Envío real con tu certificado" : "Cámbialo en Configuración → Modo de envío"}</div>
         </div>
         <div className="bg-white border border-slate-200 rounded-lg shadow-sm p-5">
           <div className="text-[11px] font-semibold uppercase tracking-wider text-slate-500">Registros enviados</div>
@@ -89,7 +91,7 @@ export default function Connection() {
                   <span className="text-xs text-slate-400">{new Date(e.created_at).toLocaleString("es-ES")}</span>
                 </div>
                 <div className="flex items-center gap-2">
-                  {e.mode && <Badge className={`rounded-full text-[10px] ${e.mode === "preproduccion" ? "bg-blue-100 text-blue-700 hover:bg-blue-100" : "bg-slate-100 text-slate-500 hover:bg-slate-100"}`}>{e.mode === "preproduccion" ? "Preprod" : "Simulado"}</Badge>}
+                  {e.mode && <Badge className={`rounded-full text-[10px] ${e.mode === "produccion" ? "bg-emerald-100 text-emerald-700 hover:bg-emerald-100" : e.mode === "preproduccion" ? "bg-blue-100 text-blue-700 hover:bg-blue-100" : "bg-slate-100 text-slate-500 hover:bg-slate-100"}`}>{e.mode === "produccion" ? "Producción" : e.mode === "preproduccion" ? "Preprod" : "Simulado"}</Badge>}
                   {e.signed && <Badge className="bg-slate-100 text-slate-600 hover:bg-slate-100 rounded-full text-[10px]">Firmado</Badge>}
                   <Badge className={`rounded-full ${e.estado === "Correcto" ? "bg-emerald-100 text-emerald-700 hover:bg-emerald-100" : "bg-red-100 text-red-700 hover:bg-red-100"}`}>{e.estado_registro}</Badge>
                   {e.csv && <span className="font-mono text-xs text-slate-400">{e.csv}</span>}

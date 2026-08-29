@@ -858,7 +858,14 @@ async def delete_certificate(user=Depends(get_current_user)):
 
 @api.get("/verifactu/connection-log")
 async def connection_log(user=Depends(get_current_user)):
-    return await db.verifactu_log.find({"user_id": user["id"]}, {"_id": 0}).sort("created_at", -1).to_list(500)
+    logs = await db.verifactu_log.find({"user_id": user["id"]}, {"_id": 0}).sort("created_at", -1).to_list(500)
+    for e in logs:
+        if not e.get("csv") or str(e.get("csv", "")).startswith("VF-"):
+            real = vf.parse_aeat_response(e.get("response_xml", "")).get("csv")
+            if real and not real.startswith("VF-"):
+                e["csv"] = real
+                await db.verifactu_log.update_one({"id": e.get("id")}, {"$set": {"csv": real}})
+    return logs
 
 
 @api.post("/verifactu/refresh-csv")
