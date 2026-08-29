@@ -102,10 +102,13 @@ def _build_desglose(invoice: dict) -> str:
     return "".join(parts)
 
 
-def _sistema_informatico(nif: str) -> str:
+def _sistema_informatico(nif: str, nombre_razon: str = "") -> str:
+    # El productor del SIF debe estar censado en la AEAT. Para software de uso
+    # propio, el productor es el propio obligado (su NombreRazon + NIF del censo).
+    razon = (nombre_razon or "").strip() or "OpenFactura"
     return (
         "<sum1:SistemaInformatico>"
-        "<sum1:NombreRazon>OpenFactura</sum1:NombreRazon>"
+        f"<sum1:NombreRazon>{_xesc(razon)}</sum1:NombreRazon>"
         f"<sum1:NIF>{_xesc(nif)}</sum1:NIF>"
         "<sum1:NombreSistemaInformatico>OpenFactura</sum1:NombreSistemaInformatico>"
         "<sum1:IdSistemaInformatico>OF</sum1:IdSistemaInformatico>"
@@ -173,7 +176,7 @@ def build_registro_alta_xml(company: dict, invoice: dict, prev_number: str, prev
         f"<sum1:CuotaTotal>{_fmt_num(invoice.get('iva_amount',0))}</sum1:CuotaTotal>"
         f"<sum1:ImporteTotal>{_fmt_num(invoice.get('total',0))}</sum1:ImporteTotal>"
         f"{_encadenamiento(nif, prev_number, prev_huella, prev_fecha)}"
-        f"{_sistema_informatico(nif)}"
+        f"{_sistema_informatico(nif, company.get('name',''))}"
         f"<sum1:FechaHoraHusoGenRegistro>{ts}</sum1:FechaHoraHusoGenRegistro>"
         f"<sum1:TipoHuella>01</sum1:TipoHuella>"
         f"<sum1:Huella>{huella}</sum1:Huella>"
@@ -195,7 +198,7 @@ def build_registro_anulacion_xml(company: dict, invoice: dict, prev_number: str,
         f"<sum1:FechaExpedicionFacturaAnulada>{fecha}</sum1:FechaExpedicionFacturaAnulada>"
         "</sum1:IDFactura>"
         f"{_encadenamiento(nif, prev_number, prev_huella, prev_fecha)}"
-        f"{_sistema_informatico(nif)}"
+        f"{_sistema_informatico(nif, company.get('name',''))}"
         f"<sum1:FechaHoraHusoGenRegistro>{ts}</sum1:FechaHoraHusoGenRegistro>"
         f"<sum1:TipoHuella>01</sum1:TipoHuella>"
         f"<sum1:Huella>{huella}</sum1:Huella>"

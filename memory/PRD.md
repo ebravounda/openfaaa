@@ -162,6 +162,10 @@ Sistema de facturación para España: crear facturas introduciendo datos (CIF/NI
 - ✅ **Fix encadenamiento**: `verifactu_submit` y `anular_invoice` (server.py) ahora obtienen la `issue_date` de la factura anterior y la pasan como `prev_fecha` a `build_registro_alta_xml`/`build_registro_anulacion_xml`, de modo que `RegistroAnterior/FechaExpedicionFactura` ya no va vacía (evitaría un error de validación tras el parseo). Verificado: ambos XML bien formados con la fecha presente.
 - ⚠️ PENDIENTE: no verificable contra la AEAT desde preview (requiere el certificado del usuario en preproducción). Confirmar tras redesplegar producción y reenviar.
 
+## Implemented — Iteración 23 (2026-06) VeriFactu: fix error 1110 (SistemaInformatico)
+- ✅ **4103 RESUELTO en producción** (tras redesplegar): la AEAT ya parsea el XML. Nuevo error de negocio **1110**: "Error en el bloque de SistemaInformatico. El NIF no está identificado en el censo... NIF:Z3452060H, NOMBRE_RAZON:OpenFactura". Causa: enviábamos `SistemaInformatico/NombreRazon=OpenFactura` con el NIF del obligado; la AEAT valida el par NombreRazon+NIF del PRODUCTOR contra su censo y el NIF Z3452060H está censado como "Eduardo Bravo Unda".
+- ✅ **Fix**: `_sistema_informatico(nif, nombre_razon)` ahora usa el NombreRazon del propio obligado (software de uso propio → productor = obligado). `NombreSistemaInformatico` sigue siendo "OpenFactura". Callers en alta y anulación pasan `company['name']`. Verificado: XML lleva NombreRazon=Eduardo Bravo Unda. Pendiente confirmar contra AEAT tras redesplegar.
+
 ## Backlog (prioritized)
 - P1: Campos tipo Holded en factura: descuentos (línea/global), concepto+descripción separados, total por línea, número editable.
 - P2: Editar límites/precios de planes desde admin (ahora fijos en plans.py).
