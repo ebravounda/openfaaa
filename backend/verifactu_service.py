@@ -151,12 +151,26 @@ def _xesc(v) -> str:
 
 
 def build_registro_alta_xml(company: dict, invoice: dict, prev_number: str, prev_huella: str,
-                            ts: str, huella: str, prev_fecha: str = "") -> str:
+                            ts: str, huella: str, prev_fecha: str = "", rectified: dict = None) -> str:
     """RegistroAlta VeriFactu (namespace sum1, sin envelope)."""
-    tipo = "R1" if invoice.get("invoice_type") == "rectificativa" else "F1"
+    is_rect = invoice.get("invoice_type") == "rectificativa"
+    tipo = "R1" if is_rect else "F1"
     nif = company.get("nif", "")
     fecha = to_ddmmyyyy(invoice["issue_date"])
     cl = invoice.get("client", {})
+    # Bloque rectificativa (obligatorio para R1-R5). La app rectifica "por diferencias" (I).
+    rect_xml = ""
+    if is_rect:
+        rect_xml = "<sum1:TipoRectificativa>I</sum1:TipoRectificativa>"
+        rn = (rectified or {}).get("number") or invoice.get("rectifies_number") or ""
+        rf = (rectified or {}).get("fecha") or ""
+        if rn:
+            rect_xml += (
+                "<sum1:FacturasRectificadas><sum1:IDFacturaRectificada>"
+                f"<sum1:IDEmisorFactura>{_xesc(nif)}</sum1:IDEmisorFactura>"
+                f"<sum1:NumSerieFactura>{_xesc(rn)}</sum1:NumSerieFactura>"
+                f"<sum1:FechaExpedicionFactura>{_xesc(rf)}</sum1:FechaExpedicionFactura>"
+                "</sum1:IDFacturaRectificada></sum1:FacturasRectificadas>")
     return (
         "<sum1:RegistroAlta>"
         "<sum1:IDVersion>1.0</sum1:IDVersion>"
@@ -167,6 +181,7 @@ def build_registro_alta_xml(company: dict, invoice: dict, prev_number: str, prev
         "</sum1:IDFactura>"
         f"<sum1:NombreRazonEmisor>{_xesc(company.get('name',''))}</sum1:NombreRazonEmisor>"
         f"<sum1:TipoFactura>{tipo}</sum1:TipoFactura>"
+        f"{rect_xml}"
         f"<sum1:DescripcionOperacion>{_xesc((invoice.get('line_items') or [{}])[0].get('description','Prestacion de servicios'))}</sum1:DescripcionOperacion>"
         f"<sum1:Destinatarios><sum1:IDDestinatario>"
         f"<sum1:NombreRazon>{_xesc(cl.get('name',''))}</sum1:NombreRazon>"

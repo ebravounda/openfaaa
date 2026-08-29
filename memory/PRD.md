@@ -173,6 +173,9 @@ Sistema de facturación para España: crear facturas introduciendo datos (CIF/NI
 - ✅ **Multi-tenant por certificado**: `CompanyInput.verifactu_cert_type` (personal|sello) elige host `www1` (persona física/representante) o `www10` (sello de entidad). Cada usuario configura su NIF/nombre/certificado.
 - ✅ **UI Settings**: selector de modo con opción "Producción AEAT (envío legal y definitivo)", selector de tipo de certificado, y aviso ámbar de irreversibilidad al elegir Producción. Textos obsoletos ("simulación") actualizados. Verificado routing de los 4 hosts + UI por screenshot.
 
+## Implemented — Iteración 25 (2026-06) VeriFactu: rectificativa conforme (R1)
+- ✅ **Rectificativa VeriFactu completa**: `build_registro_alta_xml` añade `TipoRectificativa=I` (por diferencias, coherente con el abono en negativo de la app) y `FacturasRectificadas/IDFacturaRectificada` (IDEmisor + NumSerie + FechaExpedicion de la original), obligatorios para R1-R5. `verifactu_submit` busca la factura original por `rectifies` y pasa `rectified={number,fecha}`. Verificado: XML bien formado con TipoFactura R1 + bloque rectificativo. Sin esto la AEAT habría rechazado las rectificativas.
+
 ## Backlog (prioritized)
 - P1: Campos tipo Holded en factura: descuentos (línea/global), concepto+descripción separados, total por línea, número editable.
 - P2: Editar límites/precios de planes desde admin (ahora fijos en plans.py).

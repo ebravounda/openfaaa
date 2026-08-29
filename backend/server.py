@@ -713,9 +713,22 @@ async def verifactu_submit(invoice_id: str, user=Depends(get_current_user)):
             if prev.get("issue_date"):
                 prev_fecha = vf.to_ddmmyyyy(prev["issue_date"])
 
+    # Rectificativa: datos de la factura original (obligatorio para R1)
+    rectified = None
+    if inv.get("invoice_type") == "rectificativa":
+        rectified = {"number": inv.get("rectifies_number", ""), "fecha": ""}
+        if inv.get("rectifies"):
+            orig = await db.invoices.find_one(
+                {"id": inv["rectifies"], "user_id": user["id"]},
+                {"_id": 0, "number": 1, "issue_date": 1})
+            if orig:
+                rectified["number"] = orig.get("number") or rectified["number"]
+                if orig.get("issue_date"):
+                    rectified["fecha"] = vf.to_ddmmyyyy(orig["issue_date"])
+
     registro_xml = vf.build_registro_alta_xml(company, inv, prev_number,
                                               vfd.get("huella_anterior", ""), vfd["timestamp"], vfd["huella"],
-                                              prev_fecha=prev_fecha)
+                                              prev_fecha=prev_fecha, rectified=rectified)
 
     # Firma con el certificado del usuario (si existe)
     signature, signed, signer = None, False, None
