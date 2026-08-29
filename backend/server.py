@@ -679,8 +679,21 @@ async def invoice_pdf(invoice_id: str, user=Depends(get_current_user)):
         raise HTTPException(status_code=404, detail="Factura no encontrada")
     company = await db.companies.find_one({"user_id": user["id"]}, {"_id": 0}) or {}
     company = await _merge_global_goroky(company)
-    qr_png = None
     vfd = inv.get("verifactu")
+    # Auto-corrección: si el CSV es placeholder (VF-) o falta, recuperar el real del log de la AEAT
+    if vfd and (not vfd.get("csv") or str(vfd.get("csv", "")).startswith("VF-")):
+        logs = await db.verifactu_log.find(
+            {"user_id": user["id"], "invoice_id": invoice_id},
+            {"_id": 0, "response_xml": 1}).sort("created_at", -1).to_list(20)
+        for lg in logs:
+            real_csv = vf.parse_aeat_response(lg.get("response_xml", "")).get("csv")
+            if real_csv:
+                vfd["csv"] = real_csv
+                await db.invoices.update_one(
+                    {"id": invoice_id, "user_id": user["id"]},
+                    {"$set": {"verifactu.csv": real_csv}})
+                break
+    qr_png = None
     if vfd and vfd.get("qr_url"):
         try:
             qr_png = vf.generate_qr_png(vfd["qr_url"])
