@@ -560,11 +560,12 @@ async def anular_invoice(invoice_id: str, user=Depends(get_current_user)):
         ts = vf.now_ts()
         last = await db.invoices.find_one(
             {"user_id": user["id"], "verifactu.huella": {"$exists": True}},
-            {"_id": 0, "verifactu": 1, "number": 1}, sort=[("created_at", -1)])
+            {"_id": 0, "verifactu": 1, "number": 1, "issue_date": 1}, sort=[("created_at", -1)])
         prev = (last or {}).get("verifactu", {}).get("huella", "") if last else ""
         prev_number = (last or {}).get("number", "") if last else ""
+        prev_fecha = vf.to_ddmmyyyy(last["issue_date"]) if (last and last.get("issue_date")) else ""
         huella = vf.compute_fingerprint_anulacion(nif, inv["number"], fecha, prev, ts)
-        registro_xml = vf.build_registro_anulacion_xml(company, inv, prev_number, prev, ts, huella)
+        registro_xml = vf.build_registro_anulacion_xml(company, inv, prev_number, prev, ts, huella, prev_fecha=prev_fecha)
 
         signature, signed, signer, cert_bytes, cert_pwd = None, False, None, None, None
         cert_doc = await db.certificates.find_one({"user_id": user["id"]})
@@ -696,16 +697,21 @@ async def verifactu_submit(invoice_id: str, user=Depends(get_current_user)):
     company = await db.companies.find_one({"user_id": user["id"]}, {"_id": 0}) or {}
     nif = company.get("nif", "")
 
-    # Encadenamiento: número de la factura anterior
+    # Encadenamiento: número y fecha de la factura anterior
     prev_number = ""
+    prev_fecha = ""
     if vfd.get("huella_anterior"):
         prev = await db.invoices.find_one(
             {"user_id": user["id"], "verifactu.huella": vfd["huella_anterior"]},
-            {"_id": 0, "number": 1})
-        prev_number = prev["number"] if prev else ""
+            {"_id": 0, "number": 1, "issue_date": 1})
+        if prev:
+            prev_number = prev.get("number", "")
+            if prev.get("issue_date"):
+                prev_fecha = vf.to_ddmmyyyy(prev["issue_date"])
 
     registro_xml = vf.build_registro_alta_xml(company, inv, prev_number,
-                                              vfd.get("huella_anterior", ""), vfd["timestamp"], vfd["huella"])
+                                              vfd.get("huella_anterior", ""), vfd["timestamp"], vfd["huella"],
+                                              prev_fecha=prev_fecha)
 
     # Firma con el certificado del usuario (si existe)
     signature, signed, signer = None, False, None
