@@ -176,6 +176,9 @@ Sistema de facturación para España: crear facturas introduciendo datos (CIF/NI
 ## Implemented — Iteración 25 (2026-06) VeriFactu: rectificativa conforme (R1)
 - ✅ **Rectificativa VeriFactu completa**: `build_registro_alta_xml` añade `TipoRectificativa=I` (por diferencias, coherente con el abono en negativo de la app) y `FacturasRectificadas/IDFacturaRectificada` (IDEmisor + NumSerie + FechaExpedicion de la original), obligatorios para R1-R5. `verifactu_submit` busca la factura original por `rectifies` y pasa `rectified={number,fecha}`. Verificado: XML bien formado con TipoFactura R1 + bloque rectificativo. Sin esto la AEAT habría rechazado las rectificativas.
 
+## Implemented — Iteración 26 (2026-06) Tooltips en botones de acción de Facturas
+- ✅ **Tooltips descriptivos** (shadcn/radix) en todos los botones de la columna Acciones de /facturas, sustituyendo los `title` nativos: VeriFactu (Enviar a la AEAT / Registrada · CSV), Crear rectificativa, Editar, Ver/descargar PDF, Enviar por email, Marcar pagada/pendiente (dinámico), Anular, Eliminar. Helper `Tip` + `TooltipProvider` (delay 150ms). Verificado por screenshot.
+
 ## Backlog (prioritized)
 - P1: Campos tipo Holded en factura: descuentos (línea/global), concepto+descripción separados, total por línea, número editable.
 - P2: Editar límites/precios de planes desde admin (ahora fijos en plans.py).

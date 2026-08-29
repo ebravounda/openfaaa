@@ -22,6 +22,16 @@ import {
   Plus, Trash2, FileText, Mail, Download, CheckCircle2, Loader2, Pencil, Undo2, ShieldCheck, ShieldAlert, Search, Ban, Sparkles, HelpCircle,
 } from "lucide-react";
 import RectificativaGuide, { RECTIFY_GUIDE_KEY } from "@/components/RectificativaGuide";
+import {
+  Tooltip, TooltipContent, TooltipProvider, TooltipTrigger,
+} from "@/components/ui/tooltip";
+
+const Tip = ({ label, children }) => (
+  <Tooltip>
+    <TooltipTrigger asChild>{children}</TooltipTrigger>
+    <TooltipContent>{label}</TooltipContent>
+  </Tooltip>
+);
 
 const LINE_IVA_OPTIONS = [
   { v: "21", l: "IVA 21%" },
@@ -429,30 +439,50 @@ export default function Invoices() {
                       : <Badge className="bg-amber-100 text-amber-700 hover:bg-amber-100 rounded-full">Pendiente</Badge>}
                   </TableCell>
                   <TableCell className="text-right">
+                    <TooltipProvider delayDuration={150}>
                     <div className="flex items-center justify-end gap-0.5">
                       {inv.verifactu && (inv.verifactu.submitted ? (
-                        <Button variant="ghost" size="icon" disabled title={`VeriFactu enviado (simulado) · ${inv.verifactu.csv || ""}`} data-testid={`invoice-vf-${inv.number}`} className="h-8 w-8 text-emerald-600 opacity-100"><ShieldCheck className="w-4 h-4" strokeWidth={1.5} /></Button>
+                        <Tip label={`Registrada en VeriFactu${inv.verifactu.csv ? ` · CSV ${inv.verifactu.csv}` : ""}`}>
+                          <Button variant="ghost" size="icon" disabled data-testid={`invoice-vf-${inv.number}`} className="h-8 w-8 text-emerald-600 opacity-100"><ShieldCheck className="w-4 h-4" strokeWidth={1.5} /></Button>
+                        </Tip>
                       ) : (
-                        <Button variant="ghost" size="icon" title="Enviar a AEAT (VeriFactu, simulado)" onClick={() => submitVf(inv)} data-testid={`invoice-vf-${inv.number}`} className="h-8 w-8 text-amber-500 hover:text-amber-600"><ShieldAlert className="w-4 h-4" strokeWidth={1.5} /></Button>
+                        <Tip label="Enviar a la AEAT (VeriFactu)">
+                          <Button variant="ghost" size="icon" onClick={() => submitVf(inv)} data-testid={`invoice-vf-${inv.number}`} className="h-8 w-8 text-amber-500 hover:text-amber-600"><ShieldAlert className="w-4 h-4" strokeWidth={1.5} /></Button>
+                        </Tip>
                       ))}
                       {inv.invoice_type !== "rectificativa" && inv.status !== "anulada" && (
-                        <Button variant="ghost" size="icon" title="Crear rectificativa (abono)" onClick={() => openRectify(inv)} data-testid={`invoice-rectify-${inv.number}`} className="h-8 w-8 text-slate-500 hover:text-purple-600"><Undo2 className="w-4 h-4" strokeWidth={1.5} /></Button>
+                        <Tip label="Crear factura rectificativa (abono)">
+                          <Button variant="ghost" size="icon" onClick={() => openRectify(inv)} data-testid={`invoice-rectify-${inv.number}`} className="h-8 w-8 text-slate-500 hover:text-purple-600"><Undo2 className="w-4 h-4" strokeWidth={1.5} /></Button>
+                        </Tip>
                       )}
                       {inv.status !== "anulada" && (
-                        <Button variant="ghost" size="icon" title="Editar" onClick={() => openEdit(inv)} data-testid={`invoice-edit-${inv.number}`} className="h-8 w-8 text-slate-500 hover:text-[#0052FF]"><Pencil className="w-4 h-4" strokeWidth={1.5} /></Button>
+                        <Tip label="Editar factura">
+                          <Button variant="ghost" size="icon" onClick={() => openEdit(inv)} data-testid={`invoice-edit-${inv.number}`} className="h-8 w-8 text-slate-500 hover:text-[#0052FF]"><Pencil className="w-4 h-4" strokeWidth={1.5} /></Button>
+                        </Tip>
                       )}
-                      <Button variant="ghost" size="icon" title="Ver PDF" onClick={() => openPdf(inv)} data-testid={`invoice-pdf-${inv.number}`} className="h-8 w-8 text-slate-500 hover:text-slate-900"><Download className="w-4 h-4" strokeWidth={1.5} /></Button>
-                      <Button variant="ghost" size="icon" title="Enviar por email" onClick={() => sendEmail(inv)} disabled={sendingId === inv.id} data-testid={`invoice-email-${inv.number}`} className="h-8 w-8 text-slate-500 hover:text-[#0052FF]">
-                        {sendingId === inv.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <Mail className="w-4 h-4" strokeWidth={1.5} />}
-                      </Button>
+                      <Tip label="Ver / descargar PDF">
+                        <Button variant="ghost" size="icon" onClick={() => openPdf(inv)} data-testid={`invoice-pdf-${inv.number}`} className="h-8 w-8 text-slate-500 hover:text-slate-900"><Download className="w-4 h-4" strokeWidth={1.5} /></Button>
+                      </Tip>
+                      <Tip label="Enviar por email al cliente">
+                        <Button variant="ghost" size="icon" onClick={() => sendEmail(inv)} disabled={sendingId === inv.id} data-testid={`invoice-email-${inv.number}`} className="h-8 w-8 text-slate-500 hover:text-[#0052FF]">
+                          {sendingId === inv.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <Mail className="w-4 h-4" strokeWidth={1.5} />}
+                        </Button>
+                      </Tip>
                       {inv.status !== "anulada" && (
-                        <Button variant="ghost" size="icon" title="Marcar pagada" onClick={() => markPaid(inv)} data-testid={`invoice-paid-${inv.number}`} className="h-8 w-8 text-slate-500 hover:text-emerald-600"><CheckCircle2 className={`w-4 h-4 ${inv.status === "paid" ? "text-emerald-600" : ""}`} strokeWidth={1.5} /></Button>
+                        <Tip label={inv.status === "paid" ? "Marcar como pendiente" : "Marcar como pagada"}>
+                          <Button variant="ghost" size="icon" onClick={() => markPaid(inv)} data-testid={`invoice-paid-${inv.number}`} className="h-8 w-8 text-slate-500 hover:text-emerald-600"><CheckCircle2 className={`w-4 h-4 ${inv.status === "paid" ? "text-emerald-600" : ""}`} strokeWidth={1.5} /></Button>
+                        </Tip>
                       )}
                       {inv.status !== "anulada" && (
-                        <Button variant="ghost" size="icon" title="Anular factura (con VeriFactu)" onClick={() => anular(inv)} data-testid={`invoice-anular-${inv.number}`} className="h-8 w-8 text-slate-400 hover:text-red-600"><Ban className="w-4 h-4" strokeWidth={1.5} /></Button>
+                        <Tip label="Anular factura (registra la anulación en VeriFactu)">
+                          <Button variant="ghost" size="icon" onClick={() => anular(inv)} data-testid={`invoice-anular-${inv.number}`} className="h-8 w-8 text-slate-400 hover:text-red-600"><Ban className="w-4 h-4" strokeWidth={1.5} /></Button>
+                        </Tip>
                       )}
-                      <Button variant="ghost" size="icon" title="Eliminar" onClick={() => remove(inv)} data-testid={`invoice-delete-${inv.number}`} className="h-8 w-8 text-slate-400 hover:text-red-600"><Trash2 className="w-4 h-4" strokeWidth={1.5} /></Button>
+                      <Tip label="Eliminar factura">
+                        <Button variant="ghost" size="icon" onClick={() => remove(inv)} data-testid={`invoice-delete-${inv.number}`} className="h-8 w-8 text-slate-400 hover:text-red-600"><Trash2 className="w-4 h-4" strokeWidth={1.5} /></Button>
+                      </Tip>
                     </div>
+                    </TooltipProvider>
                   </TableCell>
                 </TableRow>
               ))}
