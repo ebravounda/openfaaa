@@ -251,6 +251,18 @@ def simulate_aeat_response(nif: str, numserie: str, csv: str, ts: str) -> str:
 
 AEAT_PREPROD_URL = "https://prewww1.aeat.es/wlpl/TIKE-CONT/ws/SistemaFacturacion/VerifactuSOAP"
 AEAT_PREPROD_SEAL_URL = "https://prewww10.aeat.es/wlpl/TIKE-CONT/ws/SistemaFacturacion/VerifactuSOAP"
+AEAT_PROD_URL = "https://www1.agenciatributaria.gob.es/wlpl/TIKE-CONT/ws/SistemaFacturacion/VerifactuSOAP"
+AEAT_PROD_SEAL_URL = "https://www10.agenciatributaria.gob.es/wlpl/TIKE-CONT/ws/SistemaFacturacion/VerifactuSOAP"
+
+
+def aeat_url(produccion: bool = False, seal: bool = False) -> str:
+    """URL del servicio SOAP según entorno y tipo de certificado.
+    - produccion=False → preproducción (sandbox). produccion=True → AEAT real.
+    - seal=False → certificado personal/representante (www1/prewww1).
+    - seal=True  → certificado de sello de entidad (www10/prewww10)."""
+    if produccion:
+        return AEAT_PROD_SEAL_URL if seal else AEAT_PROD_URL
+    return AEAT_PREPROD_SEAL_URL if seal else AEAT_PREPROD_URL
 
 
 def pfx_to_pem(pfx_bytes: bytes, password: str):
@@ -263,10 +275,11 @@ def pfx_to_pem(pfx_bytes: bytes, password: str):
     return cert_pem, key_pem
 
 
-async def send_to_aeat(pfx_bytes: bytes, password: str, soap_xml: str, seal: bool = False, timeout: int = 20) -> dict:
-    """Envío real (mTLS) al entorno de PREPRODUCCIÓN de la AEAT usando el certificado del usuario."""
+async def send_to_aeat(pfx_bytes: bytes, password: str, soap_xml: str,
+                       produccion: bool = False, seal: bool = False, timeout: int = 20) -> dict:
+    """Envío real (mTLS) a la AEAT (preproducción o PRODUCCIÓN) con el certificado del usuario."""
     import httpx, tempfile, os
-    url = AEAT_PREPROD_SEAL_URL if seal else AEAT_PREPROD_URL
+    url = aeat_url(produccion, seal)
     try:
         cert_pem, key_pem = pfx_to_pem(pfx_bytes, password)
     except Exception as e:

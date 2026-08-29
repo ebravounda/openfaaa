@@ -110,6 +110,7 @@ class CompanyInput(BaseModel):
     invoice_due_days: int = 15
     verifactu_enabled: bool = False
     verifactu_mode: str = "simulado"
+    verifactu_cert_type: str = "personal"  # personal | sello
     template_id: str = "clasico"
     accent_color: str = ""
     logo: str = ""
@@ -582,19 +583,22 @@ async def anular_invoice(invoice_id: str, user=Depends(get_current_user)):
 
         soap_request = vf.build_soap_request(registro_xml, nif, company.get("name", ""))
         mode = company.get("verifactu_mode", "simulado")
-        if mode == "preproduccion" and cert_bytes:
-            real = await vf.send_to_aeat(cert_bytes, cert_pwd, soap_request)
+        seal = (company.get("verifactu_cert_type") == "sello")
+        if mode in ("preproduccion", "produccion") and cert_bytes:
+            produccion = mode == "produccion"
+            entorno = "producción" if produccion else "preproducción"
+            real = await vf.send_to_aeat(cert_bytes, cert_pwd, soap_request, produccion=produccion, seal=seal)
             simulated, http_status, endpoint = False, real["status"], real["url"]
             if real["ok"]:
                 submitted, estado_reg = True, "Anulada"
                 aeat_response = real["response"]
                 csv_code = "VF-ANUL-" + secrets.token_hex(6).upper()
-                status_msg = "Anulación aceptada por la AEAT (preproducción)"
+                status_msg = f"Anulación aceptada por la AEAT ({entorno})"
             else:
                 submitted, estado_reg = False, "Rechazado"
-                aeat_response = real["response"] or f"ERROR DE CONEXIÓN CON LA AEAT (preproducción):\n{real['error']}"
+                aeat_response = real["response"] or f"ERROR DE CONEXIÓN CON LA AEAT ({entorno}):\n{real['error']}"
                 csv_code = None
-                status_msg = "Error al anular en la AEAT (preproducción)"
+                status_msg = f"Error al anular en la AEAT ({entorno})"
         else:
             simulated, http_status, endpoint = True, 200, "AEAT VerifactuSOAP (SIMULADO)"
             submitted, estado_reg = True, "Anulada"
@@ -731,20 +735,23 @@ async def verifactu_submit(invoice_id: str, user=Depends(get_current_user)):
     soap_request = vf.build_soap_request(registro_xml, nif, company.get("name", ""))
     resp_ts = datetime.now(timezone.utc).isoformat()
     mode = company.get("verifactu_mode", "simulado")
+    seal = (company.get("verifactu_cert_type") == "sello")
 
-    if mode == "preproduccion" and cert_bytes:
-        real = await vf.send_to_aeat(cert_bytes, cert_pwd, soap_request)
+    if mode in ("preproduccion", "produccion") and cert_bytes:
+        produccion = mode == "produccion"
+        entorno = "producción" if produccion else "preproducción"
+        real = await vf.send_to_aeat(cert_bytes, cert_pwd, soap_request, produccion=produccion, seal=seal)
         simulated, endpoint, http_status = False, real["url"], real["status"]
         if real["ok"]:
             estado, estado_reg, submitted = "Correcto", "Aceptado", True
             aeat_response = real["response"]
             csv_code = vfd.get("csv") or ("VF-" + secrets.token_hex(8).upper())
-            status_msg = "Aceptado por la AEAT (preproducción)"
+            status_msg = f"Aceptado por la AEAT ({entorno})"
         else:
             estado, estado_reg, submitted = "Error", "Rechazado", False
-            aeat_response = real["response"] or f"ERROR DE CONEXIÓN CON LA AEAT (preproducción):\n{real['error']}"
+            aeat_response = real["response"] or f"ERROR DE CONEXIÓN CON LA AEAT ({entorno}):\n{real['error']}"
             csv_code = vfd.get("csv")
-            status_msg = "Error de comunicación con la AEAT (preproducción)"
+            status_msg = f"Error de comunicación con la AEAT ({entorno})"
     else:
         simulated, http_status = True, 200
         endpoint = "https://prewww1.aeat.es/wlpl/TIKE-CONT/ws/SistemaFacturacion/VerifactuSOAP (SIMULADO)"

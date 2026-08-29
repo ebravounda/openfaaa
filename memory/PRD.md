@@ -164,7 +164,14 @@ Sistema de facturación para España: crear facturas introduciendo datos (CIF/NI
 
 ## Implemented — Iteración 23 (2026-06) VeriFactu: fix error 1110 (SistemaInformatico)
 - ✅ **4103 RESUELTO en producción** (tras redesplegar): la AEAT ya parsea el XML. Nuevo error de negocio **1110**: "Error en el bloque de SistemaInformatico. El NIF no está identificado en el censo... NIF:Z3452060H, NOMBRE_RAZON:OpenFactura". Causa: enviábamos `SistemaInformatico/NombreRazon=OpenFactura` con el NIF del obligado; la AEAT valida el par NombreRazon+NIF del PRODUCTOR contra su censo y el NIF Z3452060H está censado como "Eduardo Bravo Unda".
-- ✅ **Fix**: `_sistema_informatico(nif, nombre_razon)` ahora usa el NombreRazon del propio obligado (software de uso propio → productor = obligado). `NombreSistemaInformatico` sigue siendo "OpenFactura". Callers en alta y anulación pasan `company['name']`. Verificado: XML lleva NombreRazon=Eduardo Bravo Unda. Pendiente confirmar contra AEAT tras redesplegar.
+- ✅ **Fix**: `_sistema_informatico(nif, nombre_razon)` ahora usa el NombreRazon del propio obligado (software de uso propio → productor = obligado). `NombreSistemaInformatico` sigue siendo "OpenFactura". Callers en alta y anulación pasan `company['name']`. Verificado: XML lleva NombreRazon=Eduardo Bravo Unda.
+- ✅✅ **HOMOLOGADO EN PREPRODUCCIÓN AEAT**: factura GRKY-2026-0007 devuelve `<EstadoEnvio>Correcto</EstadoEnvio>` + `<EstadoRegistro>Correcto</EstadoRegistro>` + CSV `A-68VNLQ7RKHNZCS`. Recorrido resuelto: 4103 (namespaces/parseo) → 1110 (SistemaInformatico NombreRazon) → Correcto.
+- 📌 **URLs de PRODUCCIÓN listas** (pendiente de activar por el usuario): cert estándar `https://www1.agenciatributaria.gob.es/wlpl/TIKE-CONT/ws/SistemaFacturacion/VerifactuSOAP`; sello `https://www10.agenciatributaria.gob.es/...`; QR prod ya correcto (www2). Falta wiring `mode==produccion` en `send_to_aeat`/server.py.
+
+## Implemented — Iteración 24 (2026-06) VeriFactu: Producción real activada (multi-tenant)
+- ✅ **Modo Producción AEAT**: `verifactu_service.aeat_url(produccion, seal)` con 4 hosts (preprod/prod × personal/sello). `send_to_aeat(produccion, seal)`. `server.py` (verifactu_submit y anular) envían real cuando `mode in (preproduccion, produccion)`, con `entorno` dinámico en los mensajes y el log. QR ya usa host prod cuando mode==produccion.
+- ✅ **Multi-tenant por certificado**: `CompanyInput.verifactu_cert_type` (personal|sello) elige host `www1` (persona física/representante) o `www10` (sello de entidad). Cada usuario configura su NIF/nombre/certificado.
+- ✅ **UI Settings**: selector de modo con opción "Producción AEAT (envío legal y definitivo)", selector de tipo de certificado, y aviso ámbar de irreversibilidad al elegir Producción. Textos obsoletos ("simulación") actualizados. Verificado routing de los 4 hosts + UI por screenshot.
 
 ## Backlog (prioritized)
 - P1: Campos tipo Holded en factura: descuentos (línea/global), concepto+descripción separados, total por línea, número editable.

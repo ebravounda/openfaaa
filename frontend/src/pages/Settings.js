@@ -14,7 +14,7 @@ import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 
 export default function Settings() {
-  const [form, setForm] = useState({ name: "", nif: "", address: "", email: "", phone: "", tax_type: "autonomo", invoice_prefix: "", rectify_prefix: "R", invoice_start_number: 1, invoice_due_days: 15, verifactu_enabled: false, verifactu_mode: "simulado", template_id: "clasico", accent_color: "", invoice_footer: "", legal_name: "", legal_notice: "", footer_message: "" });
+  const [form, setForm] = useState({ name: "", nif: "", address: "", email: "", phone: "", tax_type: "autonomo", invoice_prefix: "", rectify_prefix: "R", invoice_start_number: 1, invoice_due_days: 15, verifactu_enabled: false, verifactu_mode: "simulado", verifactu_cert_type: "personal", template_id: "clasico", accent_color: "", invoice_footer: "", legal_name: "", legal_notice: "", footer_message: "" });
   const [templates, setTemplates] = useState([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -272,7 +272,7 @@ export default function Settings() {
                 </div>
                 <p className="text-xs text-slate-500 mt-1 max-w-md">
                   Activa el registro VeriFactu: cada factura genera una huella SHA-256 encadenada, un código QR y la leyenda de la AEAT en el PDF.
-                  El envío a la AEAT es una simulación (la transmisión real requiere tu certificado digital).
+                  El envío a la AEAT es real usando tu certificado digital (elige Preproducción para pruebas o Producción para registros con validez legal).
                 </p>
               </div>
               <Switch checked={form.verifactu_enabled} onCheckedChange={(v) => setForm({ ...form, verifactu_enabled: v })} data-testid="verifactu-toggle" />
@@ -286,11 +286,31 @@ export default function Settings() {
                     <SelectTrigger data-testid="verifactu-mode"><SelectValue /></SelectTrigger>
                     <SelectContent>
                       <SelectItem value="simulado">Simulado (pruebas locales)</SelectItem>
-                      <SelectItem value="preproduccion">Preproducción AEAT (envío real con tu certificado)</SelectItem>
+                      <SelectItem value="preproduccion">Preproducción AEAT (sandbox, envío real con tu certificado)</SelectItem>
+                      <SelectItem value="produccion">Producción AEAT (envío legal y definitivo)</SelectItem>
                     </SelectContent>
                   </Select>
-                  <p className="text-[11px] text-slate-400">En "Preproducción" el sistema intenta enviar realmente a los servidores de pruebas de la AEAT usando tu certificado.</p>
+                  <p className="text-[11px] text-slate-400">En "Preproducción" se envía a los servidores de pruebas de la AEAT. En "Producción" los registros son reales y con validez legal.</p>
                 </div>
+
+                <div className="space-y-2">
+                  <Label>Tipo de certificado</Label>
+                  <Select value={form.verifactu_cert_type || "personal"} onValueChange={(v) => setForm({ ...form, verifactu_cert_type: v })}>
+                    <SelectTrigger data-testid="verifactu-cert-type"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="personal">Personal / de representante (persona física o representante)</SelectItem>
+                      <SelectItem value="sello">Sello de entidad (sociedad, alto volumen)</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <p className="text-[11px] text-slate-400">Determina el servidor de la AEAT: personal/representante → host estándar; sello de entidad → host de sellos.</p>
+                </div>
+
+                {form.verifactu_mode === "produccion" && (
+                  <div className="flex items-start gap-2 text-xs text-amber-800 bg-amber-50 border border-amber-200 rounded-lg p-3" data-testid="produccion-warning">
+                    <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" strokeWidth={1.6} />
+                    <span><strong>Modo Producción activo.</strong> Cada factura que envíes se registrará de forma <strong>real, legal e irreversible</strong> en la AEAT. Asegúrate de que tu NIF y nombre coinciden con el titular del certificado.</span>
+                  </div>
+                )}
                 <div className="flex items-center gap-2 font-medium text-slate-900 pt-1">
                   <KeyRound className="w-4 h-4 text-[#0052FF]" strokeWidth={1.5} /> Certificado digital
                 </div>
@@ -329,7 +349,7 @@ export default function Settings() {
                   </div>
                 )}
                 <p className="text-[11px] text-amber-600 bg-amber-50 border border-amber-100 rounded-md px-2.5 py-1.5">
-                  La transmisión real a la AEAT está simulada en este entorno; la firma y el registro son reales. Consulta la pestaña "Conexión" para ver el detalle.
+                  En modo Preproducción/Producción, la firma, el envío y el registro en la AEAT son reales (mTLS con tu certificado). Consulta la pestaña "Conexión" para ver la petición y la respuesta.
                 </p>
               </div>
             )}
