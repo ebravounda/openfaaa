@@ -264,6 +264,23 @@ def simulate_aeat_response(nif: str, numserie: str, csv: str, ts: str) -> str:
     )
 
 
+def parse_aeat_response(xml_text: str) -> dict:
+    """Extrae CSV, EstadoEnvio, EstadoRegistro y error de la respuesta SOAP de la AEAT."""
+    import re as _re2
+    if not xml_text:
+        return {}
+    def _tag(name):
+        m = _re2.search(rf"<[^>]*:?{name}\b[^>]*>(.*?)</[^>]*:?{name}>", xml_text, _re2.S)
+        return (m.group(1).strip() if m else "")
+    return {
+        "csv": _tag("CSV"),
+        "estado_envio": _tag("EstadoEnvio"),
+        "estado_registro": _tag("EstadoRegistro"),
+        "codigo_error": _tag("CodigoErrorRegistro"),
+        "descripcion_error": _tag("DescripcionErrorRegistro"),
+    }
+
+
 AEAT_PREPROD_URL = "https://prewww1.aeat.es/wlpl/TIKE-CONT/ws/SistemaFacturacion/VerifactuSOAP"
 AEAT_PREPROD_SEAL_URL = "https://prewww10.aeat.es/wlpl/TIKE-CONT/ws/SistemaFacturacion/VerifactuSOAP"
 AEAT_PROD_URL = "https://www1.agenciatributaria.gob.es/wlpl/TIKE-CONT/ws/SistemaFacturacion/VerifactuSOAP"

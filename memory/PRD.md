@@ -184,6 +184,10 @@ Sistema de facturación para España: crear facturas introduciendo datos (CIF/NI
 - ✅✅✅ **Rectificativa (R1)**: R-2026-0005 con `TipoRectificativa=I` + `FacturasRectificadas` (ref. GRKY-2026-0008) → EstadoRegistro=Correcto, CSV `A-T97FFHYYRSV7AZ`. Encadenamiento correcto.
 - Endpoint PROD `www1.agenciatributaria.gob.es`, firmado con certificado real (BRAVO UNDA EDUARDO ANDRES - Z3452060H). Ciclo completo alta+rectificativa homologado. Recorrido: 4103 → 1110 → Correcto(preprod) → 1114 → Correcto(PROD alta+rectificativa).
 
+## Implemented — Iteración 27 (2026-06) VeriFactu: CSV real + estado según respuesta AEAT
+- ✅ **Bug crítico**: el CSV impreso en el PDF era un placeholder (`VF-...`) y la factura se marcaba "Aceptada" solo por HTTP 200, ignorando `EstadoRegistro`. `verifactu_service.parse_aeat_response` extrae CSV/EstadoEnvio/EstadoRegistro/CodigoError/Descripcion de la respuesta SOAP. `verifactu_submit` y `anular` ahora: (1) marcan Aceptada solo si `EstadoRegistro=Correcto`; (2) guardan el CSV REAL de la AEAT; (3) si `Incorrecto`, marcan Rechazada con el código+descripción del error. Verificado con las respuestas reales (CSV `A-T97FFHYYRSV7AZ` y error 1114).
+- ✅ Endpoint de backfill `POST /api/verifactu/refresh-csv`: relee el log y corrige el CSV de facturas ya enviadas que tuvieran placeholder.
+
 ## Backlog (prioritized)
 - P1: Campos tipo Holded en factura: descuentos (línea/global), concepto+descripción separados, total por línea, número editable.
 - P2: Editar límites/precios de planes desde admin (ahora fijos en plans.py).

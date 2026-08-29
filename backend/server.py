@@ -589,14 +589,21 @@ async def anular_invoice(invoice_id: str, user=Depends(get_current_user)):
             entorno = "producción" if produccion else "preproducción"
             real = await vf.send_to_aeat(cert_bytes, cert_pwd, soap_request, produccion=produccion, seal=seal)
             simulated, http_status, endpoint = False, real["status"], real["url"]
-            if real["ok"]:
+            aeat_response = real["response"] or f"ERROR DE CONEXIÓN CON LA AEAT ({entorno}):\n{real['error']}"
+            parsed = vf.parse_aeat_response(real["response"]) if real["ok"] else {}
+            estado_aeat = (parsed.get("estado_registro") or parsed.get("estado_envio") or "").lower()
+            if real["ok"] and estado_aeat == "correcto":
                 submitted, estado_reg = True, "Anulada"
-                aeat_response = real["response"]
-                csv_code = "VF-ANUL-" + secrets.token_hex(6).upper()
+                csv_code = parsed.get("csv") or ("VF-ANUL-" + secrets.token_hex(6).upper())
                 status_msg = f"Anulación aceptada por la AEAT ({entorno})"
+            elif real["ok"]:
+                submitted, estado_reg = False, "Rechazado"
+                csv_code = None
+                err = f"{parsed.get('codigo_error','')} {parsed.get('descripcion_error','')}".strip()
+                status_msg = (f"Anulación rechazada por la AEAT ({entorno}): {err}" if err
+                              else f"Anulación rechazada por la AEAT ({entorno})")
             else:
                 submitted, estado_reg = False, "Rechazado"
-                aeat_response = real["response"] or f"ERROR DE CONEXIÓN CON LA AEAT ({entorno}):\n{real['error']}"
                 csv_code = None
                 status_msg = f"Error al anular en la AEAT ({entorno})"
         else:
@@ -755,15 +762,22 @@ async def verifactu_submit(invoice_id: str, user=Depends(get_current_user)):
         entorno = "producción" if produccion else "preproducción"
         real = await vf.send_to_aeat(cert_bytes, cert_pwd, soap_request, produccion=produccion, seal=seal)
         simulated, endpoint, http_status = False, real["url"], real["status"]
-        if real["ok"]:
+        aeat_response = real["response"] or f"ERROR DE CONEXIÓN CON LA AEAT ({entorno}):\n{real['error']}"
+        parsed = vf.parse_aeat_response(real["response"]) if real["ok"] else {}
+        estado_aeat = (parsed.get("estado_registro") or parsed.get("estado_envio") or "").lower()
+        if real["ok"] and estado_aeat == "correcto":
             estado, estado_reg, submitted = "Correcto", "Aceptado", True
-            aeat_response = real["response"]
-            csv_code = vfd.get("csv") or ("VF-" + secrets.token_hex(8).upper())
+            csv_code = parsed.get("csv") or vfd.get("csv") or ("VF-" + secrets.token_hex(8).upper())
             status_msg = f"Aceptado por la AEAT ({entorno})"
+        elif real["ok"]:
+            estado, estado_reg, submitted = "Error", "Rechazado", False
+            csv_code = None
+            err = f"{parsed.get('codigo_error','')} {parsed.get('descripcion_error','')}".strip()
+            status_msg = (f"Rechazado por la AEAT ({entorno}): {err}" if err
+                          else f"Rechazado por la AEAT ({entorno})")
         else:
             estado, estado_reg, submitted = "Error", "Rechazado", False
-            aeat_response = real["response"] or f"ERROR DE CONEXIÓN CON LA AEAT ({entorno}):\n{real['error']}"
-            csv_code = vfd.get("csv")
+            csv_code = None
             status_msg = f"Error de comunicación con la AEAT ({entorno})"
     else:
         simulated, http_status = True, 200
@@ -832,6 +846,24 @@ async def delete_certificate(user=Depends(get_current_user)):
 @api.get("/verifactu/connection-log")
 async def connection_log(user=Depends(get_current_user)):
     return await db.verifactu_log.find({"user_id": user["id"]}, {"_id": 0}).sort("created_at", -1).to_list(500)
+
+
+@api.post("/verifactu/refresh-csv")
+async def refresh_verifactu_csv(user=Depends(get_current_user)):
+    """Corrige el CSV de facturas ya enviadas releyendo el CSV real de la respuesta guardada de la AEAT."""
+    updated = 0
+    logs = await db.verifactu_log.find({"user_id": user["id"]}, {"_id": 0}).sort("created_at", 1).to_list(3000)
+    for entry in logs:
+        real_csv = vf.parse_aeat_response(entry.get("response_xml", "")).get("csv")
+        if not real_csv:
+            continue
+        await db.verifactu_log.update_one({"id": entry.get("id")}, {"$set": {"csv": real_csv}})
+        if entry.get("invoice_id"):
+            res = await db.invoices.update_one(
+                {"id": entry["invoice_id"], "user_id": user["id"]},
+                {"$set": {"verifactu.csv": real_csv}})
+            updated += res.modified_count
+    return {"updated": updated}
 
 
 @api.get("/invoices/{invoice_id}/verifactu/xml")
