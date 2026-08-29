@@ -180,7 +180,9 @@ Sistema de facturación para España: crear facturas introduciendo datos (CIF/NI
 - ✅ **Tooltips descriptivos** (shadcn/radix) en todos los botones de la columna Acciones de /facturas, sustituyendo los `title` nativos: VeriFactu (Enviar a la AEAT / Registrada · CSV), Crear rectificativa, Editar, Ver/descargar PDF, Enviar por email, Marcar pagada/pendiente (dinámico), Anular, Eliminar. Helper `Tip` + `TooltipProvider` (delay 150ms). Verificado por screenshot.
 
 ## 🏁 HITO — VeriFactu en PRODUCCIÓN REAL (2026-08-30)
-- ✅✅✅ Factura **GRKY-2026-0008** enviada al endpoint de PRODUCCIÓN `www1.agenciatributaria.gob.es`, firmada con certificado real (BRAVO UNDA EDUARDO ANDRES - Z3452060H) → **EstadoEnvio=Correcto, EstadoRegistro=Correcto, CSV `A-FKWVCHJ35EULQ8`**. OpenFactura operativo en Producción con VeriFactu. Recorrido completo: 4103 → 1110 → Correcto(preprod) → Correcto(PROD).
+- ✅✅✅ **Alta (F1)**: factura GRKY-2026-0008 → EstadoRegistro=Correcto, CSV `A-FKWVCHJ35EULQ8`.
+- ✅✅✅ **Rectificativa (R1)**: R-2026-0005 con `TipoRectificativa=I` + `FacturasRectificadas` (ref. GRKY-2026-0008) → EstadoRegistro=Correcto, CSV `A-T97FFHYYRSV7AZ`. Encadenamiento correcto.
+- Endpoint PROD `www1.agenciatributaria.gob.es`, firmado con certificado real (BRAVO UNDA EDUARDO ANDRES - Z3452060H). Ciclo completo alta+rectificativa homologado. Recorrido: 4103 → 1110 → Correcto(preprod) → 1114 → Correcto(PROD alta+rectificativa).
 
 ## Backlog (prioritized)
 - P1: Campos tipo Holded en factura: descuentos (línea/global), concepto+descripción separados, total por línea, número editable.
