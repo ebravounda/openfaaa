@@ -184,39 +184,39 @@ export default function Expenses() {
         </div>
         <div className="flex items-center gap-2">
           <input ref={fileRef} type="file" accept="image/*,application/pdf" onChange={onScanFile} className="hidden" data-testid="scan-file-input" />
-          <Button onClick={() => fileRef.current?.click()} disabled={scanning} className="bg-[#0052FF] hover:bg-[#0040CC] text-white" data-testid="scan-button">
+          <Button onClick={() => fileRef.current?.click()} disabled={scanning} className="bg-[#0052FF] hover:bg-[#0040CC] text-white rounded-xl shadow-[0_4px_14px_0_rgba(0,82,255,0.39)] transition-all hover:-translate-y-0.5 active:scale-95" data-testid="scan-button">
             {scanning ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <ScanLine className="w-4 h-4 mr-2" strokeWidth={1.5} />}
             {scanning ? "Analizando…" : "Escanear con IA"}
           </Button>
-          <Button variant="outline" onClick={openManual} className="border-slate-200 text-slate-700" data-testid="new-expense-button">
+          <Button variant="outline" onClick={openManual} className="border-slate-200 text-slate-700 rounded-xl hover:bg-slate-50 transition-all" data-testid="new-expense-button">
             <Plus className="w-4 h-4 mr-2" strokeWidth={1.5} /> Manual
           </Button>
         </div>
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-6 max-w-md">
-        <div className="bg-white border border-slate-200 rounded-lg shadow-sm p-4">
+        <div className="bg-white border border-slate-200/60 rounded-[20px] shadow-[0_8px_30px_rgb(0,0,0,0.04)] p-4">
           <div className="text-[11px] font-semibold uppercase tracking-wider text-slate-500">Total gastos</div>
           <div className="font-display text-2xl font-semibold tracking-tight mt-1 tabular" data-testid="total-gastos">{eur(totalGastos)}</div>
         </div>
-        <div className="bg-white border border-slate-200 rounded-lg shadow-sm p-4">
+        <div className="bg-white border border-slate-200/60 rounded-[20px] shadow-[0_8px_30px_rgb(0,0,0,0.04)] p-4">
           <div className="text-[11px] font-semibold uppercase tracking-wider text-slate-500">IVA soportado</div>
           <div className="font-display text-2xl font-semibold tracking-tight mt-1 tabular text-[#0052FF]" data-testid="total-iva-soportado">{eur(totalIva)}</div>
         </div>
       </div>
 
-      <div className="bg-white border border-slate-200 rounded-lg shadow-sm overflow-hidden">
+      <div className="bg-white border border-slate-200/60 rounded-[20px] shadow-[0_8px_30px_rgb(0,0,0,0.04)] overflow-hidden">
         {loading ? (
           <div className="p-5 space-y-3">{[0, 1, 2].map((i) => <Skeleton key={i} className="h-12 rounded-md" />)}</div>
         ) : expenses.length === 0 ? (
-          <div className="border-2 border-dashed border-slate-200 m-5 rounded-lg py-14 text-center" data-testid="expenses-empty">
-            <Receipt className="w-12 h-12 mx-auto text-slate-300" strokeWidth={1.25} />
+          <div className="border-2 border-dashed border-slate-200 m-5 rounded-2xl py-14 text-center" data-testid="expenses-empty">
+            <div className="w-14 h-14 mx-auto rounded-2xl bg-slate-50 flex items-center justify-center"><Receipt className="w-7 h-7 text-slate-300" strokeWidth={1.25} /></div>
             <p className="text-slate-500 mt-3">Sin gastos todavía. Prueba a escanear un ticket con IA.</p>
           </div>
         ) : (
           <Table>
             <TableHeader>
-              <TableRow className="hover:bg-transparent">
+              <TableRow className="hover:bg-transparent border-b border-slate-100 [&>th]:text-[11px] [&>th]:uppercase [&>th]:tracking-wider [&>th]:text-slate-500 [&>th]:font-semibold [&>th]:bg-slate-50/50 [&>th]:h-11">
                 <TableHead>Fecha</TableHead>
                 <TableHead>Proveedor</TableHead>
                 <TableHead>Categoría</TableHead>
@@ -228,7 +228,7 @@ export default function Expenses() {
             </TableHeader>
             <TableBody>
               {expenses.map((exp, i) => (
-                <TableRow key={exp.id} data-testid={`expense-row-${i}`}>
+                <TableRow key={exp.id} data-testid={`expense-row-${i}`} className="hover:bg-slate-50/60 transition-colors border-b border-slate-100 last:border-0">
                   <TableCell className="text-sm text-slate-600 tabular">{exp.date}</TableCell>
                   <TableCell className="text-sm font-medium text-slate-900">
                     <span className="inline-flex items-center gap-1.5">
@@ -336,7 +336,7 @@ export default function Expenses() {
 
           <DialogFooter>
             <Button variant="outline" onClick={() => { setOpen(false); clearPreview(); }} className="border-slate-200">Cancelar</Button>
-            <Button onClick={save} disabled={saving} className="bg-[#0052FF] hover:bg-[#0040CC] text-white" data-testid="save-expense">
+            <Button onClick={save} disabled={saving} className="bg-[#0052FF] hover:bg-[#0040CC] text-white rounded-xl shadow-[0_4px_14px_0_rgba(0,82,255,0.39)] transition-all hover:-translate-y-0.5 active:scale-95" data-testid="save-expense">
               {saving && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}{editingId ? "Guardar cambios" : "Guardar gasto"}
             </Button>
           </DialogFooter>

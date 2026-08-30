@@ -45,7 +45,7 @@ export default function Taxes() {
             <FileText className="w-4 h-4 mr-2 text-slate-500" strokeWidth={1.5} /> CSV
           </Button>
           <Select value={String(year)} onValueChange={(v) => setYear(Number(v))}>
-            <SelectTrigger className="w-[130px] bg-white" data-testid="tax-year-select"><SelectValue /></SelectTrigger>
+            <SelectTrigger className="w-[140px] h-11 rounded-xl bg-white border-slate-200" data-testid="tax-year-select"><SelectValue /></SelectTrigger>
             <SelectContent>{years.map((y) => <SelectItem key={y} value={String(y)}>Ejercicio {y}</SelectItem>)}</SelectContent>
           </Select>
         </div>
@@ -55,7 +55,7 @@ export default function Taxes() {
         <div className="space-y-4"><Skeleton className="h-16 rounded-lg" /><Skeleton className="h-64 rounded-lg" /></div>
       ) : (
         <>
-          <div className="flex gap-3 p-4 mb-6 bg-blue-50 border border-blue-100 rounded-lg">
+          <div className="flex gap-3 p-5 mb-6 bg-blue-50/70 border border-blue-100 rounded-2xl">
             <Info className="w-5 h-5 text-[#0052FF] shrink-0 mt-0.5" strokeWidth={1.5} />
             <div className="text-sm text-slate-600">
               <strong className="text-slate-900">Modelo 303 (IVA):</strong> IVA repercutido − IVA soportado, cada trimestre.
@@ -68,10 +68,10 @@ export default function Taxes() {
           <div className="mb-3 flex items-center justify-between">
             <h2 className="font-display text-lg font-semibold text-slate-900">Modelo 303 · IVA</h2>
           </div>
-          <div className="bg-white border border-slate-200 rounded-lg shadow-sm overflow-hidden mb-8">
+          <div className="bg-white border border-slate-200/60 rounded-[20px] shadow-[0_8px_30px_rgb(0,0,0,0.04)] overflow-hidden mb-8">
             <Table>
               <TableHeader>
-                <TableRow className="hover:bg-transparent">
+                <TableRow className="hover:bg-transparent border-b border-slate-100 [&>th]:text-[11px] [&>th]:uppercase [&>th]:tracking-wider [&>th]:text-slate-500 [&>th]:font-semibold [&>th]:bg-slate-50/50 [&>th]:h-11">
                   <TableHead>Trimestre</TableHead>
                   <TableHead className="text-right">Ingresos</TableHead>
                   <TableHead className="text-right">IVA Repercutido</TableHead>
@@ -83,7 +83,7 @@ export default function Taxes() {
               </TableHeader>
               <TableBody>
                 {data.quarters.map((q) => (
-                  <TableRow key={q.quarter} data-testid={`tax-quarter-${q.quarter}`} className={q.quarter === nextQ ? "bg-blue-50/40" : ""}>
+                  <TableRow key={q.quarter} data-testid={`tax-quarter-${q.quarter}`} className={`transition-colors border-b border-slate-100 last:border-0 ${q.quarter === nextQ ? "bg-blue-50/40" : "hover:bg-slate-50/60"}`}>
                     <TableCell className="font-medium">{q.label}</TableCell>
                     <TableCell className="text-right tabular">{eur(q.ingresos)}</TableCell>
                     <TableCell className="text-right tabular">{eur(q.iva_repercutido)}</TableCell>
@@ -103,10 +103,10 @@ export default function Taxes() {
                 <h2 className="font-display text-lg font-semibold text-slate-900">Modelo 130 · IRPF (pagos fraccionados)</h2>
                 <p className="text-sm text-slate-500 mt-0.5">Solo para autónomos en estimación directa</p>
               </div>
-              <div className="bg-white border border-slate-200 rounded-lg shadow-sm overflow-hidden" data-testid="modelo-130-table">
+              <div className="bg-white border border-slate-200/60 rounded-[20px] shadow-[0_8px_30px_rgb(0,0,0,0.04)] overflow-hidden" data-testid="modelo-130-table">
                 <Table>
                   <TableHeader>
-                    <TableRow className="hover:bg-transparent">
+                    <TableRow className="hover:bg-transparent border-b border-slate-100 [&>th]:text-[11px] [&>th]:uppercase [&>th]:tracking-wider [&>th]:text-slate-500 [&>th]:font-semibold [&>th]:bg-slate-50/50 [&>th]:h-11">
                       <TableHead>Trimestre</TableHead>
                       <TableHead className="text-right">Rendimiento acumulado</TableHead>
                       <TableHead className="text-right">IRPF retenido (acum.)</TableHead>
@@ -137,10 +137,10 @@ export default function Taxes() {
                 <h2 className="font-display text-lg font-semibold text-slate-900">Resumen anual · Modelo 390 (IVA)</h2>
                 <p className="text-sm text-slate-500 mt-0.5">Declaración resumen anual del IVA del ejercicio {annual.year}</p>
               </div>
-              <div className="bg-white border border-slate-200 rounded-lg shadow-sm overflow-hidden">
+              <div className="bg-white border border-slate-200/60 rounded-[20px] shadow-[0_8px_30px_rgb(0,0,0,0.04)] overflow-hidden">
                 <Table>
                   <TableHeader>
-                    <TableRow className="hover:bg-transparent">
+                    <TableRow className="hover:bg-transparent border-b border-slate-100 [&>th]:text-[11px] [&>th]:uppercase [&>th]:tracking-wider [&>th]:text-slate-500 [&>th]:font-semibold [&>th]:bg-slate-50/50 [&>th]:h-11">
                       <TableHead>Tipo IVA</TableHead>
                       <TableHead className="text-right">Base repercutida</TableHead>
                       <TableHead className="text-right">Cuota repercutida</TableHead>
@@ -187,7 +187,7 @@ export default function Taxes() {
                       { l: "Retenciones soportadas", v: annual.irpf.retenciones_soportadas },
                       { l: "Pagos frac. (130)", v: annual.irpf.pagos_fraccionados_130 },
                     ].map((c) => (
-                      <div key={c.l} className="bg-white border border-slate-200 rounded-lg shadow-sm p-4">
+                      <div key={c.l} className="bg-white border border-slate-200/60 rounded-[20px] shadow-[0_8px_30px_rgb(0,0,0,0.04)] p-4">
                         <div className="text-[11px] font-semibold uppercase tracking-wider text-slate-500">{c.l}</div>
                         <div className="font-display text-xl font-semibold tracking-tight mt-1 tabular">{eur(c.v)}</div>
                       </div>

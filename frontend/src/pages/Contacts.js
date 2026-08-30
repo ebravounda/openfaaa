@@ -60,7 +60,7 @@ export default function Contacts() {
           <h1 className="font-display text-[28px] font-semibold tracking-tight text-slate-900">Contactos</h1>
           <p className="text-sm text-slate-500 mt-0.5">Guarda clientes y proveedores para reutilizarlos</p>
         </div>
-        <Button onClick={() => { setForm(emptyForm()); setOpen(true); }} className="bg-[#0052FF] hover:bg-[#0040CC] text-white" data-testid="new-contact-button">
+        <Button onClick={() => { setForm(emptyForm()); setOpen(true); }} className="bg-[#0052FF] hover:bg-[#0040CC] text-white rounded-xl shadow-[0_4px_14px_0_rgba(0,82,255,0.39)] transition-all hover:-translate-y-0.5 active:scale-95" data-testid="new-contact-button">
           <Plus className="w-4 h-4 mr-2" strokeWidth={1.5} /> {isClient ? "Nuevo cliente" : "Nuevo proveedor"}
         </Button>
       </div>
@@ -77,14 +77,14 @@ export default function Contacts() {
           {[0, 1, 2].map((i) => <Skeleton key={i} className="h-32 rounded-lg" />)}
         </div>
       ) : contacts.length === 0 ? (
-        <div className="border-2 border-dashed border-slate-200 rounded-lg p-12 text-center" data-testid="contacts-empty">
+        <div className="border-2 border-dashed border-slate-200 rounded-2xl p-12 text-center" data-testid="contacts-empty">
           {isClient ? <Users className="w-12 h-12 mx-auto text-slate-300" strokeWidth={1.25} /> : <Building2 className="w-12 h-12 mx-auto text-slate-300" strokeWidth={1.25} />}
           <p className="text-slate-500 mt-3">Aún no tienes {isClient ? "clientes" : "proveedores"} guardados.</p>
         </div>
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
           {contacts.map((c) => (
-            <div key={c.id} className="bg-white border border-slate-200 rounded-lg shadow-sm p-5 group" data-testid={`contact-card-${c.id}`}>
+            <div key={c.id} className="bg-white border border-slate-200/60 rounded-[20px] shadow-[0_8px_30px_rgb(0,0,0,0.04)] p-6 group hover:shadow-[0_20px_40px_rgb(0,0,0,0.08)] hover:-translate-y-0.5 transition-all of-fade-up" data-testid={`contact-card-${c.id}`}>
               <div className="flex items-start justify-between">
                 <div className="w-10 h-10 rounded-lg bg-[#0052FF]/10 text-[#0052FF] flex items-center justify-center font-semibold text-sm">
                   {c.name.slice(0, 2).toUpperCase()}
@@ -115,7 +115,7 @@ export default function Contacts() {
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setOpen(false)} className="border-slate-200">Cancelar</Button>
-            <Button onClick={save} disabled={saving} className="bg-[#0052FF] hover:bg-[#0040CC] text-white" data-testid="save-contact">
+            <Button onClick={save} disabled={saving} className="bg-[#0052FF] hover:bg-[#0040CC] text-white rounded-xl shadow-[0_4px_14px_0_rgba(0,82,255,0.39)] transition-all hover:-translate-y-0.5 active:scale-95" data-testid="save-contact">
               {saving && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}Guardar
             </Button>
           </DialogFooter>

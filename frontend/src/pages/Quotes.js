@@ -273,23 +273,23 @@ export default function Quotes() {
           <h1 className="font-display text-[28px] font-semibold tracking-tight text-slate-900">Presupuestos</h1>
           <p className="text-sm text-slate-500 mt-0.5">Crea presupuestos, envíalos a tus clientes y conviértelos en factura</p>
         </div>
-        <Button onClick={openNew} className="bg-[#0052FF] hover:bg-[#0040CC] text-white" data-testid="new-quote-button">
+        <Button onClick={openNew} className="bg-[#0052FF] hover:bg-[#0040CC] text-white rounded-xl shadow-[0_4px_14px_0_rgba(0,82,255,0.39)] transition-all hover:-translate-y-0.5 active:scale-95" data-testid="new-quote-button">
           <Plus className="w-4 h-4 mr-2" strokeWidth={1.5} /> Nuevo presupuesto
         </Button>
       </div>
 
-      <div className="bg-white border border-slate-200 rounded-lg shadow-sm overflow-hidden">
+      <div className="bg-white border border-slate-200/60 rounded-[20px] shadow-[0_8px_30px_rgb(0,0,0,0.04)] overflow-hidden">
         {loading ? (
           <div className="p-5 space-y-3">{[0, 1, 2, 3].map((i) => <Skeleton key={i} className="h-12 rounded-md" />)}</div>
         ) : quotes.length === 0 ? (
-          <div className="border-2 border-dashed border-slate-200 m-5 rounded-lg py-14 text-center" data-testid="quotes-empty">
-            <FileSignature className="w-12 h-12 mx-auto text-slate-300" strokeWidth={1.25} />
+          <div className="border-2 border-dashed border-slate-200 m-5 rounded-2xl py-14 text-center" data-testid="quotes-empty">
+            <div className="w-14 h-14 mx-auto rounded-2xl bg-slate-50 flex items-center justify-center"><FileSignature className="w-7 h-7 text-slate-300" strokeWidth={1.25} /></div>
             <p className="text-slate-500 mt-3">Aún no has creado ningún presupuesto.</p>
           </div>
         ) : (
           <Table>
             <TableHeader>
-              <TableRow className="hover:bg-transparent">
+              <TableRow className="hover:bg-transparent border-b border-slate-100 [&>th]:text-[11px] [&>th]:uppercase [&>th]:tracking-wider [&>th]:text-slate-500 [&>th]:font-semibold [&>th]:bg-slate-50/50 [&>th]:h-11">
                 <TableHead>Nº</TableHead>
                 <TableHead>Fecha</TableHead>
                 <TableHead>Cliente</TableHead>
@@ -301,7 +301,7 @@ export default function Quotes() {
             </TableHeader>
             <TableBody>
               {quotes.map((q) => (
-                <TableRow key={q.id} data-testid={`quote-row-${q.number}`}>
+                <TableRow key={q.id} data-testid={`quote-row-${q.number}`} className="hover:bg-slate-50/60 transition-colors border-b border-slate-100 last:border-0">
                   <TableCell className="font-mono text-sm font-medium text-slate-900">{q.number}</TableCell>
                   <TableCell className="text-sm text-slate-600 tabular">{q.issue_date}</TableCell>
                   <TableCell className="text-sm font-medium text-slate-900">{q.client?.name}</TableCell>
@@ -469,7 +469,7 @@ export default function Quotes() {
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setOpen(false)} className="border-slate-200">Cancelar</Button>
-            <Button onClick={save} disabled={saving} className="bg-[#0052FF] hover:bg-[#0040CC] text-white" data-testid="save-quote">
+            <Button onClick={save} disabled={saving} className="bg-[#0052FF] hover:bg-[#0040CC] text-white rounded-xl shadow-[0_4px_14px_0_rgba(0,82,255,0.39)] transition-all hover:-translate-y-0.5 active:scale-95" data-testid="save-quote">
               {saving && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}{editingId ? "Guardar cambios" : "Crear presupuesto"}
             </Button>
           </DialogFooter>
