@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import api, { formatApiErrorDetail } from "@/lib/api";
 import Layout from "@/components/Layout";
+import { ActiveCompanyBanner } from "@/components/ActiveCompanyBanner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -126,6 +127,7 @@ export default function Settings() {
 
   return (
     <Layout>
+      <ActiveCompanyBanner context="los datos" />
       <div className="mb-6">
         <h1 className="font-display text-[28px] font-semibold tracking-tight text-slate-900">Configuración</h1>
         <p className="text-sm text-slate-500 mt-0.5">Estos datos aparecerán como emisor en tus facturas</p>

@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import Layout from "@/components/Layout";
+import { ActiveCompanyBanner } from "@/components/ActiveCompanyBanner";
 import { Seo } from "@/components/Seo";
 import api, { formatApiErrorDetail } from "@/lib/api";
 import { Button } from "@/components/ui/button";
@@ -39,6 +40,7 @@ export default function PaymentMethods() {
     <Layout>
       <Seo title="Métodos de pago" description="Conecta tu cuenta de Stripe para cobrar tus facturas con tarjeta." noindex />
       <div className="max-w-2xl space-y-6" data-testid="payment-methods-page">
+        <ActiveCompanyBanner context="los cobros" />
         <div>
           <h1 className="font-display text-2xl font-semibold text-slate-900 flex items-center gap-2">
             <CreditCard className="w-6 h-6 text-[#635BFF]" strokeWidth={1.6} /> Métodos de pago

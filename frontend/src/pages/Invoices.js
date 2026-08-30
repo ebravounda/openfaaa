@@ -445,11 +445,34 @@ export default function Invoices() {
                   <TableCell className="text-right text-sm text-slate-500 tabular">{eur(inv.iva_amount)}</TableCell>
                   <TableCell className="text-right text-sm font-semibold tabular">{eur(inv.total)}</TableCell>
                   <TableCell>
-                    {inv.status === "anulada"
-                      ? <Badge className="bg-red-100 text-red-700 hover:bg-red-100 rounded-full">Anulada</Badge>
-                      : inv.status === "paid"
-                      ? <Badge className="bg-emerald-100 text-emerald-700 hover:bg-emerald-100 rounded-full">Pagada</Badge>
-                      : <Badge className="bg-amber-100 text-amber-700 hover:bg-amber-100 rounded-full">Pendiente</Badge>}
+                    <TooltipProvider delayDuration={150}>
+                      <div className="flex flex-col items-start gap-1">
+                        {inv.status === "anulada" ? (
+                          <Badge className="bg-red-100 text-red-700 hover:bg-red-100 rounded-full" data-testid={`invoice-pay-${inv.number}`}>Anulada</Badge>
+                        ) : inv.payment?.status === "paid" ? (
+                          <Badge className="bg-emerald-100 text-emerald-700 hover:bg-emerald-100 rounded-full gap-1" data-testid={`invoice-pay-${inv.number}`}><CreditCard className="w-3 h-3" strokeWidth={2} /> Pagado con tarjeta</Badge>
+                        ) : inv.status === "paid" ? (
+                          <Badge className="bg-emerald-100 text-emerald-700 hover:bg-emerald-100 rounded-full" data-testid={`invoice-pay-${inv.number}`}>Pagada</Badge>
+                        ) : (
+                          <Badge className="bg-amber-100 text-amber-700 hover:bg-amber-100 rounded-full" data-testid={`invoice-pay-${inv.number}`}>Pendiente</Badge>
+                        )}
+                        {inv.verifactu && (
+                          inv.verifactu.submitted ? (
+                            <Tip label={inv.verifactu.csv ? `Registrada en VeriFactu · CSV: ${inv.verifactu.csv}` : (inv.verifactu.status || "Registrada en VeriFactu")}>
+                              <Badge className="bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-50 rounded-full gap-1 cursor-default" data-testid={`invoice-vf-badge-${inv.number}`}><ShieldCheck className="w-3 h-3" strokeWidth={2} /> VeriFactu ✓</Badge>
+                            </Tip>
+                          ) : /rechaz/i.test(inv.verifactu.status || "") ? (
+                            <Tip label={inv.verifactu.status || "Rechazada por la AEAT"}>
+                              <Badge className="bg-red-50 text-red-700 border border-red-200 hover:bg-red-50 rounded-full gap-1 cursor-default" data-testid={`invoice-vf-badge-${inv.number}`}><ShieldAlert className="w-3 h-3" strokeWidth={2} /> VeriFactu ✕</Badge>
+                            </Tip>
+                          ) : (
+                            <Tip label="Pendiente de enviar a la AEAT">
+                              <Badge className="bg-amber-50 text-amber-700 border border-amber-200 hover:bg-amber-50 rounded-full gap-1 cursor-default" data-testid={`invoice-vf-badge-${inv.number}`}><ShieldAlert className="w-3 h-3" strokeWidth={2} /> VeriFactu ⏳</Badge>
+                            </Tip>
+                          )
+                        )}
+                      </div>
+                    </TooltipProvider>
                   </TableCell>
                   <TableCell className="text-right">
                     <TooltipProvider delayDuration={150}>

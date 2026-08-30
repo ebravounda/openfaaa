@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import api, { API } from "@/lib/api";
 import Layout from "@/components/Layout";
+import { ActiveCompanyBanner } from "@/components/ActiveCompanyBanner";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -29,6 +30,7 @@ export default function Connection() {
 
   return (
     <Layout>
+      <ActiveCompanyBanner context="el certificado" />
       <div className="mb-6">
         <h1 className="font-display text-[28px] font-semibold tracking-tight text-slate-900">Conexión AEAT</h1>
         <p className="text-sm text-slate-500 mt-0.5">Registro VeriFactu: certificado, firma y comunicación con la Agencia Tributaria</p>
