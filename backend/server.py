@@ -107,6 +107,7 @@ class CompanyInput(BaseModel):
     tax_type: str = "autonomo"
     invoice_prefix: str = ""
     rectify_prefix: str = "R"
+    quote_prefix: str = "PRE"
     invoice_start_number: int = 1
     invoice_due_days: int = 15
     verifactu_enabled: bool = False
@@ -146,6 +147,23 @@ class ContactInput(BaseModel):
     email: str = ""
     phone: str = ""
     kind: str = "client"  # "client" or "provider"
+
+
+class QuoteInput(BaseModel):
+    issue_date: str
+    valid_until: str = ""
+    client: Client
+    line_items: List[LineItem]
+    irpf_rate: float = 0
+    recargo_equivalencia: bool = False
+    global_discount: float = 0
+    status: str = "borrador"  # borrador | enviado | aceptado | rechazado | facturado
+    notes: str = ""
+    series: str = ""
+    period: str = ""
+    payment_method: str = ""
+    iban: str = ""
+    concept_label: str = ""
 
 
 # ---------- Helpers ----------
@@ -442,18 +460,8 @@ async def _next_seq(user_id: str, prefix: str, year: str, start_number) -> int:
     return max(max_seq + 1, start)
 
 
-@api.post("/invoices")
-async def create_invoice(data: InvoiceInput, user=Depends(get_current_user)):
-    _validate_invoice(data)
-    plan = await plan_for_user(user)
-    if plan["max_invoices"] is not None:
-        cnt = await db.invoices.count_documents(
-            {"user_id": user["id"], "issue_date": {"$regex": f"^{_month_prefix()}"}})
-        if cnt >= plan["max_invoices"]:
-            raise HTTPException(status_code=403,
-                detail=f"Has alcanzado el límite de {plan['max_invoices']} facturas al mes de tu plan {plan['name']}. Mejora tu plan para emitir más.")
+async def _make_invoice(user, company, data: InvoiceInput) -> dict:
     year = data.issue_date[:4]
-    company = await db.companies.find_one({"user_id": user["id"]}, {"_id": 0}) or {}
     if data.invoice_type == "rectificativa":
         series = (data.series or company.get("rectify_prefix", "") or "R").strip()
     else:
@@ -489,6 +497,20 @@ async def create_invoice(data: InvoiceInput, user=Depends(get_current_user)):
     await db.invoices.insert_one(doc)
     doc.pop("_id", None)
     return doc
+
+
+@api.post("/invoices")
+async def create_invoice(data: InvoiceInput, user=Depends(get_current_user)):
+    _validate_invoice(data)
+    plan = await plan_for_user(user)
+    if plan["max_invoices"] is not None:
+        cnt = await db.invoices.count_documents(
+            {"user_id": user["id"], "issue_date": {"$regex": f"^{_month_prefix()}"}})
+        if cnt >= plan["max_invoices"]:
+            raise HTTPException(status_code=403,
+                detail=f"Has alcanzado el límite de {plan['max_invoices']} facturas al mes de tu plan {plan['name']}. Mejora tu plan para emitir más.")
+    company = await db.companies.find_one({"user_id": user["id"]}, {"_id": 0}) or {}
+    return await _make_invoice(user, company, data)
 
 
 @api.get("/invoices/next-number")
@@ -703,6 +725,187 @@ async def invoice_pdf(invoice_id: str, user=Depends(get_current_user)):
     pdf = build_invoice_pdf(inv, company, qr_png=qr_png, verifactu=vfd)
     return Response(content=pdf, media_type="application/pdf",
                     headers={"Content-Disposition": f'inline; filename="factura-{inv["number"]}.pdf"'})
+
+
+# ---------- Presupuestos (quotes) ----------
+QUOTE_STATUSES = {"borrador", "enviado", "aceptado", "rechazado", "facturado"}
+
+
+def _quote_prefix(company: dict) -> str:
+    return ((company or {}).get("quote_prefix") or "PRE").strip()
+
+
+async def _next_quote_seq(user_id: str, prefix: str, year: str) -> int:
+    pat = f"^{re.escape(prefix)}{year}-"
+    max_seq = 0
+    async for n in db.quotes.find({"user_id": user_id, "number": {"$regex": pat}}, {"_id": 0, "number": 1}):
+        try:
+            max_seq = max(max_seq, int(n["number"].rsplit("-", 1)[-1]))
+        except Exception:
+            pass
+    return max_seq + 1
+
+
+@api.get("/quotes")
+async def list_quotes(user=Depends(get_current_user)):
+    return await db.quotes.find({"user_id": user["id"]}, {"_id": 0}).sort("issue_date", -1).to_list(1000)
+
+
+@api.get("/quotes/next-number")
+async def next_quote_number(series: str = "", issue_date: str = "", user=Depends(get_current_user)):
+    company = await db.companies.find_one({"user_id": user["id"]}, {"_id": 0}) or {}
+    year = (issue_date[:4] if issue_date else str(datetime.now(timezone.utc).year))
+    s = (series or _quote_prefix(company)).strip()
+    prefix = f"{s}-" if s else ""
+    seq = await _next_quote_seq(user["id"], prefix, year)
+    return {"number": f"{prefix}{year}-{seq:04d}", "series": s}
+
+
+def _build_quote_doc(user, company, data: QuoteInput, number: str, series: str) -> dict:
+    doc = data.model_dump()
+    doc["series"] = series
+    doc["doc_type"] = "presupuesto"
+    if doc.get("status") not in QUOTE_STATUSES:
+        doc["status"] = "borrador"
+    doc.update({
+        "id": str(uuid.uuid4()), "user_id": user["id"], "number": number,
+        "created_at": datetime.now(timezone.utc).isoformat(),
+    })
+    compute_invoice(doc)
+    return doc
+
+
+@api.post("/quotes")
+async def create_quote(data: QuoteInput, user=Depends(get_current_user)):
+    _validate_invoice(data)
+    company = await db.companies.find_one({"user_id": user["id"]}, {"_id": 0}) or {}
+    year = data.issue_date[:4]
+    s = (data.series or _quote_prefix(company)).strip()
+    prefix = f"{s}-" if s else ""
+    seq = await _next_quote_seq(user["id"], prefix, year)
+    number = f"{prefix}{year}-{seq:04d}"
+    doc = _build_quote_doc(user, company, data, number, s)
+    await db.quotes.insert_one(doc)
+    doc.pop("_id", None)
+    return doc
+
+
+@api.get("/quotes/{quote_id}")
+async def get_quote(quote_id: str, user=Depends(get_current_user)):
+    doc = await db.quotes.find_one({"id": quote_id, "user_id": user["id"]}, {"_id": 0})
+    if not doc:
+        raise HTTPException(status_code=404, detail="Presupuesto no encontrado")
+    return doc
+
+
+@api.put("/quotes/{quote_id}")
+async def update_quote(quote_id: str, data: QuoteInput, user=Depends(get_current_user)):
+    _validate_invoice(data)
+    existing = await db.quotes.find_one({"id": quote_id, "user_id": user["id"]}, {"_id": 0})
+    if not existing:
+        raise HTTPException(status_code=404, detail="Presupuesto no encontrado")
+    if existing.get("status") == "facturado":
+        raise HTTPException(status_code=400, detail="No se puede editar un presupuesto ya facturado.")
+    company = await db.companies.find_one({"user_id": user["id"]}, {"_id": 0}) or {}
+    doc = _build_quote_doc(user, company, data, existing["number"], existing.get("series", ""))
+    doc["id"] = quote_id
+    doc["created_at"] = existing.get("created_at")
+    doc["status"] = existing.get("status", "borrador")
+    doc["updated_at"] = datetime.now(timezone.utc).isoformat()
+    await db.quotes.update_one({"id": quote_id, "user_id": user["id"]}, {"$set": doc})
+    return doc
+
+
+@api.patch("/quotes/{quote_id}/status")
+async def update_quote_status(quote_id: str, data: StatusInput, user=Depends(get_current_user)):
+    if data.status not in QUOTE_STATUSES:
+        raise HTTPException(status_code=400, detail="Estado no válido")
+    res = await db.quotes.update_one({"id": quote_id, "user_id": user["id"]},
+                                     {"$set": {"status": data.status}})
+    if res.matched_count == 0:
+        raise HTTPException(status_code=404, detail="Presupuesto no encontrado")
+    return {"status": "ok"}
+
+
+@api.delete("/quotes/{quote_id}")
+async def delete_quote(quote_id: str, user=Depends(get_current_user)):
+    res = await db.quotes.delete_one({"id": quote_id, "user_id": user["id"]})
+    if res.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Presupuesto no encontrado")
+    return {"status": "ok"}
+
+
+@api.get("/quotes/{quote_id}/pdf")
+async def quote_pdf(quote_id: str, user=Depends(get_current_user)):
+    q = await db.quotes.find_one({"id": quote_id, "user_id": user["id"]}, {"_id": 0})
+    if not q:
+        raise HTTPException(status_code=404, detail="Presupuesto no encontrado")
+    company = await db.companies.find_one({"user_id": user["id"]}, {"_id": 0}) or {}
+    q["doc_type"] = "presupuesto"
+    pdf = build_invoice_pdf(q, company)
+    return Response(content=pdf, media_type="application/pdf",
+                    headers={"Content-Disposition": f'inline; filename="presupuesto-{q["number"]}.pdf"'})
+
+
+@api.post("/quotes/{quote_id}/send-email")
+async def send_quote_email(quote_id: str, user=Depends(get_current_user)):
+    plan = await plan_for_user(user)
+    if not plan["features"].get("email"):
+        raise _plan_denied(plan, "email")
+    q = await db.quotes.find_one({"id": quote_id, "user_id": user["id"]}, {"_id": 0})
+    if not q:
+        raise HTTPException(status_code=404, detail="Presupuesto no encontrado")
+    to = q.get("client", {}).get("email")
+    if not to:
+        raise HTTPException(status_code=400, detail="El cliente no tiene email registrado")
+    company = await db.companies.find_one({"user_id": user["id"]}, {"_id": 0}) or {}
+    q["doc_type"] = "presupuesto"
+    html = build_invoice_email_html(q, company, doc_label="PRESUPUESTO")
+    subject = f"Presupuesto {q['number']} - {company.get('name', 'OpenFactura')}"
+    import base64 as _b64
+    pdf = build_invoice_pdf(q, company)
+    attachments = [{"filename": f"presupuesto-{q['number']}.pdf", "content": _b64.b64encode(pdf).decode()}]
+    email_id = await send_email(to=to, subject=subject, html=html, reply_to=company.get("email"), attachments=attachments)
+    await db.quotes.update_one({"id": quote_id, "user_id": user["id"]},
+                               {"$set": {"emailed_at": datetime.now(timezone.utc).isoformat(),
+                                         "status": "enviado" if q.get("status") == "borrador" else q.get("status")}})
+    return {"status": "sent", "email_id": email_id, "to": to}
+
+
+@api.post("/quotes/{quote_id}/convert")
+async def convert_quote(quote_id: str, user=Depends(get_current_user)):
+    q = await db.quotes.find_one({"id": quote_id, "user_id": user["id"]}, {"_id": 0})
+    if not q:
+        raise HTTPException(status_code=404, detail="Presupuesto no encontrado")
+    if q.get("invoice_id"):
+        raise HTTPException(status_code=400, detail=f"Este presupuesto ya se convirtió en la factura {q.get('invoice_number')}.")
+    plan = await plan_for_user(user)
+    if plan["max_invoices"] is not None:
+        cnt = await db.invoices.count_documents(
+            {"user_id": user["id"], "issue_date": {"$regex": f"^{_month_prefix()}"}})
+        if cnt >= plan["max_invoices"]:
+            raise HTTPException(status_code=403,
+                detail=f"Has alcanzado el límite de {plan['max_invoices']} facturas al mes de tu plan {plan['name']}. Mejora tu plan para emitir más.")
+    company = await db.companies.find_one({"user_id": user["id"]}, {"_id": 0}) or {}
+    inv_in = InvoiceInput(
+        issue_date=datetime.now(timezone.utc).date().isoformat(),
+        client=Client(**(q.get("client") or {})),
+        line_items=[LineItem(**{k: it.get(k) for k in ("description", "detail", "quantity", "unit_price", "discount", "iva_rate", "iva_type") if it.get(k) is not None}) for it in q.get("line_items", [])],
+        irpf_rate=q.get("irpf_rate", 0) or 0,
+        recargo_equivalencia=bool(q.get("recargo_equivalencia")),
+        global_discount=q.get("global_discount", 0) or 0,
+        notes=q.get("notes", "") or "",
+        series="",
+        period=q.get("period", "") or "",
+        payment_method=q.get("payment_method", "") or "",
+        iban=q.get("iban", "") or "",
+        concept_label=q.get("concept_label", "") or "",
+    )
+    inv = await _make_invoice(user, company, inv_in)
+    await db.quotes.update_one({"id": quote_id, "user_id": user["id"]}, {"$set": {
+        "status": "facturado", "invoice_id": inv["id"], "invoice_number": inv["number"],
+        "converted_at": datetime.now(timezone.utc).isoformat()}})
+    return inv
 
 
 @api.post("/invoices/{invoice_id}/verifactu/submit")
@@ -1548,6 +1751,7 @@ async def startup():
     await db.login_attempts.create_index("identifier")
     await db.register_attempts.create_index("ip")
     await db.invoices.create_index("user_id")
+    await db.quotes.create_index("user_id")
     await db.expenses.create_index("user_id")
     await db.contacts.create_index("user_id")
     await db.files.create_index("storage_path")

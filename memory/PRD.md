@@ -226,3 +226,15 @@ Sistema de facturación para España: crear facturas introduciendo datos (CIF/NI
 - 🟠 **VeriFactu XML (AEAT preproducción, error 4103)**: a la espera de que el usuario envíe una factura en modo Preproducción y pegue la respuesta SOAP literal de la AEAT para seguir depurando `verifactu_service.py`. NO activar endpoint de PRODUCCIÓN hasta recibir `<EstadoRegistro>Correcto</EstadoRegistro>`.
 - 🔵 **Logos dinámicos por plantilla PDF**: requiere decisión de qué logos/assets por sector (actualmente solo GoRoky tiene logo fijo).
 - 🟣 **eInforma/Axesor**: requiere API key de pago del usuario para autocompletar nombre/dirección por CIF.
+
+## Implemented — Iteración 34 (2026-06) Presupuestos (Fase 1 del nuevo backlog)
+- ✅ **Presupuestos (quotes)**: nueva sección `/presupuestos` (menú lateral, icono FileSignature). Modelo `QuoteInput` + colección `db.quotes`, numeración propia serie "PRE" (`quote_prefix` en Company), estados borrador/enviado/aceptado/rechazado/facturado. Reutiliza `compute_invoice` (IVA por línea, descuentos, IRPF, RE, suplidos). Backend: GET/POST/PUT/DELETE `/api/quotes`, `/api/quotes/next-number`, PATCH `/status`, `/pdf`, `/send-email` (PDF adjunto, gated por plan email), `/convert`.
+- ✅ **Convertir en factura**: `POST /api/quotes/{id}/convert` genera la factura definitiva (reutiliza `_make_invoice`, respeta límite de plan y encadenamiento VeriFactu), marca el presupuesto `facturado` con ref. a la factura; doble conversión bloqueada (400). El presupuesto NO se envía a VeriFactu (no es fiscal).
+- ✅ **PDF**: `build_invoice_pdf` con `doc_type="presupuesto"` → título "PRESUPUESTO", línea "Válido hasta", sin QR/VeriFactu, fuerza plantilla estándar (no goroky). Email con `doc_label` configurable. Estado editable en la tabla (dropdown), botón "Convertir en factura".
+- ✅ Verificado backend E2E (curl): PRE-2026-0001 (total 1060€ con IRPF) → PDF 200 con "PRESUPUESTO"/"Válido hasta" → convert → factura 2026-0014 → estado facturado → re-convert 400. Refactor: `create_invoice` extraído a `_make_invoice(user, company, data)`.
+
+## NUEVO BACKLOG (petición del usuario, 2026-06)
+- Fase 1 ✅ Presupuestos + conversión a factura (manual, sin aceptación online).
+- Fase 2 ⏳ Facturación intracomunitaria (tipo IVA "intracomunitaria" exenta art. 25 / inversión sujeto pasivo, leyenda PDF, mapeo VeriFactu OperaciónExenta E5 + Modelo 303/349).
+- Fase 3 ⏳ Multiempresa (gran refactor): `company_id` en facturas/gastos/contactos/certificados, selector de empresa, panel acordeón por empresa/autónomo, certificado por empresa, menú "Activar multiempresas".
+  - Nuevo plan "Multiempresas" 49,99€/mes con tramos 20 y 50 empresas + opción "necesitas más empresas: contáctanos" (formulario → email a soporte@goroky.com).

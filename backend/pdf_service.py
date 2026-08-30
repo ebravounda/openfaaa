@@ -125,7 +125,8 @@ def _stamp_anulada(canvas, doc, anulada: bool):
 
 def build_invoice_pdf(invoice: dict, company: dict, qr_png: bytes = None, verifactu: dict = None) -> bytes:
     comp0 = company or {}
-    if TEMPLATE_MAP.get(comp0.get("template_id", ""), {}).get("layout") == "goroky":
+    is_quote = invoice.get("doc_type") == "presupuesto"
+    if not is_quote and TEMPLATE_MAP.get(comp0.get("template_id", ""), {}).get("layout") == "goroky":
         return build_goroky_invoice_pdf(invoice, comp0, qr_png=qr_png, verifactu=verifactu)
     buf = BytesIO()
     doc = SimpleDocTemplate(buf, pagesize=A4, topMargin=20 * mm,
@@ -157,16 +158,26 @@ def build_invoice_pdf(invoice: dict, company: dict, qr_png: bytes = None, verifa
     if _lg:
         header_left = [_lg, Spacer(1, 3 * mm)] + header_left
     is_rect = invoice.get("invoice_type") == "rectificativa"
+    if is_quote:
+        _title, _tsize, _tlead = "PRESUPUESTO", 20, 25
+    elif is_rect:
+        _title, _tsize, _tlead = "FACTURA RECTIFICATIVA", 16, 20
+    else:
+        _title, _tsize, _tlead = "FACTURA", 22, 27
     header_right = [
-        Paragraph("FACTURA RECTIFICATIVA" if is_rect else "FACTURA",
+        Paragraph(_title,
                   ParagraphStyle("t", parent=styles["Normal"], fontName="Helvetica-Bold",
-                                 fontSize=16 if is_rect else 22, textColor=DARK, alignment=2,
-                                 leading=20 if is_rect else 27, spaceAfter=4)),
+                                 fontSize=_tsize, textColor=DARK, alignment=2,
+                                 leading=_tlead, spaceAfter=4)),
         Paragraph(f"Nº {invoice['number']}", ParagraphStyle("n", parent=styles["Normal"],
                   fontSize=11, textColor=DARK, alignment=2, leading=16)),
         Paragraph(f"Fecha: {invoice['issue_date']}", ParagraphStyle("d", parent=styles["Normal"],
                   fontSize=9, textColor=MUTED, alignment=2, leading=14)),
     ]
+    if is_quote and invoice.get("valid_until"):
+        header_right.append(Paragraph(f"Válido hasta: {invoice['valid_until']}",
+                            ParagraphStyle("v", parent=styles["Normal"], fontSize=9,
+                                           textColor=MUTED, alignment=2, leading=13)))
     if is_rect and invoice.get("rectifies_number"):
         header_right.append(Paragraph(f"Rectifica a: {invoice['rectifies_number']}",
                             ParagraphStyle("r", parent=styles["Normal"], fontSize=9,

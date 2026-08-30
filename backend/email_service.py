@@ -176,7 +176,7 @@ def build_payment_email_html(invoice: dict, company: dict, pay_url: str) -> str:
     return button + build_invoice_email_html(invoice, company)
 
 
-def build_invoice_email_html(invoice: dict, company: dict) -> str:
+def build_invoice_email_html(invoice: dict, company: dict, doc_label: str = "FACTURA") -> str:
     comp = company or {}
     rows = ""
     for it in invoice.get("line_items", []):
@@ -196,7 +196,7 @@ def build_invoice_email_html(invoice: dict, company: dict) -> str:
         f'<table role="presentation" width="100%" style="max-width:640px;margin:0 auto;'
         f'font-family:Arial,Helvetica,sans-serif;background:#ffffff">'
         f'<tr><td style="padding:24px 24px 8px 24px">'
-        f'<div style="font-size:22px;font-weight:bold;color:#0A0A0A">FACTURA {escape(invoice["number"])}</div>'
+        f'<div style="font-size:22px;font-weight:bold;color:#0A0A0A">{escape(doc_label)} {escape(invoice["number"])}</div>'
         f'<div style="font-size:13px;color:#666;margin-top:4px">Emitida por {escape(comp.get("name","Mi Empresa"))} '
         f'· {escape(comp.get("nif",""))}</div>'
         f'<div style="font-size:13px;color:#666">Fecha: {escape(invoice["issue_date"])}</div>'

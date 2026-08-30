@@ -8,6 +8,7 @@ import { AssistantWidget } from "@/components/AssistantWidget";
 import {
   LayoutDashboard,
   FileText,
+  FileSignature,
   Receipt,
   Users,
   Landmark,
@@ -26,6 +27,7 @@ import {
 const baseNav = [
   { to: "/", label: "Panel", icon: LayoutDashboard, end: true, testid: "nav-dashboard" },
   { to: "/facturas", label: "Facturas", icon: FileText, testid: "nav-invoices" },
+  { to: "/presupuestos", label: "Presupuestos", icon: FileSignature, testid: "nav-quotes" },
   { to: "/gastos", label: "Gastos", icon: Receipt, testid: "nav-expenses" },
   { to: "/contactos", label: "Contactos", icon: Users, testid: "nav-contacts" },
   { to: "/impuestos", label: "Impuestos", icon: Landmark, testid: "nav-taxes" },
