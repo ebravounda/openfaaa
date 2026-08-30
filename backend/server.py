@@ -392,11 +392,6 @@ async def _list_companies(user: dict) -> list:
             cid = str(uuid.uuid4())
             await db.companies.update_one({"_id": c["_id"]}, {"$set": {"id": cid}})
             c["id"] = cid
-            for name in ("invoices", "expenses", "contacts", "quotes", "certificates",
-                         "verifactu_log", "files", "payment_transactions"):
-                await db[name].update_many(
-                    {"user_id": user["id"], "company_id": {"$exists": False}},
-                    {"$set": {"company_id": cid}})
     if not comps:
         cid = str(uuid.uuid4())
         doc = {"id": cid, "user_id": user["id"], "name": "",
@@ -406,6 +401,18 @@ async def _list_companies(user: dict) -> list:
         comps = [doc]
     for c in comps:
         c.pop("_id", None)
+    # Salvaguarda: adjunta cualquier dato heredado SIN company_id a la primera empresa.
+    # Evita que facturas/datos antiguos "desaparezcan" al activar multiempresa. Se ejecuta una sola vez.
+    if not user.get("legacy_company_migrated"):
+        primary = comps[0]["id"]
+        for name in ("invoices", "expenses", "contacts", "quotes", "certificates",
+                     "verifactu_log", "files", "payment_transactions"):
+            await db[name].update_many(
+                {"user_id": user["id"], "company_id": {"$exists": False}},
+                {"$set": {"company_id": primary}})
+        await db.users.update_one({"_id": ObjectId(user["id"])},
+                                  {"$set": {"legacy_company_migrated": True}})
+        user["legacy_company_migrated"] = True
     return comps
 
 
@@ -523,7 +530,11 @@ class MultiToggleInput(BaseModel):
 
 @api.get("/companies")
 async def list_companies_ep(user=Depends(get_current_user)):
-    return await _list_companies(user)
+    comps = await _list_companies(user)
+    for c in comps:
+        c["invoice_count"] = await db.invoices.count_documents(
+            {"user_id": user["id"], "company_id": c["id"]})
+    return comps
 
 
 @api.post("/companies")

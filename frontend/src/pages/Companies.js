@@ -131,6 +131,11 @@ export default function Companies() {
                     <div className="font-medium text-slate-900 flex items-center gap-2">
                       {c.name || "(Sin nombre)"}
                       {c.id === activeId && <Badge className="bg-emerald-100 text-emerald-700 hover:bg-emerald-100 rounded-full text-[10px]">Activa</Badge>}
+                      {typeof c.invoice_count === "number" && (
+                        <Badge variant="outline" className="border-slate-200 text-slate-600 rounded-full text-[10px]" data-testid={`company-invoice-count-${c.id}`}>
+                          {c.invoice_count} {c.invoice_count === 1 ? "factura" : "facturas"}
+                        </Badge>
+                      )}
                     </div>
                     <div className="text-xs text-slate-500">{c.tax_type === "empresa" ? "Empresa" : "Autónomo"}{c.nif ? ` · ${c.nif}` : ""}</div>
                   </div>
