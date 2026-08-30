@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import {
   Sparkles, FileText, Landmark, ShieldCheck, ScanLine, Bot, Check, ArrowRight,
   Menu, TrendingUp, Zap, ReceiptText, Building2, Users, Briefcase, Star, MapPin,
+  CreditCard, Clock,
 } from "lucide-react";
 
 const ACCENT = "#0052FF";
@@ -210,19 +211,45 @@ function ChatMockup() {
   );
 }
 
+function PaymentMockup() {
+  return (
+    <BrowserFrame>
+      <div className="p-5 sm:p-6 bg-white">
+        <div className="flex items-center justify-between mb-4">
+          <div className="font-outfit font-semibold text-slate-900">Cobro de factura F26012</div>
+          <span className="inline-flex items-center px-2.5 py-1 rounded-md bg-[#635BFF] text-white font-bold text-[11px] tracking-tight lowercase">stripe</span>
+        </div>
+        <div className="rounded-xl border border-slate-100 p-4 mb-4">
+          <div className="text-[11px] text-slate-400">Importe a pagar</div>
+          <div className="font-outfit text-3xl font-bold tabular-nums text-slate-900">1.991,66€</div>
+          <div className="mt-3 flex items-center gap-2 rounded-lg border border-slate-200 px-3 py-2.5">
+            <CreditCard className="w-4 h-4 text-slate-400" strokeWidth={1.5} />
+            <span className="text-sm text-slate-500 tabular-nums tracking-wider">4242 4242 4242 4242</span>
+          </div>
+        </div>
+        <button className="w-full rounded-lg py-3 text-white font-semibold text-sm" style={{ background: "#635BFF" }}>Pagar 1.991,66€</button>
+        <div className="mt-3 flex items-center justify-center gap-1.5 text-[11px] text-emerald-600 font-medium">
+          <ShieldCheck className="w-3.5 h-3.5" strokeWidth={2} /> Pago seguro · La factura se marca pagada al instante
+        </div>
+      </div>
+    </BrowserFrame>
+  );
+}
+
 const MODULES = [
-  { icon: FileText, label: "Facturación", title: "Facturas en segundos", subtitle: "Crea, envía y cobra facturas profesionales al instante.", bullets: ["Series, rectificativas y PDF automático", "15+ plantillas adaptadas por sector"], visual: InvoiceMockup },
-  { icon: Landmark, label: "Impuestos", title: "IVA e IRPF automáticos", subtitle: "Tus impuestos se calculan solos mientras facturas.", bullets: ["Modelos 303, 130 y resumen anual 390 listos", "Aplica el 7% de IRPF reducido si eres nuevo autónomo"], visual: TaxMockup },
-  { icon: ShieldCheck, label: "Cumplimiento", title: "Software compatible VeriFactu", subtitle: "Cumple con la normativa de la AEAT sin esfuerzo.", bullets: ["Registro y anulación con huella encadenada + QR", "Firma con tu certificado digital .pfx"], visual: DashboardMockup },
-  { icon: ScanLine, label: "Gastos", title: "Escaneo de gastos con IA", subtitle: "Haz una foto a tus tickets y olvídate de picar datos.", bullets: ["Extracción automática de proveedor, base e IVA", "Almacenamiento digital seguro de tus recibos"], visual: ScanMockup },
-  { icon: Bot, label: "Inteligencia", title: "Asistente con IA (FiscalBot)", subtitle: "Tu experto fiscal disponible 24/7.", bullets: ["Resuelve dudas de facturación e impuestos al instante", "Revisa tus facturas antes de emitirlas"], visual: ChatMockup },
+  { id: "facturacion", icon: FileText, label: "Facturación", title: "Facturas en segundos", subtitle: "Crea, envía y cobra facturas profesionales al instante.", bullets: ["Series, rectificativas y PDF automático", "Plantillas personalizables con tu logo por sector"], visual: InvoiceMockup },
+  { id: "cobros", icon: CreditCard, label: "Cobros", title: "Cobra con tarjeta por Stripe", subtitle: "Envía un enlace de pago y cobra tus facturas más rápido.", bullets: ["Botón «Enviar Cobro»: tu cliente paga con tarjeta desde el email", "La factura se marca pagada automáticamente al cobrar", "Próximamente también RedSys (TPV bancario español)"], visual: PaymentMockup },
+  { id: "impuestos", icon: Landmark, label: "Impuestos", title: "IVA e IRPF automáticos", subtitle: "Tus impuestos se calculan solos mientras facturas.", bullets: ["Modelos 303, 130 y resumen anual 390 listos", "Aplica el 7% de IRPF reducido si eres nuevo autónomo"], visual: TaxMockup },
+  { id: "cumplimiento", icon: ShieldCheck, label: "Cumplimiento", title: "Software compatible VeriFactu", subtitle: "Cumple con la normativa de la AEAT sin esfuerzo.", bullets: ["Registro y anulación con huella encadenada + QR", "Firma con tu certificado digital .pfx"], visual: DashboardMockup },
+  { id: "gastos", icon: ScanLine, label: "Gastos", title: "Escaneo de gastos con IA", subtitle: "Haz una foto a tus tickets y olvídate de picar datos.", bullets: ["Extracción automática de proveedor, base e IVA", "Almacenamiento digital seguro de tus recibos"], visual: ScanMockup },
+  { id: "inteligencia", icon: Bot, label: "Inteligencia", title: "Asistente con IA (FiscalBot)", subtitle: "Tu experto fiscal disponible 24/7.", bullets: ["Resuelve dudas de facturación e impuestos al instante", "Revisa tus facturas antes de emitirlas"], visual: ChatMockup },
 ];
 
 const REASONS = [
   { n: "01", t: "Setup rápido", d: "Emite tu primera factura en menos de 5 minutos, sin curva de aprendizaje." },
   { n: "02", t: "Cumplimiento VeriFactu", d: "Adaptado a la nueva ley antifraude de la AEAT: huella, QR y certificado." },
-  { n: "03", t: "Escáner OCR con IA", d: "Sube un ticket y la IA extrae proveedor, base e IVA por ti." },
-  { n: "04", t: "Dashboard fiscal", d: "Controla cuánto IVA e IRPF tienes que pagar cada trimestre." },
+  { n: "03", t: "Cobros con tarjeta", d: "Envía enlaces de pago por Stripe y cobra tus facturas al instante. RedSys llegará pronto." },
+  { n: "04", t: "Escáner OCR con IA", d: "Sube un ticket y la IA extrae proveedor, base e IVA por ti." },
   { n: "05", t: "Asistente IA", d: "No vuelvas a quedarte con una duda fiscal sin resolver." },
   { n: "06", t: "Diseñado para España", d: "Tipos de IVA e IRPF siempre actualizados a la normativa española." },
 ];
@@ -266,6 +293,7 @@ export default function Landing() {
           </div>
           <nav className="hidden md:flex items-center gap-8 text-sm font-medium text-slate-600">
             <a href="#facturacion" className="hover:text-slate-900 transition-colors">Facturación</a>
+            <a href="#cobros" className="hover:text-slate-900 transition-colors">Cobros</a>
             <a href="#impuestos" className="hover:text-slate-900 transition-colors">Impuestos</a>
             <a href="#funcionalidades" className="hover:text-slate-900 transition-colors">Funcionalidades</a>
             <Link to="/registro" className="hover:text-slate-900 transition-colors">Precios</Link>
@@ -294,7 +322,7 @@ export default function Landing() {
             </Reveal>
             <Reveal immediate delay={0.1}>
               <p className="text-base sm:text-lg text-slate-500 mt-6 max-w-xl leading-relaxed">
-                OpenFactura es la solución en la nube con todo lo que necesitas para gestionar tu negocio. Facturas, IVA, IRPF, VeriFactu y una IA que te ayuda, en una sola plataforma.
+                OpenFactura es la solución en la nube con todo lo que necesitas para gestionar tu negocio. Facturas con plantillas propias, cobros con tarjeta, IVA, IRPF, VeriFactu y una IA que te ayuda, en una sola plataforma.
               </p>
             </Reveal>
             <Reveal immediate delay={0.15}>
@@ -357,7 +385,7 @@ export default function Landing() {
             const Visual = m.visual;
             const flip = i % 2 === 1;
             return (
-              <div key={m.title} id={i === 0 ? "facturacion" : i === 1 ? "impuestos" : undefined} className="grid lg:grid-cols-2 gap-10 lg:gap-16 items-center">
+              <div key={m.title} id={m.id} className="grid lg:grid-cols-2 gap-10 lg:gap-16 items-center">
                 <Reveal className={flip ? "lg:order-2" : ""}>
                   <div className="inline-flex items-center gap-2 text-sm font-semibold mb-4" style={{ color: ACCENT }}>
                     <m.icon className="w-4 h-4" strokeWidth={2} /> {m.label}
@@ -450,11 +478,14 @@ export default function Landing() {
           <Reveal><h2 className="text-2xl sm:text-3xl font-bold tracking-tight">Se conecta con tus herramientas favoritas</h2></Reveal>
           <Reveal delay={0.1}>
             <div className="flex flex-wrap items-center justify-center gap-3 mt-8">
-              {["Stripe", "VeriFactu AEAT", "VIES", "Resend", "PayPal", "Google"].map((n) => (
+              {["Stripe", "VeriFactu AEAT", "VIES", "Resend", "Certificado digital", "Google"].map((n) => (
                 <span key={n} className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-slate-50 px-4 py-2 text-sm font-medium text-slate-600">
                   <Zap className="w-3.5 h-3.5" style={{ color: ACCENT }} strokeWidth={2} /> {n}
                 </span>
               ))}
+              <span className="inline-flex items-center gap-2 rounded-full border border-dashed border-[#635BFF]/40 bg-[#635BFF]/5 px-4 py-2 text-sm font-medium text-[#635BFF]">
+                <Clock className="w-3.5 h-3.5" strokeWidth={2} /> RedSys · Próximamente
+              </span>
             </div>
           </Reveal>
         </div>

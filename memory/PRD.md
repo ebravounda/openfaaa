@@ -209,6 +209,9 @@ Sistema de facturación para España: crear facturas introduciendo datos (CIF/NI
 ## Implemented — Iteración 32 (2026-06) Fix Stripe: quitar parámetro `timeout` inválido
 - ✅ Bug "Received unknown parameter: timeout": el SDK de Stripe interpretaba `timeout=` (pasado a los métodos de recurso) como parámetro de la API → rechazaba la petición. Quitado de `Account.retrieve` y `checkout.Session.create`. El `asyncio.to_thread` ya evita el bloqueo del event loop. Verificado tras redeploy.
 
+## Implemented — Iteración 33 (2026-06) Landing actualizada con Cobros/Stripe + RedSys próximamente
+- ✅ Nuevo módulo "Cobros — Cobra con tarjeta por Stripe" en la landing (con `PaymentMockup`: importe, tarjeta, botón Pagar #635BFF, "se marca pagada al instante"). Bullets: Enviar Cobro, marca pagada automática, "Próximamente RedSys". Nav con enlace #cobros; ids de módulos por `m.id` (no por índice). Facturación resalta "plantillas personalizables con tu logo". Integraciones: chip "RedSys · Próximamente" (badge punteado). Razón "Cobros con tarjeta" añadida. Hero menciona cobros y plantillas. Verificado por screenshot.
+
 ## Backlog (prioritized)
 - P1: Campos tipo Holded en factura: descuentos (línea/global), concepto+descripción separados, total por línea, número editable.
 - P2: Editar límites/precios de planes desde admin (ahora fijos en plans.py).
