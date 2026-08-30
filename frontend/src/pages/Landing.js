@@ -272,6 +272,20 @@ const TESTIMONIALS = [
   { q: "Lo del 7% de IRPF me lo sugirió solo. Es como tener un asesor dentro de la app.", n: "Fincas Vega", r: "Administración" },
 ];
 
+const NOVEDADES = [
+  { icon: FileText, t: "Presupuestos", d: "Crea presupuestos profesionales, envíalos a tus clientes y conviértelos en factura con un solo clic." },
+  { icon: Building2, t: "Multiempresa", d: "Gestiona varias empresas y autónomos desde una sola cuenta, cada uno con su contabilidad, numeración y certificado propios." },
+  { icon: Landmark, t: "Facturación intracomunitaria", d: "Emite facturas exentas por operaciones intracomunitarias (art. 25) con su leyenda legal y el Modelo 349." },
+  { icon: CreditCard, t: "Cobro con tarjeta", d: "Envía un enlace de pago por Stripe y cobra tus facturas al instante, con conciliación automática." },
+];
+
+const PLANS = [
+  { name: "Básico", price: "0€", per: "/mes", desc: "Para empezar a facturar", features: ["Hasta 10 facturas al mes", "Clientes y presupuestos", "Cálculo de IVA e IRPF"], cta: "Empezar gratis", highlight: false },
+  { name: "Medio", price: "9,99€", per: "/mes", desc: "Para autónomos en activo", features: ["Hasta 100 facturas al mes", "Envío de facturas por email", "Escáner de gastos con IA"], cta: "Probar 14 días gratis", highlight: false },
+  { name: "Platino", price: "24,99€", per: "/mes", desc: "Sin límites y con VeriFactu", features: ["Facturas ilimitadas", "VeriFactu AEAT + tu certificado", "Cobros con tarjeta (Stripe)"], cta: "Probar 14 días gratis", highlight: true },
+  { name: "Multiempresas", price: "49,99€", per: "/mes", desc: "Para asesorías y grupos", features: ["Hasta 20 empresas y autónomos", "Todo lo de Platino en cada empresa", "Certificado y contabilidad por empresa"], cta: "Probar 14 días gratis", highlight: false, badge: "Nuevo" },
+];
+
 export default function Landing() {
   return (
     <div className="min-h-screen bg-white text-slate-900 font-outfit selection:bg-[#0052FF]/20">
@@ -296,7 +310,7 @@ export default function Landing() {
             <a href="#cobros" className="hover:text-slate-900 transition-colors">Cobros</a>
             <a href="#impuestos" className="hover:text-slate-900 transition-colors">Impuestos</a>
             <a href="#funcionalidades" className="hover:text-slate-900 transition-colors">Funcionalidades</a>
-            <Link to="/registro" className="hover:text-slate-900 transition-colors">Precios</Link>
+            <a href="#precios" className="hover:text-slate-900 transition-colors">Precios</a>
           </nav>
           <div className="flex items-center gap-2 sm:gap-3">
             <Link to="/login"><Button variant="ghost" className="text-slate-600 rounded-full" data-testid="landing-login">Entrar</Button></Link>
@@ -517,6 +531,64 @@ export default function Landing() {
                 </span>
               ))}
             </div>
+          </Reveal>
+        </div>
+      </section>
+
+      {/* Novedades */}
+      <section id="novedades" className="bg-white border-t border-slate-100">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-20 sm:py-24">
+          <Reveal>
+            <span className="inline-flex items-center gap-2 text-sm font-semibold" style={{ color: ACCENT }}><Sparkles className="w-4 h-4" strokeWidth={2} /> Novedades</span>
+            <h2 className="text-3xl sm:text-4xl font-bold tracking-tight mt-3">Más potente que nunca</h2>
+            <p className="text-slate-500 mt-3 max-w-2xl leading-relaxed">Presupuestos, multiempresa para asesorías, facturación intracomunitaria y cobros con tarjeta. Todo dentro de OpenFactura.</p>
+          </Reveal>
+          <motion.div variants={stagger} initial="hidden" whileInView="show" viewport={{ once: true }} className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mt-12">
+            {NOVEDADES.map((f) => (
+              <motion.div key={f.t} variants={fadeUp} className="rounded-2xl border border-slate-200 p-6 hover:shadow-lg transition-shadow duration-300" data-testid={`novedad-${f.t}`}>
+                <div className="w-11 h-11 rounded-xl bg-[#0052FF]/10 text-[#0052FF] flex items-center justify-center mb-4"><f.icon className="w-5 h-5" strokeWidth={1.5} /></div>
+                <div className="font-semibold text-slate-900">{f.t}</div>
+                <p className="text-sm text-slate-500 mt-1.5 leading-relaxed">{f.d}</p>
+              </motion.div>
+            ))}
+          </motion.div>
+        </div>
+      </section>
+
+      {/* Pricing */}
+      <section id="precios" className="bg-[#F8FAFC] border-t border-slate-100">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-20 sm:py-28">
+          <Reveal>
+            <h2 className="text-3xl sm:text-4xl font-bold tracking-tight text-center">Planes para cada negocio</h2>
+            <p className="text-slate-500 mt-3 text-center max-w-2xl mx-auto leading-relaxed">14 días gratis en cualquier plan. Opción anual con 2 meses gratis. Sin permanencia.</p>
+          </Reveal>
+          <motion.div variants={stagger} initial="hidden" whileInView="show" viewport={{ once: true }} className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mt-12 items-stretch">
+            {PLANS.map((p) => (
+              <motion.div key={p.name} variants={fadeUp} data-testid={`plan-${p.name}`} className={`rounded-2xl border p-6 bg-white flex flex-col ${p.highlight ? "border-[#0052FF] shadow-xl ring-1 ring-[#0052FF]/20" : "border-slate-200"}`}>
+                <div className="flex items-center justify-between">
+                  <div className="font-semibold text-lg text-slate-900">{p.name}</div>
+                  {p.badge ? <span className="text-[10px] font-semibold uppercase tracking-wider bg-[#0052FF]/10 text-[#0052FF] rounded-full px-2 py-0.5">{p.badge}</span>
+                    : p.highlight ? <span className="text-[10px] font-semibold uppercase tracking-wider bg-[#0052FF] text-white rounded-full px-2 py-0.5">Popular</span> : null}
+                </div>
+                <div className="mt-3 flex items-end gap-1"><span className="text-3xl font-extrabold tracking-tight text-slate-900">{p.price}</span><span className="text-slate-400 text-sm mb-1">{p.per}</span></div>
+                <p className="text-sm text-slate-500 mt-1">{p.desc}</p>
+                <ul className="mt-5 space-y-2.5 flex-1">
+                  {p.features.map((f) => (<li key={f} className="flex items-start gap-2 text-sm text-slate-600"><span className="mt-[7px] w-1.5 h-1.5 rounded-full shrink-0" style={{ background: ACCENT }} /> {f}</li>))}
+                </ul>
+                <Link to="/registro" className="mt-6"><Button className="w-full rounded-full text-white" style={{ background: ACCENT }} data-testid={`plan-cta-${p.name}`}>{p.cta}</Button></Link>
+              </motion.div>
+            ))}
+          </motion.div>
+          <p className="text-center text-sm text-slate-500 mt-8">¿Gestionas más de 20 empresas? Disponemos de un plan de <strong>50 empresas</strong> y planes a medida. <a href="mailto:soporte@goroky.com" className="font-medium" style={{ color: ACCENT }}>Escríbenos</a> y lo adaptamos a tu asesoría.</p>
+        </div>
+      </section>
+
+      {/* Alternativa (SEO competidores) */}
+      <section className="bg-white border-t border-slate-100">
+        <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-16 text-center">
+          <Reveal>
+            <h2 className="text-2xl sm:text-3xl font-bold tracking-tight">La alternativa española a Holded, FacturaDirecta, Quipu y Billin</h2>
+            <p className="text-slate-500 mt-4 leading-relaxed">Si buscas un <strong>programa de facturación</strong> sencillo y 100% adaptado a España —con VeriFactu, IVA e IRPF automáticos, presupuestos, multiempresa y cobros con tarjeta— OpenFactura reúne lo mejor de las soluciones más conocidas a un precio justo y sin curva de aprendizaje.</p>
           </Reveal>
         </div>
       </section>

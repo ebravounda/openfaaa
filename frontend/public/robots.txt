@@ -2,12 +2,16 @@ User-agent: *
 Allow: /
 
 # Bloquear rutas privadas de la aplicación
+Disallow: /panel
 Disallow: /facturas
+Disallow: /presupuestos
+Disallow: /empresas
 Disallow: /gastos
 Disallow: /contactos
 Disallow: /impuestos
 Disallow: /conexion
 Disallow: /configuracion
+Disallow: /metodos-pago
 Disallow: /admin
 Disallow: /payment/
 
