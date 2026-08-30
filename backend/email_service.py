@@ -107,10 +107,22 @@ async def _send_via_resend(rc: dict, to: str, subject: str, html: str, reply_to:
         return resp.json().get("id")
     except httpx.HTTPStatusError as e:
         logger.error(f"Resend send failed: {e.response.status_code} {e.response.text}")
-        raise HTTPException(status_code=502, detail=f"Resend rechazó el envío: {e.response.text[:200]}")
+        try:
+            msg = e.response.json().get("message", "") or e.response.text[:200]
+        except Exception:
+            msg = e.response.text[:200]
+        low = msg.lower()
+        if "not verified" in low or "not authorized" in low or "domain" in low:
+            detail = (f"Tu dominio de envío no está verificado en Resend. "
+                      f"Verifícalo en resend.com/domains y usa un remitente de ese dominio. (Resend: {msg})")
+        else:
+            detail = f"Resend rechazó el envío: {msg}"
+        raise HTTPException(status_code=400, detail=detail)
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"Resend send error: {e}")
-        raise HTTPException(status_code=500, detail="No se pudo enviar el email con Resend")
+        raise HTTPException(status_code=400, detail="No se pudo enviar el email con Resend. Revisa tu API key y el remitente en Integraciones.")
 
 
 async def send_email(*, to: str, subject: str, html: str, reply_to: str | None = None, attachments: list | None = None):
@@ -138,10 +150,10 @@ async def send_email(*, to: str, subject: str, html: str, reply_to: str | None =
         return resp.json().get("id")
     except httpx.HTTPStatusError as e:
         logger.error(f"Email send failed: {e.response.status_code} {e.response.text}")
-        raise HTTPException(status_code=502, detail="No se pudo enviar el email")
+        raise HTTPException(status_code=400, detail="No se pudo enviar el email (el proveedor rechazó el envío).")
     except Exception as e:
         logger.error(f"Email send error: {str(e)}")
-        raise HTTPException(status_code=500, detail="No se pudo enviar el email")
+        raise HTTPException(status_code=400, detail="No se pudo enviar el email")
 
 
 def _eur(v):

@@ -200,6 +200,9 @@ Sistema de facturación para España: crear facturas introduciendo datos (CIF/NI
 ## Implemented — Iteración 29 (2026-06) Stripe: blindaje anti-bloqueo (Cloudflare 52x)
 - ✅ El SDK `stripe` es síncrono; dentro de endpoints async podía bloquear el event loop del worker → posibles 502/520 en producción. Envueltas las 3 llamadas (`Account.retrieve`, `checkout.Session.create`, `checkout.Session.retrieve`) en `asyncio.to_thread(...)` con `timeout` (15-20s) para que fallen rápido y no bloqueen. Verificado: clave inválida devuelve 400 en <25s.
 
+## Implemented — Iteración 30 (2026-06) Fix email: mensaje real en vez de Cloudflare 502
+- ✅ **RCA del "error Cloudflare" al enviar email**: Resend devolvía 403 ("The openfacura.es domain is not verified") y el backend respondía HTTP 502, que Cloudflare/Plesk sustituían por su página de error genérica. Cambiado `_send_via_resend` y el fallback para devolver **400 con el mensaje real** (detecta dominio no verificado y guía a resend.com/domains). Ahora el usuario ve el motivo exacto en la app. Causa de negocio: el `from_email` usa `openfacura.es` (dominio no verificado en Resend / typo de openfactura.es).
+
 ## Backlog (prioritized)
 - P1: Campos tipo Holded en factura: descuentos (línea/global), concepto+descripción separados, total por línea, número editable.
 - P2: Editar límites/precios de planes desde admin (ahora fijos en plans.py).
