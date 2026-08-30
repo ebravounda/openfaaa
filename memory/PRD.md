@@ -197,6 +197,9 @@ Sistema de facturación para España: crear facturas introduciendo datos (CIF/NI
 - ✅ **UI**: Configuración → "Cobros con tarjeta" (logo Stripe #635BFF, input clave, Conectar/Desconectar, estado "Conectada: {cuenta}", mini tutorial con enlaces a registro y claves API). Facturas → botón "Enviar Cobro" (icono tarjeta, tooltip) visible si no pagada/anulada. Páginas públicas PagoExito/PagoCancelado.
 - ⚠️ **No verificable end-to-end en preview** (requiere una clave Stripe real del usuario). Verificado: validación de claves, endpoints (401/404/validación), UI por screenshot, y que la creación de Checkout Session usa parámetros correctos (la SDK llega a la validación de Stripe).
 
+## Implemented — Iteración 29 (2026-06) Stripe: blindaje anti-bloqueo (Cloudflare 52x)
+- ✅ El SDK `stripe` es síncrono; dentro de endpoints async podía bloquear el event loop del worker → posibles 502/520 en producción. Envueltas las 3 llamadas (`Account.retrieve`, `checkout.Session.create`, `checkout.Session.retrieve`) en `asyncio.to_thread(...)` con `timeout` (15-20s) para que fallen rápido y no bloqueen. Verificado: clave inválida devuelve 400 en <25s.
+
 ## Backlog (prioritized)
 - P1: Campos tipo Holded en factura: descuentos (línea/global), concepto+descripción separados, total por línea, número editable.
 - P2: Editar límites/precios de planes desde admin (ahora fijos en plans.py).

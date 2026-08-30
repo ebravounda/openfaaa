@@ -1,6 +1,7 @@
 from dotenv import load_dotenv
 from pathlib import Path
 import os
+import asyncio
 load_dotenv(Path(__file__).parent / ".env")
 
 import logging
@@ -1002,7 +1003,7 @@ async def stripe_connect(data: StripeConnectReq, user=Depends(get_current_user))
     if not key.startswith("sk_"):
         raise HTTPException(status_code=400, detail="La clave debe ser tu Clave secreta de Stripe (empieza por sk_)")
     try:
-        acct = stripe.Account.retrieve(api_key=key)
+        acct = await asyncio.to_thread(stripe.Account.retrieve, api_key=key, timeout=15)
     except stripe.error.AuthenticationError:
         raise HTTPException(status_code=400, detail="Clave de Stripe inválida. Revísala en Stripe → Desarrolladores → Claves API.")
     except stripe.error.StripeError as e:
@@ -1056,14 +1057,14 @@ async def send_invoice_payment(invoice_id: str, data: SendPaymentReq, user=Depen
     origin = data.origin_url.rstrip("/")
     desc = (inv.get("line_items") or [{}])[0].get("description", "Factura")
     try:
-        session = stripe.checkout.Session.create(
-            api_key=key, mode="payment", customer_email=to,
+        session = await asyncio.to_thread(lambda: stripe.checkout.Session.create(
+            api_key=key, mode="payment", customer_email=to, timeout=20,
             line_items=[{"price_data": {"currency": "eur",
                         "product_data": {"name": f"Factura {inv['number']}", "description": desc[:250]},
                         "unit_amount": amount_cents}, "quantity": 1}],
             success_url=f"{origin}/pago/exito?session_id={{CHECKOUT_SESSION_ID}}",
             cancel_url=f"{origin}/pago/cancelado",
-            metadata={"invoice_id": invoice_id, "user_id": user["id"], "number": inv["number"]})
+            metadata={"invoice_id": invoice_id, "user_id": user["id"], "number": inv["number"]}))
     except stripe.error.StripeError as e:
         logger.error(f"stripe invoice checkout failed: {e}")
         raise HTTPException(status_code=502, detail=f"Stripe rechazó la creación del cobro: {str(e)}")
@@ -1102,7 +1103,7 @@ async def public_payment_status(session_id: str):
         key = _company_stripe_key(comp)
         if key:
             try:
-                s = stripe.checkout.Session.retrieve(session_id, api_key=key)
+                s = await asyncio.to_thread(stripe.checkout.Session.retrieve, session_id, api_key=key, timeout=15)
                 if s.get("payment_status") == "paid" or s.get("status") == "complete":
                     status = "paid"
                     now = datetime.now(timezone.utc).isoformat()
