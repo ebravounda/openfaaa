@@ -615,6 +615,7 @@ export default function Landing() {
             <span className="text-slate-400">© {new Date().getFullYear()}</span>
           </div>
           <div className="flex gap-6">
+            <Link to="/blog" className="hover:text-slate-900 transition-colors" data-testid="footer-blog">Blog</Link>
             <Link to="/terminos" className="hover:text-slate-900 transition-colors" data-testid="footer-terms">Términos y condiciones</Link>
             <Link to="/privacidad" className="hover:text-slate-900 transition-colors" data-testid="footer-privacy">Política de privacidad</Link>
           </div>

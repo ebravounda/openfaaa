@@ -17,6 +17,9 @@ import Settings from "@/pages/Settings";
 import PaymentMethods from "@/pages/PaymentMethods";
 import Admin from "@/pages/Admin";
 import Pricing from "@/pages/Pricing";
+import PreciosRoute from "@/pages/PreciosRoute";
+import Blog from "@/pages/Blog";
+import BlogPost from "@/pages/BlogPost";
 import PaymentSuccess from "@/pages/PaymentSuccess";
 import PaymentCancel from "@/pages/PaymentCancel";
 import PagoExito from "@/pages/PagoExito";
@@ -52,7 +55,9 @@ function App() {
           <Route path="/conexion" element={<ProtectedRoute><Connection /></ProtectedRoute>} />
           <Route path="/configuracion" element={<ProtectedRoute><Settings /></ProtectedRoute>} />
           <Route path="/metodos-pago" element={<ProtectedRoute><PaymentMethods /></ProtectedRoute>} />
-          <Route path="/precios" element={<ProtectedRoute><Pricing /></ProtectedRoute>} />
+          <Route path="/precios" element={<PreciosRoute />} />
+          <Route path="/blog" element={<Blog />} />
+          <Route path="/blog/:slug" element={<BlogPost />} />
           <Route path="/pago/exito" element={<PagoExito />} />
           <Route path="/pago/cancelado" element={<PagoCancelado />} />
           <Route path="/payment/success" element={<ProtectedRoute><PaymentSuccess /></ProtectedRoute>} />

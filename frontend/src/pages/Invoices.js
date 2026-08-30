@@ -68,6 +68,7 @@ const emptyForm = () => ({
   invoice_type: "normal",
   rectifies: "",
   rectifies_number: "",
+  rectify_type: "I",
   save_client: false,
   due_date: "",
   period: "",
@@ -225,6 +226,7 @@ export default function Invoices() {
       invoice_type: "rectificativa",
       rectifies: inv.id,
       rectifies_number: inv.number,
+      rectify_type: "I",
       save_client: false,
     });
     setOpen(true);
@@ -274,6 +276,7 @@ export default function Invoices() {
       invoice_type: form.invoice_type,
       rectifies: form.rectifies,
       rectifies_number: form.rectifies_number,
+      rectify_type: form.rectify_type || "I",
       due_date: form.due_date,
       period: form.period,
       payment_method: form.payment_method,
@@ -538,9 +541,27 @@ export default function Invoices() {
         <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto" data-testid="invoice-dialog">
           <DialogHeader><DialogTitle className="font-display">{editingId ? "Editar factura" : form.invoice_type === "rectificativa" ? "Nueva factura rectificativa" : "Nueva factura"}</DialogTitle></DialogHeader>
           {form.invoice_type === "rectificativa" && (
-            <div className="flex items-center gap-2 text-sm text-purple-700 bg-purple-50 border border-purple-100 rounded-lg px-3 py-2" data-testid="rectify-banner">
-              <Undo2 className="w-4 h-4" strokeWidth={1.5} />
-              Abono que rectifica a la factura <strong>{form.rectifies_number}</strong>. Los importes negativos restan del total original.
+            <div className="space-y-2" data-testid="rectify-banner">
+              <div className="flex items-center gap-2 text-sm text-purple-700 bg-purple-50 border border-purple-100 rounded-lg px-3 py-2">
+                <Undo2 className="w-4 h-4" strokeWidth={1.5} />
+                Rectifica a la factura <strong>{form.rectifies_number}</strong>.
+              </div>
+              <div className="flex items-center gap-3 flex-wrap">
+                <span className="text-sm text-slate-600">Tipo de rectificación:</span>
+                <Select value={form.rectify_type} onValueChange={(v) => setForm((f) => ({
+                  ...f, rectify_type: v,
+                  line_items: f.line_items.map((i) => ({ ...i, unit_price: v === "S" ? Math.abs(Number(i.unit_price) || 0) : -Math.abs(Number(i.unit_price) || 0) })),
+                }))}>
+                  <SelectTrigger className="h-9 w-[280px]" data-testid="rectify-type-select"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="I">Por diferencias (importes negativos)</SelectItem>
+                    <SelectItem value="S">Por sustitución (importe correcto total)</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <p className="text-xs text-slate-400">{form.rectify_type === "S"
+                ? "Sustitución: introduce los importes correctos y completos de la factura. Se declaran la base y cuota originales como rectificadas."
+                : "Diferencias: los importes negativos restan del total original (abono)."}</p>
             </div>
           )}
           <div className="space-y-5">

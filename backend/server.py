@@ -80,6 +80,7 @@ class InvoiceInput(BaseModel):
     invoice_type: str = "normal"  # "normal" or "rectificativa"
     rectifies: str = ""
     rectifies_number: str = ""
+    rectify_type: str = "I"  # "I" (por diferencias) o "S" (por sustitución)
     due_date: str = ""
     period: str = ""
     payment_method: str = ""
@@ -1099,9 +1100,12 @@ async def verifactu_submit(invoice_id: str, user=Depends(get_current_user)):
         if inv.get("rectifies"):
             orig = await db.invoices.find_one(
                 {"id": inv["rectifies"], "user_id": user["id"]},
-                {"_id": 0, "number": 1, "issue_date": 1})
+                {"_id": 0, "number": 1, "issue_date": 1, "base": 1, "iva_amount": 1, "recargo_amount": 1})
             if orig:
                 rectified["number"] = orig.get("number") or rectified["number"]
+                rectified["base"] = orig.get("base")
+                rectified["cuota"] = orig.get("iva_amount")
+                rectified["recargo"] = orig.get("recargo_amount") or 0
                 if orig.get("issue_date"):
                     rectified["fecha"] = vf.to_ddmmyyyy(orig["issue_date"])
 

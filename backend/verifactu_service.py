@@ -168,10 +168,13 @@ def build_registro_alta_xml(company: dict, invoice: dict, prev_number: str, prev
     nif = company.get("nif", "")
     fecha = to_ddmmyyyy(invoice["issue_date"])
     cl = invoice.get("client", {})
-    # Bloque rectificativa (obligatorio para R1-R5). La app rectifica "por diferencias" (I).
+    # Bloque rectificativa (obligatorio para R1-R5). Soporta "I" (por diferencias) y "S" (por sustitución).
     rect_xml = ""
     if is_rect:
-        rect_xml = "<sum1:TipoRectificativa>I</sum1:TipoRectificativa>"
+        tipo_rect = (invoice.get("rectify_type") or "I").strip().upper()
+        if tipo_rect not in ("I", "S"):
+            tipo_rect = "I"
+        rect_xml = f"<sum1:TipoRectificativa>{tipo_rect}</sum1:TipoRectificativa>"
         rn = (rectified or {}).get("number") or invoice.get("rectifies_number") or ""
         rf = (rectified or {}).get("fecha") or ""
         if rn:
@@ -181,6 +184,17 @@ def build_registro_alta_xml(company: dict, invoice: dict, prev_number: str, prev
                 f"<sum1:NumSerieFactura>{_xesc(rn)}</sum1:NumSerieFactura>"
                 f"<sum1:FechaExpedicionFactura>{_xesc(rf)}</sum1:FechaExpedicionFactura>"
                 "</sum1:IDFacturaRectificada></sum1:FacturasRectificadas>")
+        if tipo_rect == "S":
+            rb = (rectified or {}).get("base")
+            rc = (rectified or {}).get("cuota")
+            rr = (rectified or {}).get("recargo") or 0
+            if rb is not None and rc is not None:
+                rect_xml += (
+                    "<sum1:ImporteRectificacion>"
+                    f"<sum1:BaseRectificada>{_fmt_num(rb)}</sum1:BaseRectificada>"
+                    f"<sum1:CuotaRectificada>{_fmt_num(rc)}</sum1:CuotaRectificada>"
+                    f"<sum1:CuotaRecargoRectificado>{_fmt_num(rr)}</sum1:CuotaRecargoRectificado>"
+                    "</sum1:ImporteRectificacion>")
     return (
         "<sum1:RegistroAlta>"
         "<sum1:IDVersion>1.0</sum1:IDVersion>"
