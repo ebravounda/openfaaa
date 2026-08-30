@@ -190,6 +190,13 @@ Sistema de facturación para España: crear facturas introduciendo datos (CIF/NI
 - ✅ **Auto-heal en `/invoices/{id}/pdf`**: si el CSV guardado es placeholder (`VF-`) o vacío, recupera el CSV real del `verifactu_log.response_xml` y actualiza la factura antes de generar el PDF. Así basta redesplegar + re-descargar el PDF (sin pasos manuales).
 - ✅ **Fix pantalla Conexión**: (1) el badge del log ahora muestra "Producción" (verde) / "Preprod" (azul) / "Simulado" — antes producción se etiquetaba erróneamente como "Simulado"; (2) el header "Estado del servicio" contempla el modo producción; (3) `/verifactu/connection-log` auto-corrige el CSV placeholder de cada entrada leyendo el CSV real de la respuesta guardada.
 
+## Implemented — Iteración 28 (2026-06) Cobros con Stripe (BYOK por usuario)
+- ✅ **Stripe por tenant**: cada usuario conecta SU cuenta Stripe (clave secreta propia, cifrada en company doc). Endpoints: `POST/GET/DELETE /api/stripe/connect|status` (valida con `stripe.Account.retrieve(api_key=...)`, guarda nombre de cuenta + charges_enabled + modo live/test).
+- ✅ **Enviar Cobro**: `POST /api/invoices/{id}/send-payment` crea Checkout Session (EUR, importe de la factura, tarjeta) con la clave del usuario, guarda `payment_transactions` + `invoice.payment`, y envía email al cliente con botón "Pagar" (`build_payment_email_html`) + **PDF adjunto** (Resend con attachments base64). success_url `/pago/exito`, cancel_url `/pago/cancelado`.
+- ✅ **Marcar pagada automáticamente**: página pública `/pago/exito` (polling) → `GET /api/public/payment-status/{session_id}` (sin auth) recupera la sesión con la clave del usuario y, si `paid`, marca la factura `status=paid` + tx paid. Sin necesidad de configurar webhooks por usuario.
+- ✅ **UI**: Configuración → "Cobros con tarjeta" (logo Stripe #635BFF, input clave, Conectar/Desconectar, estado "Conectada: {cuenta}", mini tutorial con enlaces a registro y claves API). Facturas → botón "Enviar Cobro" (icono tarjeta, tooltip) visible si no pagada/anulada. Páginas públicas PagoExito/PagoCancelado.
+- ⚠️ **No verificable end-to-end en preview** (requiere una clave Stripe real del usuario). Verificado: validación de claves, endpoints (401/404/validación), UI por screenshot, y que la creación de Checkout Session usa parámetros correctos (la SDK llega a la validación de Stripe).
+
 ## Backlog (prioritized)
 - P1: Campos tipo Holded en factura: descuentos (línea/global), concepto+descripción separados, total por línea, número editable.
 - P2: Editar límites/precios de planes desde admin (ahora fijos en plans.py).

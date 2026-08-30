@@ -87,7 +87,7 @@ def _assert_safe_email(subject: str, html: str) -> None:
                 raise ValueError(f"Anchor text {m.group(1)!r} != real link host {real!r} (G3)")
 
 
-async def _send_via_resend(rc: dict, to: str, subject: str, html: str, reply_to: str | None):
+async def _send_via_resend(rc: dict, to: str, subject: str, html: str, reply_to: str | None, attachments: list | None = None):
     from fastapi import HTTPException
     if not rc.get("from_email"):
         raise HTTPException(status_code=400, detail="Configura el email remitente (dominio verificado) en Integraciones.")
@@ -96,6 +96,8 @@ async def _send_via_resend(rc: dict, to: str, subject: str, html: str, reply_to:
     rt = reply_to or rc.get("reply_to")
     if rt:
         payload["reply_to"] = rt
+    if attachments:
+        payload["attachments"] = attachments
     try:
         async with httpx.AsyncClient(timeout=30) as client:
             resp = await client.post("https://api.resend.com/emails",
@@ -111,13 +113,13 @@ async def _send_via_resend(rc: dict, to: str, subject: str, html: str, reply_to:
         raise HTTPException(status_code=500, detail="No se pudo enviar el email con Resend")
 
 
-async def send_email(*, to: str, subject: str, html: str, reply_to: str | None = None):
+async def send_email(*, to: str, subject: str, html: str, reply_to: str | None = None, attachments: list | None = None):
     _assert_safe_email(subject, html)
     # 1) Resend propio del usuario (self-hosted) si está configurado en Integraciones
     from integrations_config import get_resend
     rc = await get_resend()
     if rc.get("api_key"):
-        return await _send_via_resend(rc, to, subject, html, reply_to)
+        return await _send_via_resend(rc, to, subject, html, reply_to, attachments)
     # 2) Fallback: servicio de email gestionado por Emergent
     from fastapi import HTTPException
     if not EMAIL_KEY:
@@ -144,6 +146,22 @@ async def send_email(*, to: str, subject: str, html: str, reply_to: str | None =
 
 def _eur(v):
     return f"{v:,.2f} €".replace(",", "X").replace(".", ",").replace("X", ".")
+
+
+def build_payment_email_html(invoice: dict, company: dict, pay_url: str) -> str:
+    total = float(invoice.get("total") or 0)
+    button = (
+        f'<table role="presentation" width="100%" style="max-width:640px;margin:0 auto;'
+        f'font-family:Arial,Helvetica,sans-serif;background:#ffffff">'
+        f'<tr><td style="padding:28px 24px 4px 24px;text-align:center">'
+        f'<div style="font-size:15px;color:#333;margin-bottom:16px">Puedes pagar esta factura de forma segura con tarjeta:</div>'
+        f'<a href="{escape(pay_url)}" style="display:inline-block;background:#635BFF;color:#ffffff;'
+        f'text-decoration:none;padding:14px 36px;border-radius:8px;font-weight:bold;font-size:16px">'
+        f'Pagar {escape(_eur(total))}</a>'
+        f'<div style="font-size:12px;color:#888;margin-top:10px">Pago seguro procesado por Stripe &middot; Tarjeta de credito o debito</div>'
+        f'</td></tr></table>'
+    )
+    return button + build_invoice_email_html(invoice, company)
 
 
 def build_invoice_email_html(invoice: dict, company: dict) -> str:

@@ -25,7 +25,7 @@ from admin_routes import admin as admin_router
 from plans import plan_for_user, plans_list
 from templates import TEMPLATE_MAP
 from pdf_service import build_invoice_pdf
-from email_service import send_email, build_invoice_email_html
+from email_service import send_email, build_invoice_email_html, build_payment_email_html
 import storage_service
 from storage_service import put_object, get_object, MIME_TYPES, APP_NAME
 from ocr_service import extract_expense
@@ -973,6 +973,150 @@ async def send_invoice_email(invoice_id: str, user=Depends(get_current_user)):
     await db.invoices.update_one({"id": invoice_id, "user_id": user["id"]},
                                  {"$set": {"emailed_at": datetime.now(timezone.utc).isoformat()}})
     return {"status": "sent", "email_id": email_id, "to": to}
+
+
+# ---------- Cobros con Stripe (por usuario / BYOK) ----------
+class StripeConnectReq(BaseModel):
+    secret_key: str
+
+
+class SendPaymentReq(BaseModel):
+    origin_url: str
+
+
+def _company_stripe_key(company: dict) -> str:
+    import cert_service
+    enc = (company or {}).get("stripe_secret_key")
+    if not enc:
+        return ""
+    try:
+        return cert_service.decrypt(enc.encode()).decode()
+    except Exception:
+        return ""
+
+
+@api.post("/stripe/connect")
+async def stripe_connect(data: StripeConnectReq, user=Depends(get_current_user)):
+    import stripe, cert_service
+    key = (data.secret_key or "").strip()
+    if not key.startswith("sk_"):
+        raise HTTPException(status_code=400, detail="La clave debe ser tu Clave secreta de Stripe (empieza por sk_)")
+    try:
+        acct = stripe.Account.retrieve(api_key=key)
+    except stripe.error.AuthenticationError:
+        raise HTTPException(status_code=400, detail="Clave de Stripe inválida. Revísala en Stripe → Desarrolladores → Claves API.")
+    except stripe.error.StripeError as e:
+        raise HTTPException(status_code=400, detail=f"No se pudo conectar con Stripe: {str(e)}")
+    name = (acct.get("business_profile", {}) or {}).get("name") \
+        or ((acct.get("settings", {}) or {}).get("dashboard", {}) or {}).get("display_name") \
+        or acct.get("email") or acct.get("id")
+    charges = bool(acct.get("charges_enabled"))
+    mode = "live" if key.startswith("sk_live") else "test"
+    await db.companies.update_one({"user_id": user["id"]}, {"$set": {
+        "stripe_secret_key": cert_service.encrypt(key.encode()).decode(),
+        "stripe_account_name": name, "stripe_charges_enabled": charges,
+        "stripe_mode": mode, "stripe_connected": True}}, upsert=True)
+    return {"connected": True, "account_name": name, "charges_enabled": charges, "mode": mode}
+
+
+@api.get("/stripe/status")
+async def stripe_status(user=Depends(get_current_user)):
+    c = await db.companies.find_one({"user_id": user["id"]}, {"_id": 0}) or {}
+    return {"connected": bool(c.get("stripe_connected") and c.get("stripe_secret_key")),
+            "account_name": c.get("stripe_account_name", ""),
+            "charges_enabled": c.get("stripe_charges_enabled", False),
+            "mode": c.get("stripe_mode", "test")}
+
+
+@api.delete("/stripe/connect")
+async def stripe_disconnect(user=Depends(get_current_user)):
+    await db.companies.update_one({"user_id": user["id"]}, {"$set": {
+        "stripe_connected": False, "stripe_secret_key": "", "stripe_account_name": "",
+        "stripe_charges_enabled": False}})
+    return {"status": "ok"}
+
+
+@api.post("/invoices/{invoice_id}/send-payment")
+async def send_invoice_payment(invoice_id: str, data: SendPaymentReq, user=Depends(get_current_user)):
+    import stripe, base64 as _b64
+    inv = await db.invoices.find_one({"id": invoice_id, "user_id": user["id"]}, {"_id": 0})
+    if not inv:
+        raise HTTPException(status_code=404, detail="Factura no encontrada")
+    to = inv.get("client", {}).get("email")
+    if not to:
+        raise HTTPException(status_code=400, detail="El cliente no tiene email registrado")
+    company = await db.companies.find_one({"user_id": user["id"]}, {"_id": 0}) or {}
+    key = _company_stripe_key(company)
+    if not key:
+        raise HTTPException(status_code=400, detail="Conecta tu cuenta de Stripe en Configuración → Cobros con Stripe")
+    total = float(inv.get("total") or 0)
+    amount_cents = int(round(total * 100))
+    if amount_cents < 50:
+        raise HTTPException(status_code=400, detail="El importe mínimo para cobrar con Stripe es 0,50 €")
+    origin = data.origin_url.rstrip("/")
+    desc = (inv.get("line_items") or [{}])[0].get("description", "Factura")
+    try:
+        session = stripe.checkout.Session.create(
+            api_key=key, mode="payment", customer_email=to,
+            line_items=[{"price_data": {"currency": "eur",
+                        "product_data": {"name": f"Factura {inv['number']}", "description": desc[:250]},
+                        "unit_amount": amount_cents}, "quantity": 1}],
+            success_url=f"{origin}/pago/exito?session_id={{CHECKOUT_SESSION_ID}}",
+            cancel_url=f"{origin}/pago/cancelado",
+            metadata={"invoice_id": invoice_id, "user_id": user["id"], "number": inv["number"]})
+    except stripe.error.StripeError as e:
+        logger.error(f"stripe invoice checkout failed: {e}")
+        raise HTTPException(status_code=502, detail=f"Stripe rechazó la creación del cobro: {str(e)}")
+    now = datetime.now(timezone.utc).isoformat()
+    await db.payment_transactions.insert_one({
+        "id": str(uuid.uuid4()), "session_id": session.id, "invoice_id": invoice_id,
+        "invoice_number": inv["number"], "user_id": user["id"], "amount": total, "currency": "eur",
+        "status": "initiated", "payment_status": "pending", "created_at": now})
+    qr_png = None
+    vfd = inv.get("verifactu")
+    if vfd and vfd.get("qr_url"):
+        try:
+            qr_png = vf.generate_qr_png(vfd["qr_url"])
+        except Exception:
+            pass
+    pdf = build_invoice_pdf(inv, await _merge_global_goroky(company), qr_png=qr_png, verifactu=vfd)
+    attachments = [{"filename": f"factura-{inv['number']}.pdf", "content": _b64.b64encode(pdf).decode()}]
+    html = build_payment_email_html(inv, company, session.url)
+    subject = f"Factura {inv['number']} · Pago pendiente"
+    email_id = await send_email(to=to, subject=subject, html=html, reply_to=company.get("email"), attachments=attachments)
+    await db.invoices.update_one({"id": invoice_id, "user_id": user["id"]}, {"$set": {
+        "payment": {"session_id": session.id, "checkout_url": session.url, "status": "pending",
+                    "sent_at": now, "to": to}, "emailed_at": now}})
+    return {"status": "sent", "checkout_url": session.url, "to": to, "email_id": email_id}
+
+
+@api.get("/public/payment-status/{session_id}")
+async def public_payment_status(session_id: str):
+    import stripe
+    tx = await db.payment_transactions.find_one({"session_id": session_id}, {"_id": 0})
+    if not tx:
+        raise HTTPException(status_code=404, detail="Transacción no encontrada")
+    status = tx.get("payment_status", "pending")
+    if status != "paid":
+        comp = await db.companies.find_one({"user_id": tx.get("user_id")}, {"_id": 0}) or {}
+        key = _company_stripe_key(comp)
+        if key:
+            try:
+                s = stripe.checkout.Session.retrieve(session_id, api_key=key)
+                if s.get("payment_status") == "paid" or s.get("status") == "complete":
+                    status = "paid"
+                    now = datetime.now(timezone.utc).isoformat()
+                    await db.payment_transactions.update_one(
+                        {"session_id": session_id, "payment_status": {"$ne": "paid"}},
+                        {"$set": {"status": "completed", "payment_status": "paid",
+                                  "stripe_payment_intent_id": s.get("payment_intent"), "updated_at": now}})
+                    if tx.get("invoice_id"):
+                        await db.invoices.update_one({"id": tx["invoice_id"]},
+                            {"$set": {"status": "paid", "payment.status": "paid", "paid_at": now}})
+            except stripe.error.StripeError:
+                pass
+    return {"payment_status": status, "invoice_number": tx.get("invoice_number"),
+            "amount": tx.get("amount"), "currency": tx.get("currency", "eur")}
 
 
 # ---------- Expenses ----------

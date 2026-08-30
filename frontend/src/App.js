@@ -16,6 +16,8 @@ import Admin from "@/pages/Admin";
 import Pricing from "@/pages/Pricing";
 import PaymentSuccess from "@/pages/PaymentSuccess";
 import PaymentCancel from "@/pages/PaymentCancel";
+import PagoExito from "@/pages/PagoExito";
+import PagoCancelado from "@/pages/PagoCancelado";
 import Landing from "@/pages/Landing";
 import { Terms, Privacy } from "@/pages/Legal";
 import Welcome from "@/pages/Welcome";
@@ -45,6 +47,8 @@ function App() {
           <Route path="/conexion" element={<ProtectedRoute><Connection /></ProtectedRoute>} />
           <Route path="/configuracion" element={<ProtectedRoute><Settings /></ProtectedRoute>} />
           <Route path="/precios" element={<ProtectedRoute><Pricing /></ProtectedRoute>} />
+          <Route path="/pago/exito" element={<PagoExito />} />
+          <Route path="/pago/cancelado" element={<PagoCancelado />} />
           <Route path="/payment/success" element={<ProtectedRoute><PaymentSuccess /></ProtectedRoute>} />
           <Route path="/payment/cancel" element={<ProtectedRoute><PaymentCancel /></ProtectedRoute>} />
           <Route path="/admin" element={<ProtectedRoute><Admin /></ProtectedRoute>} />

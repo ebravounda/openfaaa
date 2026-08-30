@@ -9,7 +9,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
-import { Loader2, Building2, ShieldCheck, KeyRound, Upload, Trash2, CheckCircle2, AlertTriangle } from "lucide-react";
+import { Loader2, Building2, ShieldCheck, KeyRound, Upload, Trash2, CheckCircle2, AlertTriangle, ExternalLink } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 
@@ -25,6 +25,9 @@ export default function Settings() {
   const [preview, setPreview] = useState("");
   const [previewLoading, setPreviewLoading] = useState(false);
   const [uploadingLogo, setUploadingLogo] = useState(false);
+  const [stripe, setStripe] = useState(null);
+  const [stripeKey, setStripeKey] = useState("");
+  const [stripeBusy, setStripeBusy] = useState(false);
   const certRef = useRef(null);
   const logoRef = useRef(null);
 
@@ -109,6 +112,29 @@ export default function Settings() {
     await api.delete("/company/logo");
     setForm((f) => ({ ...f, logo: "" }));
     toast.success("Logo eliminado");
+  };
+
+  useEffect(() => { api.get("/stripe/status").then((r) => setStripe(r.data)).catch(() => {}); }, []);
+
+  const connectStripe = async () => {
+    if (!stripeKey.trim()) { toast.error("Pega tu clave secreta de Stripe"); return; }
+    setStripeBusy(true);
+    try {
+      const { data } = await api.post("/stripe/connect", { secret_key: stripeKey.trim() });
+      setStripe({ connected: true, ...data });
+      setStripeKey("");
+      toast.success(`Stripe conectado: ${data.account_name}`);
+    } catch (e) {
+      toast.error(formatApiErrorDetail(e.response?.data?.detail) || "No se pudo conectar Stripe");
+    } finally {
+      setStripeBusy(false);
+    }
+  };
+
+  const disconnectStripe = async () => {
+    await api.delete("/stripe/connect");
+    setStripe({ connected: false });
+    toast.success("Stripe desconectado");
   };
 
   const save = async () => {
@@ -353,6 +379,45 @@ export default function Settings() {
                 </p>
               </div>
             )}
+
+            <div className="border border-slate-200 rounded-lg p-4 space-y-4" data-testid="stripe-section">
+              <div className="flex items-center gap-2 font-medium text-slate-900">
+                <span className="inline-flex items-center px-2.5 py-1 rounded-md bg-[#635BFF] text-white font-bold text-sm tracking-tight lowercase">stripe</span>
+                Cobros con tarjeta
+              </div>
+              {stripe?.connected ? (
+                <div className="flex items-center justify-between gap-4">
+                  <div className="text-sm">
+                    <div className="flex items-center gap-2 text-emerald-700 font-medium"><CheckCircle2 className="w-4 h-4" strokeWidth={1.5} /> Conectada</div>
+                    <div className="text-slate-500 mt-1">Cuenta: <strong>{stripe.account_name}</strong> · Modo {stripe.mode === "live" ? "Real (cobros reales)" : "Pruebas"}</div>
+                    {!stripe.charges_enabled && <div className="text-xs text-amber-600 mt-1">Tu cuenta aún no puede recibir cobros: completa la verificación (KYC) en Stripe.</div>}
+                  </div>
+                  <Button variant="outline" size="sm" className="border-slate-200 text-red-600 hover:text-red-700" onClick={disconnectStripe} data-testid="stripe-disconnect">Desconectar</Button>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  <div className="flex items-end gap-3">
+                    <div className="space-y-1 flex-1">
+                      <Label className="text-xs">Clave secreta de Stripe</Label>
+                      <Input type="password" value={stripeKey} onChange={(e) => setStripeKey(e.target.value)} placeholder="sk_live_… o sk_test_…" data-testid="stripe-key-input" />
+                    </div>
+                    <Button onClick={connectStripe} disabled={stripeBusy} className="bg-[#635BFF] hover:bg-[#544bff] text-white" data-testid="stripe-connect">
+                      {stripeBusy ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : null}Conectar
+                    </Button>
+                  </div>
+                  <div className="bg-slate-50 border border-slate-100 rounded-lg p-3 text-xs text-slate-600 space-y-1.5">
+                    <div className="font-medium text-slate-900">Cómo obtener tu clave (2 minutos):</div>
+                    <ol className="list-decimal list-inside space-y-1">
+                      <li>Crea tu cuenta gratis en <a href="https://dashboard.stripe.com/register" target="_blank" rel="noopener noreferrer" className="text-[#635BFF] font-medium">dashboard.stripe.com/register <ExternalLink className="inline w-3 h-3" /></a></li>
+                      <li>Abre <a href="https://dashboard.stripe.com/apikeys" target="_blank" rel="noopener noreferrer" className="text-[#635BFF] font-medium">Desarrolladores → Claves API <ExternalLink className="inline w-3 h-3" /></a></li>
+                      <li>Copia tu <strong>Clave secreta</strong> (empieza por <code>sk_</code>) y pégala arriba.</li>
+                    </ol>
+                    <div className="text-slate-400 pt-1">Tu clave se guarda cifrada. Cobra con tarjeta de crédito/débito. Usa <code>sk_test_…</code> para probar y <code>sk_live_…</code> para cobrar de verdad.</div>
+                  </div>
+                </div>
+              )}
+              <p className="text-[11px] text-slate-400">Una vez conectada, en Facturas verás el botón «Enviar Cobro»: tu cliente recibe un email con botón Pagar y el PDF adjunto; al pagar, la factura se marca como pagada automáticamente.</p>
+            </div>
 
             <Button onClick={save} disabled={saving} className="bg-[#0052FF] hover:bg-[#0040CC] text-white" data-testid="save-company">
               {saving && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}Guardar datos

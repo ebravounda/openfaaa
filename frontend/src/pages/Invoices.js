@@ -19,7 +19,7 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import {
-  Plus, Trash2, FileText, Mail, Download, CheckCircle2, Loader2, Pencil, Undo2, ShieldCheck, ShieldAlert, Search, Ban, Sparkles, HelpCircle,
+  Plus, Trash2, FileText, Mail, Download, CheckCircle2, Loader2, Pencil, Undo2, ShieldCheck, ShieldAlert, Search, Ban, Sparkles, HelpCircle, CreditCard,
 } from "lucide-react";
 import RectificativaGuide, { RECTIFY_GUIDE_KEY } from "@/components/RectificativaGuide";
 import {
@@ -89,6 +89,7 @@ export default function Invoices() {
   const [saving, setSaving] = useState(false);
   const [sendingId, setSendingId] = useState(null);
   const [lookingUp, setLookingUp] = useState(false);
+  const [payingId, setPayingId] = useState(null);
   const [guideOpen, setGuideOpen] = useState(false);
   const [pendingRectify, setPendingRectify] = useState(null);
 
@@ -125,6 +126,18 @@ export default function Invoices() {
     api.get("/invoices").then((r) => setInvoices(r.data)).finally(() => setLoading(false));
   };
   const loadClients = () => api.get("/contacts?kind=client").then((r) => setClients(r.data));
+  const sendPayment = async (inv) => {
+    setPayingId(inv.id);
+    try {
+      const { data } = await api.post(`/invoices/${inv.id}/send-payment`, { origin_url: window.location.origin });
+      toast.success(`Cobro enviado por email a ${data.to}`);
+      load();
+    } catch (e) {
+      toast.error(e.response?.data?.detail || "No se pudo enviar el cobro");
+    } finally {
+      setPayingId(null);
+    }
+  };
   useEffect(() => {
     load(); loadClients(); loadIrpfHint();
     api.get("/company").then((r) => {
@@ -468,6 +481,13 @@ export default function Invoices() {
                           {sendingId === inv.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <Mail className="w-4 h-4" strokeWidth={1.5} />}
                         </Button>
                       </Tip>
+                      {inv.status !== "anulada" && inv.status !== "paid" && (
+                        <Tip label="Enviar cobro por email (pago con tarjeta vía Stripe)">
+                          <Button variant="ghost" size="icon" onClick={() => sendPayment(inv)} disabled={payingId === inv.id} data-testid={`invoice-pay-${inv.number}`} className="h-8 w-8 text-slate-500 hover:text-[#635BFF]">
+                            {payingId === inv.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <CreditCard className="w-4 h-4" strokeWidth={1.5} />}
+                          </Button>
+                        </Tip>
+                      )}
                       {inv.status !== "anulada" && (
                         <Tip label={inv.status === "paid" ? "Marcar como pendiente" : "Marcar como pagada"}>
                           <Button variant="ghost" size="icon" onClick={() => markPaid(inv)} data-testid={`invoice-paid-${inv.number}`} className="h-8 w-8 text-slate-500 hover:text-emerald-600"><CheckCircle2 className={`w-4 h-4 ${inv.status === "paid" ? "text-emerald-600" : ""}`} strokeWidth={1.5} /></Button>
