@@ -203,6 +203,9 @@ Sistema de facturación para España: crear facturas introduciendo datos (CIF/NI
 ## Implemented — Iteración 30 (2026-06) Fix email: mensaje real en vez de Cloudflare 502
 - ✅ **RCA del "error Cloudflare" al enviar email**: Resend devolvía 403 ("The openfacura.es domain is not verified") y el backend respondía HTTP 502, que Cloudflare/Plesk sustituían por su página de error genérica. Cambiado `_send_via_resend` y el fallback para devolver **400 con el mensaje real** (detecta dominio no verificado y guía a resend.com/domains). Ahora el usuario ve el motivo exacto en la app. Causa de negocio: el `from_email` usa `openfacura.es` (dominio no verificado en Resend / typo de openfactura.es).
 
+## Implemented — Iteración 31 (2026-06) Métodos de pago en el menú
+- ✅ Nueva página dedicada `/metodos-pago` (`pages/PaymentMethods.js`) con toda la config de Stripe (conectar/estado/desconectar + tutorial + "cómo funciona"). Ítem "Métodos de pago" en el menú lateral (icono tarjeta, entre Conexión y Planes; Planes pasa a icono Landmark). Retirada la sección Stripe duplicada de Configuración. Verificado por screenshot.
+
 ## Backlog (prioritized)
 - P1: Campos tipo Holded en factura: descuentos (línea/global), concepto+descripción separados, total por línea, número editable.
 - P2: Editar límites/precios de planes desde admin (ahora fijos en plans.py).

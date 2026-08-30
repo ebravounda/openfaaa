@@ -12,6 +12,7 @@ import Contacts from "@/pages/Contacts";
 import Taxes from "@/pages/Taxes";
 import Connection from "@/pages/Connection";
 import Settings from "@/pages/Settings";
+import PaymentMethods from "@/pages/PaymentMethods";
 import Admin from "@/pages/Admin";
 import Pricing from "@/pages/Pricing";
 import PaymentSuccess from "@/pages/PaymentSuccess";
@@ -46,6 +47,7 @@ function App() {
           <Route path="/impuestos" element={<ProtectedRoute><Taxes /></ProtectedRoute>} />
           <Route path="/conexion" element={<ProtectedRoute><Connection /></ProtectedRoute>} />
           <Route path="/configuracion" element={<ProtectedRoute><Settings /></ProtectedRoute>} />
+          <Route path="/metodos-pago" element={<ProtectedRoute><PaymentMethods /></ProtectedRoute>} />
           <Route path="/precios" element={<ProtectedRoute><Pricing /></ProtectedRoute>} />
           <Route path="/pago/exito" element={<PagoExito />} />
           <Route path="/pago/cancelado" element={<PagoCancelado />} />

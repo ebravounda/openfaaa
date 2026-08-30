@@ -30,7 +30,8 @@ const baseNav = [
   { to: "/contactos", label: "Contactos", icon: Users, testid: "nav-contacts" },
   { to: "/impuestos", label: "Impuestos", icon: Landmark, testid: "nav-taxes" },
   { to: "/conexion", label: "Conexión", icon: Activity, testid: "nav-connection" },
-  { to: "/precios", label: "Planes", icon: CreditCard, testid: "nav-pricing" },
+  { to: "/metodos-pago", label: "Métodos de pago", icon: CreditCard, testid: "nav-payment-methods" },
+  { to: "/precios", label: "Planes", icon: Landmark, testid: "nav-pricing" },
   { to: "/configuracion", label: "Configuración", icon: Settings, testid: "nav-settings" },
 ];
 
