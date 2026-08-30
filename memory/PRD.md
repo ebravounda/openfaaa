@@ -206,6 +206,9 @@ Sistema de facturación para España: crear facturas introduciendo datos (CIF/NI
 ## Implemented — Iteración 31 (2026-06) Métodos de pago en el menú
 - ✅ Nueva página dedicada `/metodos-pago` (`pages/PaymentMethods.js`) con toda la config de Stripe (conectar/estado/desconectar + tutorial + "cómo funciona"). Ítem "Métodos de pago" en el menú lateral (icono tarjeta, entre Conexión y Planes; Planes pasa a icono Landmark). Retirada la sección Stripe duplicada de Configuración. Verificado por screenshot.
 
+## Implemented — Iteración 32 (2026-06) Fix Stripe: quitar parámetro `timeout` inválido
+- ✅ Bug "Received unknown parameter: timeout": el SDK de Stripe interpretaba `timeout=` (pasado a los métodos de recurso) como parámetro de la API → rechazaba la petición. Quitado de `Account.retrieve` y `checkout.Session.create`. El `asyncio.to_thread` ya evita el bloqueo del event loop. Verificado tras redeploy.
+
 ## Backlog (prioritized)
 - P1: Campos tipo Holded en factura: descuentos (línea/global), concepto+descripción separados, total por línea, número editable.
 - P2: Editar límites/precios de planes desde admin (ahora fijos en plans.py).

@@ -1003,7 +1003,7 @@ async def stripe_connect(data: StripeConnectReq, user=Depends(get_current_user))
     if not key.startswith("sk_"):
         raise HTTPException(status_code=400, detail="La clave debe ser tu Clave secreta de Stripe (empieza por sk_)")
     try:
-        acct = await asyncio.to_thread(stripe.Account.retrieve, api_key=key, timeout=15)
+        acct = await asyncio.to_thread(stripe.Account.retrieve, api_key=key)
     except stripe.error.AuthenticationError:
         raise HTTPException(status_code=400, detail="Clave de Stripe inválida. Revísala en Stripe → Desarrolladores → Claves API.")
     except stripe.error.StripeError as e:
@@ -1058,7 +1058,7 @@ async def send_invoice_payment(invoice_id: str, data: SendPaymentReq, user=Depen
     desc = (inv.get("line_items") or [{}])[0].get("description", "Factura")
     try:
         session = await asyncio.to_thread(lambda: stripe.checkout.Session.create(
-            api_key=key, mode="payment", customer_email=to, timeout=20,
+            api_key=key, mode="payment", customer_email=to,
             line_items=[{"price_data": {"currency": "eur",
                         "product_data": {"name": f"Factura {inv['number']}", "description": desc[:250]},
                         "unit_amount": amount_cents}, "quantity": 1}],
@@ -1103,7 +1103,7 @@ async def public_payment_status(session_id: str):
         key = _company_stripe_key(comp)
         if key:
             try:
-                s = await asyncio.to_thread(stripe.checkout.Session.retrieve, session_id, api_key=key, timeout=15)
+                s = await asyncio.to_thread(stripe.checkout.Session.retrieve, session_id, api_key=key)
                 if s.get("payment_status") == "paid" or s.get("status") == "complete":
                     status = "paid"
                     now = datetime.now(timezone.utc).isoformat()
