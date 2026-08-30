@@ -57,6 +57,19 @@ body {
     font-variant-numeric: tabular-nums;
 }
 
+@keyframes of-fade-up {
+    from { opacity: 0; transform: translateY(14px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+.of-fade-up {
+    animation: of-fade-up 0.55s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+@keyframes of-float {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(-10px); }
+}
+.of-float { animation: of-float 6s ease-in-out infinite; }
+
 ::selection {
     background: #0052FF;
     color: #fff;

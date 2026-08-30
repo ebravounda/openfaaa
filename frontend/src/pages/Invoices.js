@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import { toast } from "sonner";
 import api, { API, eur, formatApiErrorDetail } from "@/lib/api";
 import Layout from "@/components/Layout";
@@ -19,7 +19,7 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import {
-  Plus, Trash2, FileText, Mail, Download, CheckCircle2, Loader2, Pencil, Undo2, ShieldCheck, ShieldAlert, Search, Ban, Sparkles, HelpCircle, CreditCard,
+  Plus, Trash2, FileText, Mail, Download, CheckCircle2, Loader2, Pencil, Undo2, ShieldCheck, ShieldAlert, Search, Ban, Sparkles, HelpCircle, CreditCard, Wallet, Clock3, Receipt,
 } from "lucide-react";
 import RectificativaGuide, { RECTIFY_GUIDE_KEY } from "@/components/RectificativaGuide";
 import {
@@ -93,6 +93,32 @@ export default function Invoices() {
   const [payingId, setPayingId] = useState(null);
   const [guideOpen, setGuideOpen] = useState(false);
   const [pendingRectify, setPendingRectify] = useState(null);
+  const [query, setQuery] = useState("");
+  const [statusFilter, setStatusFilter] = useState("all");
+
+  const summary = useMemo(() => {
+    let facturado = 0, cobrado = 0, pendiente = 0;
+    invoices.forEach((inv) => {
+      if (inv.status === "anulada") return;
+      const t = Number(inv.total) || 0;
+      facturado += t;
+      if (inv.status === "paid" || inv.payment?.status === "paid") cobrado += t;
+      else pendiente += t;
+    });
+    return { facturado, cobrado, pendiente };
+  }, [invoices]);
+
+  const filtered = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    return invoices.filter((inv) => {
+      const isPaid = inv.status === "paid" || inv.payment?.status === "paid";
+      if (statusFilter === "paid" && !isPaid) return false;
+      if (statusFilter === "pending" && (isPaid || inv.status === "anulada")) return false;
+      if (statusFilter === "anulada" && inv.status !== "anulada") return false;
+      if (!q) return true;
+      return (inv.number || "").toLowerCase().includes(q) || (inv.client?.name || "").toLowerCase().includes(q);
+    });
+  }, [invoices, query, statusFilter]);
 
   const lookupNif = async () => {
     const nif = form.client.nif.trim();
@@ -394,13 +420,29 @@ export default function Invoices() {
           <p className="text-sm text-slate-500 mt-0.5">Emite y gestiona tus facturas de venta</p>
         </div>
         <div className="flex items-center gap-2">
-          <Button variant="outline" onClick={() => { setPendingRectify(null); setGuideOpen(true); }} className="border-slate-200 text-slate-600" title="Cómo generar una factura rectificativa" data-testid="rectify-help-button">
+          <Button variant="outline" onClick={() => { setPendingRectify(null); setGuideOpen(true); }} className="border-slate-200 text-slate-600 rounded-xl hover:bg-slate-50 transition-all" title="Cómo generar una factura rectificativa" data-testid="rectify-help-button">
             <HelpCircle className="w-4 h-4 mr-2" strokeWidth={1.5} /> Guía rectificativa
           </Button>
-          <Button onClick={openNew} className="bg-[#0052FF] hover:bg-[#0040CC] text-white" data-testid="new-invoice-button">
+          <Button onClick={openNew} className="bg-[#0052FF] hover:bg-[#0040CC] text-white rounded-xl shadow-[0_4px_14px_0_rgba(0,82,255,0.39)] transition-all hover:-translate-y-0.5 active:scale-95" data-testid="new-invoice-button">
             <Plus className="w-4 h-4 mr-2" strokeWidth={1.5} /> Nueva factura
           </Button>
         </div>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-5 mb-7">
+        {[
+          { key: "facturado", label: "Total facturado", value: summary.facturado, Icon: Receipt, chip: "bg-blue-50 text-[#0052FF]" },
+          { key: "cobrado", label: "Cobrado", value: summary.cobrado, Icon: Wallet, chip: "bg-emerald-50 text-emerald-600" },
+          { key: "pendiente", label: "Pendiente de cobro", value: summary.pendiente, Icon: Clock3, chip: "bg-amber-50 text-amber-600" },
+        ].map((c, i) => (
+          <div key={c.key} className="bg-white border border-slate-200/60 rounded-[20px] shadow-[0_8px_30px_rgb(0,0,0,0.04)] p-6 of-fade-up hover:shadow-[0_20px_40px_rgb(0,0,0,0.08)] transition-shadow" style={{ animationDelay: `${i * 80}ms` }} data-testid={`summary-${c.key}`}>
+            <div className="flex items-center justify-between">
+              <span className="text-sm text-slate-500">{c.label}</span>
+              <span className={`w-10 h-10 rounded-full flex items-center justify-center ${c.chip}`}><c.Icon className="w-5 h-5" strokeWidth={1.75} /></span>
+            </div>
+            <div className="mt-3 font-display text-3xl font-bold text-slate-900 tabular">{eur(c.value)}</div>
+          </div>
+        ))}
       </div>
 
       <RectificativaGuide
@@ -409,18 +451,36 @@ export default function Invoices() {
         onContinue={() => { if (pendingRectify) { doRectify(pendingRectify); setPendingRectify(null); } }}
       />
 
-      <div className="bg-white border border-slate-200 rounded-lg shadow-sm overflow-hidden">
+      <div className="bg-white border border-slate-200/60 rounded-[20px] shadow-[0_8px_30px_rgb(0,0,0,0.04)] overflow-hidden of-fade-up" style={{ animationDelay: "240ms" }}>
+        <div className="flex items-center gap-3 p-4 border-b border-slate-100 flex-wrap">
+          <div className="relative flex-1 min-w-[220px]">
+            <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" strokeWidth={1.5} />
+            <Input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Buscar por nº o cliente…" className="pl-9 h-11 rounded-xl bg-slate-50 border-transparent focus:bg-white transition-all" data-testid="invoice-search" />
+          </div>
+          <Select value={statusFilter} onValueChange={setStatusFilter}>
+            <SelectTrigger className="h-11 w-[190px] rounded-xl bg-slate-50 border-transparent" data-testid="invoice-status-filter"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Todos los estados</SelectItem>
+              <SelectItem value="paid">Cobradas</SelectItem>
+              <SelectItem value="pending">Pendientes</SelectItem>
+              <SelectItem value="anulada">Anuladas</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
         {loading ? (
-          <div className="p-5 space-y-3">{[0, 1, 2, 3].map((i) => <Skeleton key={i} className="h-12 rounded-md" />)}</div>
-        ) : invoices.length === 0 ? (
-          <div className="border-2 border-dashed border-slate-200 m-5 rounded-lg py-14 text-center" data-testid="invoices-empty">
-            <FileText className="w-12 h-12 mx-auto text-slate-300" strokeWidth={1.25} />
-            <p className="text-slate-500 mt-3">Aún no has creado ninguna factura.</p>
+          <div className="p-5 space-y-3">{[0, 1, 2, 3].map((i) => <Skeleton key={i} className="h-12 rounded-xl" />)}</div>
+        ) : filtered.length === 0 ? (
+          <div className="border-2 border-dashed border-slate-200 m-5 rounded-2xl py-14 text-center" data-testid="invoices-empty">
+            <div className="w-14 h-14 mx-auto rounded-2xl bg-slate-50 flex items-center justify-center"><FileText className="w-7 h-7 text-slate-300" strokeWidth={1.25} /></div>
+            <p className="text-slate-500 mt-3">{invoices.length === 0 ? "Aún no has creado ninguna factura." : "No hay facturas que coincidan con la búsqueda."}</p>
+            {invoices.length === 0 && (
+              <Button onClick={openNew} className="mt-4 bg-[#0052FF] hover:bg-[#0040CC] text-white rounded-xl" data-testid="empty-new-invoice"><Plus className="w-4 h-4 mr-2" strokeWidth={1.5} /> Crear primera factura</Button>
+            )}
           </div>
         ) : (
           <Table>
             <TableHeader>
-              <TableRow className="hover:bg-transparent">
+              <TableRow className="hover:bg-transparent border-b border-slate-100 [&>th]:text-[11px] [&>th]:uppercase [&>th]:tracking-wider [&>th]:text-slate-500 [&>th]:font-semibold [&>th]:bg-slate-50/50 [&>th]:h-11">
                 <TableHead>Nº</TableHead>
                 <TableHead>Fecha</TableHead>
                 <TableHead>Cliente</TableHead>
@@ -432,8 +492,8 @@ export default function Invoices() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {invoices.map((inv) => (
-                <TableRow key={inv.id} data-testid={`invoice-row-${inv.number}`}>
+              {filtered.map((inv) => (
+                <TableRow key={inv.id} data-testid={`invoice-row-${inv.number}`} className="hover:bg-slate-50/60 transition-colors border-b border-slate-100 last:border-0">
                   <TableCell className="font-mono text-sm font-medium text-slate-900">
                     <div className="flex items-center gap-2">
                       {inv.number}
