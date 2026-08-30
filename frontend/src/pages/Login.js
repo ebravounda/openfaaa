@@ -47,7 +47,7 @@ export default function Login() {
       <Seo path="/login" title="Iniciar sesión" description="Accede a tu panel de OpenFactura para gestionar facturas, IVA, IRPF y VeriFactu." />
 
       {/* Form side */}
-      <div className="flex items-center justify-center p-6 sm:p-10 order-2 lg:order-1">
+      <div className="flex items-center justify-center p-6 sm:p-10 order-2 lg:order-2">
         <form onSubmit={submit} className="w-full max-w-md space-y-7 of-fade-up" data-testid="login-form">
           <div className="flex items-center gap-2.5">
             <div className="w-9 h-9 rounded-xl bg-[#0052FF] flex items-center justify-center text-white font-display font-bold shadow-[0_4px_14px_0_rgba(0,82,255,0.39)]">O</div>
@@ -95,12 +95,12 @@ export default function Login() {
       </div>
 
       {/* Visual side */}
-      <div className="hidden lg:block relative order-1 lg:order-2 overflow-hidden">
+      <div className="hidden lg:block relative order-1 lg:order-1 overflow-hidden">
         <img src={SIDE_IMG} alt="" className="absolute inset-0 w-full h-full object-cover" />
         <div className="absolute inset-0 bg-gradient-to-br from-[#0A1B3D]/85 via-[#0A1B3D]/70 to-[#0052FF]/50" />
 
         <div className="absolute inset-0 flex flex-col justify-between p-12 xl:p-16 text-white">
-          <img src="/openfactura-logo-white.png" alt="OpenFactura by GoRoky" className="h-8 w-auto" />
+          <img src="/openfactura-logo-white.png" alt="OpenFactura by GoRoky" className="h-8 w-auto max-w-[220px] object-contain self-start" />
 
           <div className="of-fade-up" style={{ animationDelay: "120ms" }}>
             <div className="inline-flex items-center gap-2 rounded-full bg-white/10 backdrop-blur-xl border border-white/20 px-4 py-2 text-sm mb-7">
