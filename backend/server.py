@@ -132,6 +132,15 @@ class AssistantInput(BaseModel):
     session_id: str = ""
 
 
+class ContactSalesInput(BaseModel):
+    name: str = ""
+    email: str = ""
+    phone: str = ""
+    company: str = ""
+    companies_needed: str = ""
+    message: str = ""
+
+
 class ReviewInput(BaseModel):
     client: dict = {}
     line_items: list = []
@@ -177,6 +186,7 @@ def compute_invoice(inv: dict) -> dict:
     gd = float(inv.get("global_discount") or 0)
     breakdown = {}
     base_general = base_exenta = base_no_sujeta = suplidos = 0.0
+    base_intracom = 0.0
     subtotal_gross = discount_total = 0.0
     for it in inv["line_items"]:
         qty = it.get("quantity") or 0
@@ -193,8 +203,10 @@ def compute_invoice(inv: dict) -> dict:
         if itype == "no_sujeto":
             base_no_sujeta += lb
             continue
-        if itype == "exento":
+        if itype in ("exento", "intracomunitaria"):
             base_exenta += lb
+            if itype == "intracomunitaria":
+                base_intracom += lb
             continue
         rate = it.get("iva_rate")
         rate = float(fallback_rate if rate is None else rate)
@@ -226,6 +238,7 @@ def compute_invoice(inv: dict) -> dict:
     inv["global_discount"] = gd
     inv["base"] = base
     inv["base_exenta"] = round(base_exenta, 2)
+    inv["base_intracom"] = round(base_intracom, 2)
     inv["base_no_sujeta"] = round(base_no_sujeta, 2)
     inv["suplidos_total"] = round(suplidos, 2)
     inv["iva_amount"] = iva_amount
@@ -250,7 +263,7 @@ def _validate_invoice(data) -> None:
         errors.append(f"El NIF/CIF '{cl.nif}' no es válido (revisa la letra de control).")
     if not data.line_items:
         errors.append("Añade al menos un concepto a la factura.")
-    valid_types = {"general", "exento", "no_sujeto", "suplido"}
+    valid_types = {"general", "exento", "no_sujeto", "suplido", "intracomunitaria"}
     for i, it in enumerate(data.line_items, 1):
         if not (it.description or "").strip():
             errors.append(f"El concepto {i} necesita una descripción.")
@@ -325,14 +338,39 @@ async def _merge_global_goroky(company: dict) -> dict:
 async def my_plan(user=Depends(get_current_user)):
     plan = await plan_for_user(user)
     mp = _month_prefix()
-    inv_month = await db.invoices.count_documents({"user_id": user["id"], "issue_date": {"$regex": f"^{mp}"}})
-    contacts = await db.contacts.count_documents({"user_id": user["id"]})
+    inv_month = await db.invoices.count_documents({"user_id": user["id"], "company_id": await active_cid(user), "issue_date": {"$regex": f"^{mp}"}})
+    contacts = await db.contacts.count_documents({"user_id": user["id"], "company_id": await active_cid(user)})
     return {"plan": plan, "usage": {"invoices_month": inv_month, "contacts": contacts}}
 
 
 @api.get("/plans")
 async def list_public_plans(user=Depends(get_current_user)):
     return await plans_list()
+
+
+@api.post("/contact-sales")
+async def contact_sales(data: ContactSalesInput, user=Depends(get_current_user)):
+    from html import escape as _esc
+    name = _esc(data.name or user.get("name", ""))
+    email = _esc(data.email or user.get("email", ""))
+    body = (
+        f"<h2>Solicitud de plan a medida (más empresas)</h2>"
+        f"<p><b>Nombre:</b> {name}</p>"
+        f"<p><b>Email:</b> {email}</p>"
+        f"<p><b>Teléfono:</b> {_esc(data.phone)}</p>"
+        f"<p><b>Empresa / Asesoría:</b> {_esc(data.company)}</p>"
+        f"<p><b>Nº de empresas que necesita:</b> {_esc(data.companies_needed)}</p>"
+        f"<p><b>Mensaje:</b><br>{_esc(data.message)}</p>"
+        f"<hr><p style='font-size:12px;color:#888'>Enviado desde OpenFactura · usuario {_esc(user.get('email',''))}</p>"
+    )
+    try:
+        await send_email(to="soporte@goroky.com",
+                         subject=f"[OpenFactura] Solicitud de más empresas — {name or email}",
+                         html=body, reply_to=data.email or user.get("email"))
+    except Exception as e:
+        logger.error(f"contact-sales email failed: {e}")
+        raise HTTPException(status_code=400, detail="No se pudo enviar la solicitud. Escríbenos a soporte@goroky.com.")
+    return {"status": "sent"}
 
 
 @api.get("/global-templates/goroky")
@@ -345,23 +383,59 @@ async def public_global_goroky(user=Depends(get_current_user)):
     }
 
 
+# ---------- Multiempresa: empresas del usuario ----------
+async def _list_companies(user: dict) -> list:
+    comps = await db.companies.find({"user_id": user["id"]}).to_list(200)
+    for c in comps:
+        if not c.get("id"):
+            cid = str(uuid.uuid4())
+            await db.companies.update_one({"_id": c["_id"]}, {"$set": {"id": cid}})
+            c["id"] = cid
+            for name in ("invoices", "expenses", "contacts", "quotes", "certificates",
+                         "verifactu_log", "files", "payment_transactions"):
+                await db[name].update_many(
+                    {"user_id": user["id"], "company_id": {"$exists": False}},
+                    {"$set": {"company_id": cid}})
+    if not comps:
+        cid = str(uuid.uuid4())
+        doc = {"id": cid, "user_id": user["id"], "name": "",
+               "tax_type": user.get("tax_type", "autonomo"),
+               "created_at": datetime.now(timezone.utc).isoformat()}
+        await db.companies.insert_one(doc)
+        comps = [doc]
+    for c in comps:
+        c.pop("_id", None)
+    return comps
+
+
+async def active_company(user: dict) -> dict:
+    comps = await _list_companies(user)
+    aid = user.get("active_company_id")
+    return next((c for c in comps if c.get("id") == aid), comps[0])
+
+
+async def active_cid(user: dict) -> str:
+    return (await active_company(user))["id"]
+
+
 # ---------- Company ----------
 @api.get("/company")
 async def get_company(user=Depends(get_current_user)):
-    doc = await db.companies.find_one({"user_id": user["id"]}, {"_id": 0})
-    if not doc:
-        return {"template_id": user.get("activity") or "clasico"}
+    doc = await active_company(user)
+    doc.setdefault("template_id", user.get("activity") or "clasico")
     return doc
 
 
 @api.put("/company")
 async def upsert_company(data: CompanyInput, user=Depends(get_current_user)):
+    comp = await active_company(user)
+    cid = comp["id"]
     doc = data.model_dump()
     doc["user_id"] = user["id"]
-    existing = await db.companies.find_one({"user_id": user["id"]}, {"_id": 0, "logo": 1})
-    if not doc.get("logo") and existing and existing.get("logo"):
-        doc["logo"] = existing["logo"]  # no perder el logo si el form no lo reenvía
-    await db.companies.update_one({"user_id": user["id"]}, {"$set": doc}, upsert=True)
+    doc["id"] = cid
+    if not doc.get("logo") and comp.get("logo"):
+        doc["logo"] = comp["logo"]
+    await db.companies.update_one({"id": cid, "user_id": user["id"]}, {"$set": doc})
     return doc
 
 
@@ -387,20 +461,20 @@ async def upload_company_logo(file: UploadFile = File(...), user=Depends(get_cur
     except Exception:
         raise HTTPException(status_code=400, detail="No se pudo procesar la imagen. Usa PNG o JPG.")
     data_url = "data:image/png;base64," + base64.b64encode(png).decode()
-    await db.companies.update_one({"user_id": user["id"]}, {"$set": {"logo": data_url}}, upsert=True)
+    await db.companies.update_one({"id": await active_cid(user), "user_id": user["id"]}, {"$set": {"logo": data_url}})
     return {"logo": data_url}
 
 
 @api.delete("/company/logo")
 async def delete_company_logo(user=Depends(get_current_user)):
-    await db.companies.update_one({"user_id": user["id"]}, {"$set": {"logo": ""}})
+    await db.companies.update_one({"id": await active_cid(user), "user_id": user["id"]}, {"$set": {"logo": ""}})
     return {"status": "ok"}
 
 
 @api.post("/company/preview-pdf")
 async def preview_company_pdf(overrides: dict = Body(default={}), user=Depends(get_current_user)):
     """Genera una miniatura PNG del PDF real con los ajustes de aspecto indicados (sin guardar)."""
-    company = await db.companies.find_one({"user_id": user["id"]}, {"_id": 0}) or {}
+    company = await active_company(user)
     for k in ("template_id", "accent_color", "logo", "name", "legal_name", "nif", "address",
               "email", "phone", "invoice_footer", "legal_notice", "footer_message"):
         if overrides.get(k) is not None:
@@ -437,18 +511,98 @@ async def list_templates(user=Depends(get_current_user)):
     return TEMPLATES
 
 
+# ---------- Multiempresa: gestión de empresas ----------
+class CompanySwitchInput(BaseModel):
+    company_id: str
+
+
+class MultiToggleInput(BaseModel):
+    enabled: bool
+
+
+@api.get("/companies")
+async def list_companies_ep(user=Depends(get_current_user)):
+    return await _list_companies(user)
+
+
+@api.post("/companies")
+async def create_company_ep(data: CompanyInput, user=Depends(get_current_user)):
+    plan = await plan_for_user(user)
+    if not plan["features"].get("multi_company") and user.get("role") != "admin":
+        raise HTTPException(status_code=403, detail="Tu plan no permite gestionar varias empresas. Cambia al plan Multiempresas.")
+    comps = await _list_companies(user)
+    maxc = plan.get("max_companies")
+    if maxc is not None and len(comps) >= maxc:
+        raise HTTPException(status_code=403, detail=f"Has alcanzado el máximo de {maxc} empresas de tu plan. Contáctanos para ampliar.")
+    cid = str(uuid.uuid4())
+    doc = data.model_dump()
+    doc.update({"id": cid, "user_id": user["id"], "created_at": datetime.now(timezone.utc).isoformat()})
+    await db.companies.insert_one(doc)
+    doc.pop("_id", None)
+    await db.users.update_one({"_id": ObjectId(user["id"])},
+                              {"$set": {"active_company_id": cid, "multi_company_enabled": True}})
+    return doc
+
+
+@api.put("/companies/{company_id}")
+async def update_company_ep(company_id: str, data: CompanyInput, user=Depends(get_current_user)):
+    existing = await db.companies.find_one({"id": company_id, "user_id": user["id"]}, {"_id": 0, "logo": 1})
+    if not existing:
+        raise HTTPException(status_code=404, detail="Empresa no encontrada")
+    doc = data.model_dump()
+    doc["user_id"] = user["id"]
+    doc["id"] = company_id
+    if not doc.get("logo") and existing.get("logo"):
+        doc["logo"] = existing["logo"]
+    await db.companies.update_one({"id": company_id, "user_id": user["id"]}, {"$set": doc})
+    return doc
+
+
+@api.delete("/companies/{company_id}")
+async def delete_company_ep(company_id: str, user=Depends(get_current_user)):
+    comps = await _list_companies(user)
+    if len(comps) <= 1:
+        raise HTTPException(status_code=400, detail="No puedes eliminar tu única empresa.")
+    n_inv = await db.invoices.count_documents({"user_id": user["id"], "company_id": company_id})
+    if n_inv:
+        raise HTTPException(status_code=400, detail="No puedes eliminar una empresa con facturas emitidas.")
+    await db.companies.delete_one({"id": company_id, "user_id": user["id"]})
+    if user.get("active_company_id") == company_id:
+        remaining = next(c["id"] for c in comps if c["id"] != company_id)
+        await db.users.update_one({"_id": ObjectId(user["id"])}, {"$set": {"active_company_id": remaining}})
+    return {"status": "ok"}
+
+
+@api.post("/companies/switch")
+async def switch_company_ep(data: CompanySwitchInput, user=Depends(get_current_user)):
+    c = await db.companies.find_one({"id": data.company_id, "user_id": user["id"]})
+    if not c:
+        raise HTTPException(status_code=404, detail="Empresa no encontrada")
+    await db.users.update_one({"_id": ObjectId(user["id"])}, {"$set": {"active_company_id": data.company_id}})
+    return {"status": "ok", "active_company_id": data.company_id}
+
+
+@api.post("/companies/multi-toggle")
+async def multi_toggle_ep(data: MultiToggleInput, user=Depends(get_current_user)):
+    plan = await plan_for_user(user)
+    if data.enabled and not plan["features"].get("multi_company") and user.get("role") != "admin":
+        raise HTTPException(status_code=403, detail="Tu plan no incluye multiempresa. Cambia al plan Multiempresas.")
+    await db.users.update_one({"_id": ObjectId(user["id"])}, {"$set": {"multi_company_enabled": bool(data.enabled)}})
+    return {"status": "ok", "enabled": bool(data.enabled)}
+
+
 # ---------- Invoices ----------
 @api.get("/invoices")
 async def list_invoices(user=Depends(get_current_user)):
-    docs = await db.invoices.find({"user_id": user["id"]}, {"_id": 0}).sort("issue_date", -1).to_list(1000)
+    docs = await db.invoices.find({"user_id": user["id"], "company_id": await active_cid(user)}, {"_id": 0}).sort("issue_date", -1).to_list(1000)
     return docs
 
 
-async def _next_seq(user_id: str, prefix: str, year: str, start_number) -> int:
+async def _next_seq(user_id: str, company_id: str, prefix: str, year: str, start_number) -> int:
     """Siguiente número de secuencia: max(mayor existente + 1, número de inicio configurado)."""
     pat = f"^{re.escape(prefix)}{year}-"
     max_seq = 0
-    async for n in db.invoices.find({"user_id": user_id, "number": {"$regex": pat}}, {"_id": 0, "number": 1}):
+    async for n in db.invoices.find({"user_id": user_id, "company_id": company_id, "number": {"$regex": pat}}, {"_id": 0, "number": 1}):
         try:
             max_seq = max(max_seq, int(n["number"].rsplit("-", 1)[-1]))
         except Exception:
@@ -467,20 +621,21 @@ async def _make_invoice(user, company, data: InvoiceInput) -> dict:
     else:
         series = (data.series or company.get("invoice_prefix", "") or "").strip()
     prefix = f"{series}-" if series else ""
-    seq = await _next_seq(user["id"], prefix, year, company.get("invoice_start_number", 1))
+    seq = await _next_seq(user["id"], company["id"], prefix, year, company.get("invoice_start_number", 1))
     number = f"{prefix}{year}-{seq:04d}"
     doc = data.model_dump()
     doc["series"] = series
     doc.update({
         "id": str(uuid.uuid4()),
         "user_id": user["id"],
+        "company_id": company["id"],
         "number": number,
         "created_at": datetime.now(timezone.utc).isoformat(),
     })
     compute_invoice(doc)
     if company.get("verifactu_enabled"):
         last = await db.invoices.find_one(
-            {"user_id": user["id"], "verifactu.huella": {"$exists": True}},
+            {"user_id": user["id"], "company_id": company["id"], "verifactu.huella": {"$exists": True}},
             {"_id": 0, "verifactu": 1}, sort=[("created_at", -1)])
         prev = last["verifactu"]["huella"] if last else ""
         nif = company.get("nif", "")
@@ -505,25 +660,25 @@ async def create_invoice(data: InvoiceInput, user=Depends(get_current_user)):
     plan = await plan_for_user(user)
     if plan["max_invoices"] is not None:
         cnt = await db.invoices.count_documents(
-            {"user_id": user["id"], "issue_date": {"$regex": f"^{_month_prefix()}"}})
+            {"user_id": user["id"], "company_id": await active_cid(user), "issue_date": {"$regex": f"^{_month_prefix()}"}})
         if cnt >= plan["max_invoices"]:
             raise HTTPException(status_code=403,
                 detail=f"Has alcanzado el límite de {plan['max_invoices']} facturas al mes de tu plan {plan['name']}. Mejora tu plan para emitir más.")
-    company = await db.companies.find_one({"user_id": user["id"]}, {"_id": 0}) or {}
+    company = await active_company(user)
     return await _make_invoice(user, company, data)
 
 
 @api.get("/invoices/next-number")
 async def next_invoice_number(invoice_type: str = "normal", series: str = "",
                               issue_date: str = "", user=Depends(get_current_user)):
-    company = await db.companies.find_one({"user_id": user["id"]}, {"_id": 0}) or {}
+    company = await active_company(user)
     year = (issue_date[:4] if issue_date else str(datetime.now(timezone.utc).year))
     if invoice_type == "rectificativa":
         s = (series or company.get("rectify_prefix", "") or "R").strip()
     else:
         s = (series or company.get("invoice_prefix", "") or "").strip()
     prefix = f"{s}-" if s else ""
-    seq = await _next_seq(user["id"], prefix, year, company.get("invoice_start_number", 1))
+    seq = await _next_seq(user["id"], company["id"], prefix, year, company.get("invoice_start_number", 1))
     return {"number": f"{prefix}{year}-{seq:04d}", "series": s,
             "due_days": company.get("invoice_due_days", 15)}
 
@@ -573,7 +728,7 @@ async def anular_invoice(invoice_id: str, user=Depends(get_current_user)):
         raise HTTPException(status_code=404, detail="Factura no encontrada")
     if inv.get("status") == "anulada":
         raise HTTPException(status_code=400, detail="La factura ya está anulada.")
-    company = await db.companies.find_one({"user_id": user["id"]}, {"_id": 0}) or {}
+    company = await active_company(user)
     now_iso = datetime.now(timezone.utc).isoformat()
     verifactu_result = None
 
@@ -583,7 +738,7 @@ async def anular_invoice(invoice_id: str, user=Depends(get_current_user)):
         fecha = vf.to_ddmmyyyy(inv["issue_date"])
         ts = vf.now_ts()
         last = await db.invoices.find_one(
-            {"user_id": user["id"], "verifactu.huella": {"$exists": True}},
+            {"user_id": user["id"], "company_id": company["id"], "verifactu.huella": {"$exists": True}},
             {"_id": 0, "verifactu": 1, "number": 1, "issue_date": 1}, sort=[("created_at", -1)])
         prev = (last or {}).get("verifactu", {}).get("huella", "") if last else ""
         prev_number = (last or {}).get("number", "") if last else ""
@@ -592,7 +747,7 @@ async def anular_invoice(invoice_id: str, user=Depends(get_current_user)):
         registro_xml = vf.build_registro_anulacion_xml(company, inv, prev_number, prev, ts, huella, prev_fecha=prev_fecha)
 
         signature, signed, signer, cert_bytes, cert_pwd = None, False, None, None, None
-        cert_doc = await db.certificates.find_one({"user_id": user["id"]})
+        cert_doc = await db.certificates.find_one({"user_id": user["id"], "company_id": company["id"]})
         if cert_doc:
             try:
                 cert_bytes = cert_service.decrypt(cert_doc["data"].encode())
@@ -637,7 +792,7 @@ async def anular_invoice(invoice_id: str, user=Depends(get_current_user)):
             status_msg = "Anulación aceptada por la AEAT (simulado)"
 
         await db.verifactu_log.insert_one({
-            "id": str(uuid.uuid4()), "user_id": user["id"], "invoice_id": invoice_id,
+            "id": str(uuid.uuid4()), "user_id": user["id"], "company_id": company["id"], "invoice_id": invoice_id,
             "invoice_number": inv["number"], "created_at": now_iso, "endpoint": endpoint,
             "estado": "Correcto" if submitted else "Error", "estado_registro": estado_reg,
             "csv": csv_code, "signed": signed, "signer": signer, "huella": huella,
@@ -656,7 +811,7 @@ async def anular_invoice(invoice_id: str, user=Depends(get_current_user)):
 
 @api.get("/irpf/suggestion")
 async def irpf_suggestion(user=Depends(get_current_user)):
-    company = await db.companies.find_one({"user_id": user["id"]}, {"_id": 0}) or {}
+    company = await active_company(user)
     tax_type = company.get("tax_type") or user.get("tax_type", "autonomo")
     return spanish_tax.irpf_suggestion(tax_type, company.get("autonomo_start_date", ""))
 
@@ -700,7 +855,7 @@ async def invoice_pdf(invoice_id: str, user=Depends(get_current_user)):
     inv = await db.invoices.find_one({"id": invoice_id, "user_id": user["id"]}, {"_id": 0})
     if not inv:
         raise HTTPException(status_code=404, detail="Factura no encontrada")
-    company = await db.companies.find_one({"user_id": user["id"]}, {"_id": 0}) or {}
+    company = await active_company(user)
     company = await _merge_global_goroky(company)
     vfd = inv.get("verifactu")
     # Auto-corrección: si el CSV es placeholder (VF-) o falta, recuperar el real del log de la AEAT
@@ -735,10 +890,10 @@ def _quote_prefix(company: dict) -> str:
     return ((company or {}).get("quote_prefix") or "PRE").strip()
 
 
-async def _next_quote_seq(user_id: str, prefix: str, year: str) -> int:
+async def _next_quote_seq(user_id: str, company_id: str, prefix: str, year: str) -> int:
     pat = f"^{re.escape(prefix)}{year}-"
     max_seq = 0
-    async for n in db.quotes.find({"user_id": user_id, "number": {"$regex": pat}}, {"_id": 0, "number": 1}):
+    async for n in db.quotes.find({"user_id": user_id, "company_id": company_id, "number": {"$regex": pat}}, {"_id": 0, "number": 1}):
         try:
             max_seq = max(max_seq, int(n["number"].rsplit("-", 1)[-1]))
         except Exception:
@@ -748,16 +903,16 @@ async def _next_quote_seq(user_id: str, prefix: str, year: str) -> int:
 
 @api.get("/quotes")
 async def list_quotes(user=Depends(get_current_user)):
-    return await db.quotes.find({"user_id": user["id"]}, {"_id": 0}).sort("issue_date", -1).to_list(1000)
+    return await db.quotes.find({"user_id": user["id"], "company_id": await active_cid(user)}, {"_id": 0}).sort("issue_date", -1).to_list(1000)
 
 
 @api.get("/quotes/next-number")
 async def next_quote_number(series: str = "", issue_date: str = "", user=Depends(get_current_user)):
-    company = await db.companies.find_one({"user_id": user["id"]}, {"_id": 0}) or {}
+    company = await active_company(user)
     year = (issue_date[:4] if issue_date else str(datetime.now(timezone.utc).year))
     s = (series or _quote_prefix(company)).strip()
     prefix = f"{s}-" if s else ""
-    seq = await _next_quote_seq(user["id"], prefix, year)
+    seq = await _next_quote_seq(user["id"], company["id"], prefix, year)
     return {"number": f"{prefix}{year}-{seq:04d}", "series": s}
 
 
@@ -768,7 +923,7 @@ def _build_quote_doc(user, company, data: QuoteInput, number: str, series: str) 
     if doc.get("status") not in QUOTE_STATUSES:
         doc["status"] = "borrador"
     doc.update({
-        "id": str(uuid.uuid4()), "user_id": user["id"], "number": number,
+        "id": str(uuid.uuid4()), "user_id": user["id"], "company_id": company["id"], "number": number,
         "created_at": datetime.now(timezone.utc).isoformat(),
     })
     compute_invoice(doc)
@@ -778,11 +933,11 @@ def _build_quote_doc(user, company, data: QuoteInput, number: str, series: str) 
 @api.post("/quotes")
 async def create_quote(data: QuoteInput, user=Depends(get_current_user)):
     _validate_invoice(data)
-    company = await db.companies.find_one({"user_id": user["id"]}, {"_id": 0}) or {}
+    company = await active_company(user)
     year = data.issue_date[:4]
     s = (data.series or _quote_prefix(company)).strip()
     prefix = f"{s}-" if s else ""
-    seq = await _next_quote_seq(user["id"], prefix, year)
+    seq = await _next_quote_seq(user["id"], company["id"], prefix, year)
     number = f"{prefix}{year}-{seq:04d}"
     doc = _build_quote_doc(user, company, data, number, s)
     await db.quotes.insert_one(doc)
@@ -806,7 +961,7 @@ async def update_quote(quote_id: str, data: QuoteInput, user=Depends(get_current
         raise HTTPException(status_code=404, detail="Presupuesto no encontrado")
     if existing.get("status") == "facturado":
         raise HTTPException(status_code=400, detail="No se puede editar un presupuesto ya facturado.")
-    company = await db.companies.find_one({"user_id": user["id"]}, {"_id": 0}) or {}
+    company = await active_company(user)
     doc = _build_quote_doc(user, company, data, existing["number"], existing.get("series", ""))
     doc["id"] = quote_id
     doc["created_at"] = existing.get("created_at")
@@ -840,7 +995,7 @@ async def quote_pdf(quote_id: str, user=Depends(get_current_user)):
     q = await db.quotes.find_one({"id": quote_id, "user_id": user["id"]}, {"_id": 0})
     if not q:
         raise HTTPException(status_code=404, detail="Presupuesto no encontrado")
-    company = await db.companies.find_one({"user_id": user["id"]}, {"_id": 0}) or {}
+    company = await active_company(user)
     q["doc_type"] = "presupuesto"
     pdf = build_invoice_pdf(q, company)
     return Response(content=pdf, media_type="application/pdf",
@@ -858,7 +1013,7 @@ async def send_quote_email(quote_id: str, user=Depends(get_current_user)):
     to = q.get("client", {}).get("email")
     if not to:
         raise HTTPException(status_code=400, detail="El cliente no tiene email registrado")
-    company = await db.companies.find_one({"user_id": user["id"]}, {"_id": 0}) or {}
+    company = await active_company(user)
     q["doc_type"] = "presupuesto"
     html = build_invoice_email_html(q, company, doc_label="PRESUPUESTO")
     subject = f"Presupuesto {q['number']} - {company.get('name', 'OpenFactura')}"
@@ -882,11 +1037,11 @@ async def convert_quote(quote_id: str, user=Depends(get_current_user)):
     plan = await plan_for_user(user)
     if plan["max_invoices"] is not None:
         cnt = await db.invoices.count_documents(
-            {"user_id": user["id"], "issue_date": {"$regex": f"^{_month_prefix()}"}})
+            {"user_id": user["id"], "company_id": await active_cid(user), "issue_date": {"$regex": f"^{_month_prefix()}"}})
         if cnt >= plan["max_invoices"]:
             raise HTTPException(status_code=403,
                 detail=f"Has alcanzado el límite de {plan['max_invoices']} facturas al mes de tu plan {plan['name']}. Mejora tu plan para emitir más.")
-    company = await db.companies.find_one({"user_id": user["id"]}, {"_id": 0}) or {}
+    company = await active_company(user)
     inv_in = InvoiceInput(
         issue_date=datetime.now(timezone.utc).date().isoformat(),
         client=Client(**(q.get("client") or {})),
@@ -922,7 +1077,7 @@ async def verifactu_submit(invoice_id: str, user=Depends(get_current_user)):
     if vfd.get("submitted"):
         return {"status": vfd.get("status"), "csv": vfd.get("csv"),
                 "signed": vfd.get("signed", False), "already": True, "simulated": True}
-    company = await db.companies.find_one({"user_id": user["id"]}, {"_id": 0}) or {}
+    company = await active_company(user)
     nif = company.get("nif", "")
 
     # Encadenamiento: número y fecha de la factura anterior
@@ -930,7 +1085,7 @@ async def verifactu_submit(invoice_id: str, user=Depends(get_current_user)):
     prev_fecha = ""
     if vfd.get("huella_anterior"):
         prev = await db.invoices.find_one(
-            {"user_id": user["id"], "verifactu.huella": vfd["huella_anterior"]},
+            {"user_id": user["id"], "company_id": company["id"], "verifactu.huella": vfd["huella_anterior"]},
             {"_id": 0, "number": 1, "issue_date": 1})
         if prev:
             prev_number = prev.get("number", "")
@@ -957,7 +1112,7 @@ async def verifactu_submit(invoice_id: str, user=Depends(get_current_user)):
     # Firma con el certificado del usuario (si existe)
     signature, signed, signer = None, False, None
     cert_bytes, cert_pwd = None, None
-    cert_doc = await db.certificates.find_one({"user_id": user["id"]})
+    cert_doc = await db.certificates.find_one({"user_id": user["id"], "company_id": company["id"]})
     if cert_doc:
         try:
             cert_bytes = cert_service.decrypt(cert_doc["data"].encode())
@@ -1011,7 +1166,7 @@ async def verifactu_submit(invoice_id: str, user=Depends(get_current_user)):
                   "verifactu.signed": signed, "verifactu.mode": mode}})
 
     entry = {
-        "id": str(uuid.uuid4()), "user_id": user["id"], "invoice_id": invoice_id,
+        "id": str(uuid.uuid4()), "user_id": user["id"], "company_id": company["id"], "invoice_id": invoice_id,
         "invoice_number": inv["number"], "created_at": resp_ts, "endpoint": endpoint,
         "estado": estado, "estado_registro": estado_reg, "csv": csv_code,
         "signed": signed, "signer": signer, "huella": vfd["huella"],
@@ -1039,30 +1194,31 @@ async def upload_certificate(file: UploadFile = File(...), password: str = Form(
     meta = cert_service.cert_metadata(cert)
     doc = {
         "user_id": user["id"],
+        "company_id": await active_cid(user),
         "data": cert_service.encrypt(data).decode(),
         "password": cert_service.encrypt(password.encode()).decode(),
         "meta": meta, "filename": file.filename,
         "uploaded_at": datetime.now(timezone.utc).isoformat(),
     }
-    await db.certificates.update_one({"user_id": user["id"]}, {"$set": doc}, upsert=True)
+    await db.certificates.update_one({"user_id": user["id"], "company_id": await active_cid(user)}, {"$set": doc}, upsert=True)
     return {"meta": meta, "filename": file.filename, "uploaded_at": doc["uploaded_at"]}
 
 
 @api.get("/verifactu/certificate")
 async def get_certificate(user=Depends(get_current_user)):
-    doc = await db.certificates.find_one({"user_id": user["id"]}, {"_id": 0, "data": 0, "password": 0})
+    doc = await db.certificates.find_one({"user_id": user["id"], "company_id": await active_cid(user)}, {"_id": 0, "data": 0, "password": 0})
     return doc or {}
 
 
 @api.delete("/verifactu/certificate")
 async def delete_certificate(user=Depends(get_current_user)):
-    await db.certificates.delete_one({"user_id": user["id"]})
+    await db.certificates.delete_one({"user_id": user["id"], "company_id": await active_cid(user)})
     return {"status": "ok"}
 
 
 @api.get("/verifactu/connection-log")
 async def connection_log(user=Depends(get_current_user)):
-    logs = await db.verifactu_log.find({"user_id": user["id"]}, {"_id": 0}).sort("created_at", -1).to_list(500)
+    logs = await db.verifactu_log.find({"user_id": user["id"], "company_id": await active_cid(user)}, {"_id": 0}).sort("created_at", -1).to_list(500)
     for e in logs:
         if not e.get("csv") or str(e.get("csv", "")).startswith("VF-"):
             real = vf.parse_aeat_response(e.get("response_xml", "")).get("csv")
@@ -1076,7 +1232,7 @@ async def connection_log(user=Depends(get_current_user)):
 async def refresh_verifactu_csv(user=Depends(get_current_user)):
     """Corrige el CSV de facturas ya enviadas releyendo el CSV real de la respuesta guardada de la AEAT."""
     updated = 0
-    logs = await db.verifactu_log.find({"user_id": user["id"]}, {"_id": 0}).sort("created_at", 1).to_list(3000)
+    logs = await db.verifactu_log.find({"user_id": user["id"], "company_id": await active_cid(user)}, {"_id": 0}).sort("created_at", 1).to_list(3000)
     for entry in logs:
         real_csv = vf.parse_aeat_response(entry.get("response_xml", "")).get("csv")
         if not real_csv:
@@ -1100,7 +1256,7 @@ async def verifactu_xml(invoice_id: str, user=Depends(get_current_user)):
     if entry and entry.get("request_xml"):
         xml = entry["request_xml"]
     else:
-        company = await db.companies.find_one({"user_id": user["id"]}, {"_id": 0}) or {}
+        company = await active_company(user)
         vfd = inv["verifactu"]
         registro = vf.build_registro_alta_xml(company, inv, "", vfd.get("huella_anterior", ""),
                                               vfd["timestamp"], vfd["huella"])
@@ -1121,7 +1277,7 @@ async def lookup_nif(nif: str, user=Depends(get_current_user)):
         raise HTTPException(status_code=400, detail="Introduce un NIF/CIF")
 
     # 1) Contactos guardados del usuario (gratis, datos completos)
-    contacts = await db.contacts.find({"user_id": user["id"]}, {"_id": 0}).to_list(2000)
+    contacts = await db.contacts.find({"user_id": user["id"], "company_id": await active_cid(user)}, {"_id": 0}).to_list(2000)
     for c in contacts:
         if _norm(c.get("nif", "")) == num:
             return {"valid": True, "name": c.get("name", ""), "address": c.get("address", ""),
@@ -1170,7 +1326,7 @@ async def send_invoice_email(invoice_id: str, user=Depends(get_current_user)):
     to = inv.get("client", {}).get("email")
     if not to:
         raise HTTPException(status_code=400, detail="El cliente no tiene email registrado")
-    company = await db.companies.find_one({"user_id": user["id"]}, {"_id": 0}) or {}
+    company = await active_company(user)
     html = build_invoice_email_html(inv, company)
     subject = f"Factura {inv['number']} - {company.get('name', 'FiscalHub España')}"
     email_id = await send_email(to=to, subject=subject, html=html, reply_to=company.get("email"))
@@ -1216,16 +1372,16 @@ async def stripe_connect(data: StripeConnectReq, user=Depends(get_current_user))
         or acct.get("email") or acct.get("id")
     charges = bool(acct.get("charges_enabled"))
     mode = "live" if key.startswith("sk_live") else "test"
-    await db.companies.update_one({"user_id": user["id"]}, {"$set": {
+    await db.companies.update_one({"id": await active_cid(user), "user_id": user["id"]}, {"$set": {
         "stripe_secret_key": cert_service.encrypt(key.encode()).decode(),
         "stripe_account_name": name, "stripe_charges_enabled": charges,
-        "stripe_mode": mode, "stripe_connected": True}}, upsert=True)
+        "stripe_mode": mode, "stripe_connected": True}})
     return {"connected": True, "account_name": name, "charges_enabled": charges, "mode": mode}
 
 
 @api.get("/stripe/status")
 async def stripe_status(user=Depends(get_current_user)):
-    c = await db.companies.find_one({"user_id": user["id"]}, {"_id": 0}) or {}
+    c = await active_company(user)
     return {"connected": bool(c.get("stripe_connected") and c.get("stripe_secret_key")),
             "account_name": c.get("stripe_account_name", ""),
             "charges_enabled": c.get("stripe_charges_enabled", False),
@@ -1234,7 +1390,7 @@ async def stripe_status(user=Depends(get_current_user)):
 
 @api.delete("/stripe/connect")
 async def stripe_disconnect(user=Depends(get_current_user)):
-    await db.companies.update_one({"user_id": user["id"]}, {"$set": {
+    await db.companies.update_one({"id": await active_cid(user), "user_id": user["id"]}, {"$set": {
         "stripe_connected": False, "stripe_secret_key": "", "stripe_account_name": "",
         "stripe_charges_enabled": False}})
     return {"status": "ok"}
@@ -1249,7 +1405,7 @@ async def send_invoice_payment(invoice_id: str, data: SendPaymentReq, user=Depen
     to = inv.get("client", {}).get("email")
     if not to:
         raise HTTPException(status_code=400, detail="El cliente no tiene email registrado")
-    company = await db.companies.find_one({"user_id": user["id"]}, {"_id": 0}) or {}
+    company = await active_company(user)
     key = _company_stripe_key(company)
     if not key:
         raise HTTPException(status_code=400, detail="Conecta tu cuenta de Stripe en Configuración → Cobros con Stripe")
@@ -1274,7 +1430,7 @@ async def send_invoice_payment(invoice_id: str, data: SendPaymentReq, user=Depen
     now = datetime.now(timezone.utc).isoformat()
     await db.payment_transactions.insert_one({
         "id": str(uuid.uuid4()), "session_id": session.id, "invoice_id": invoice_id,
-        "invoice_number": inv["number"], "user_id": user["id"], "amount": total, "currency": "eur",
+        "invoice_number": inv["number"], "user_id": user["id"], "company_id": company["id"], "amount": total, "currency": "eur",
         "status": "initiated", "payment_status": "pending", "created_at": now})
     qr_png = None
     vfd = inv.get("verifactu")
@@ -1302,7 +1458,9 @@ async def public_payment_status(session_id: str):
         raise HTTPException(status_code=404, detail="Transacción no encontrada")
     status = tx.get("payment_status", "pending")
     if status != "paid":
-        comp = await db.companies.find_one({"user_id": tx.get("user_id")}, {"_id": 0}) or {}
+        comp = ((await db.companies.find_one({"user_id": tx.get("user_id"), "id": tx.get("company_id")}, {"_id": 0})
+                 if tx.get("company_id") else None)
+                or await db.companies.find_one({"user_id": tx.get("user_id")}, {"_id": 0}) or {})
         key = _company_stripe_key(comp)
         if key:
             try:
@@ -1326,7 +1484,7 @@ async def public_payment_status(session_id: str):
 # ---------- Expenses ----------
 @api.get("/expenses")
 async def list_expenses(user=Depends(get_current_user)):
-    docs = await db.expenses.find({"user_id": user["id"]}, {"_id": 0}).sort("date", -1).to_list(1000)
+    docs = await db.expenses.find({"user_id": user["id"], "company_id": await active_cid(user)}, {"_id": 0}).sort("date", -1).to_list(1000)
     return docs
 
 
@@ -1336,6 +1494,7 @@ async def create_expense(data: ExpenseInput, user=Depends(get_current_user)):
     doc.update({
         "id": str(uuid.uuid4()),
         "user_id": user["id"],
+        "company_id": await active_cid(user),
         "created_at": datetime.now(timezone.utc).isoformat(),
     })
     compute_expense(doc)
@@ -1373,10 +1532,10 @@ async def delete_expense(expense_id: str, user=Depends(get_current_user)):
 async def export_libros(year: int, format: str = "xlsx", user=Depends(get_current_user)):
     ys = str(year)
     invoices = await db.invoices.find(
-        {"user_id": user["id"], "issue_date": {"$regex": f"^{ys}"}}, {"_id": 0}).sort("issue_date", 1).to_list(10000)
+        {"user_id": user["id"], "company_id": await active_cid(user), "issue_date": {"$regex": f"^{ys}"}}, {"_id": 0}).sort("issue_date", 1).to_list(10000)
     expenses = await db.expenses.find(
-        {"user_id": user["id"], "date": {"$regex": f"^{ys}"}}, {"_id": 0}).sort("date", 1).to_list(10000)
-    company = await db.companies.find_one({"user_id": user["id"]}, {"_id": 0}) or {}
+        {"user_id": user["id"], "company_id": await active_cid(user), "date": {"$regex": f"^{ys}"}}, {"_id": 0}).sort("date", 1).to_list(10000)
+    company = await active_company(user)
     if format == "csv":
         content = build_libros_csv(invoices, expenses, year)
         return Response(content=content, media_type="text/csv; charset=utf-8",
@@ -1395,9 +1554,9 @@ async def dashboard(year: Optional[int] = None, user=Depends(get_current_user)):
         year = datetime.now(timezone.utc).year
     ys = str(year)
     invoices = await db.invoices.find(
-        {"user_id": user["id"], "issue_date": {"$regex": f"^{ys}"}, "status": {"$ne": "anulada"}}, {"_id": 0}).to_list(5000)
+        {"user_id": user["id"], "company_id": await active_cid(user), "issue_date": {"$regex": f"^{ys}"}, "status": {"$ne": "anulada"}}, {"_id": 0}).to_list(5000)
     expenses = await db.expenses.find(
-        {"user_id": user["id"], "date": {"$regex": f"^{ys}"}}, {"_id": 0}).to_list(5000)
+        {"user_id": user["id"], "company_id": await active_cid(user), "date": {"$regex": f"^{ys}"}}, {"_id": 0}).to_list(5000)
 
     quarters = {q: {"quarter": q, "label": QUARTER_LABELS[q], "ingresos": 0.0, "gastos": 0.0,
                     "iva_repercutido": 0.0, "iva_soportado": 0.0, "irpf": 0.0} for q in (1, 2, 3, 4)}
@@ -1483,10 +1642,10 @@ async def dashboard(year: Optional[int] = None, user=Depends(get_current_user)):
 @api.get("/available-years")
 async def available_years(user=Depends(get_current_user)):
     years = set()
-    async for inv in db.invoices.find({"user_id": user["id"]}, {"issue_date": 1, "_id": 0}):
+    async for inv in db.invoices.find({"user_id": user["id"], "company_id": await active_cid(user)}, {"issue_date": 1, "_id": 0}):
         if inv.get("issue_date"):
             years.add(int(inv["issue_date"][:4]))
-    async for exp in db.expenses.find({"user_id": user["id"]}, {"date": 1, "_id": 0}):
+    async for exp in db.expenses.find({"user_id": user["id"], "company_id": await active_cid(user)}, {"date": 1, "_id": 0}):
         if exp.get("date"):
             years.add(int(exp["date"][:4]))
     years.add(datetime.now(timezone.utc).year)
@@ -1499,9 +1658,9 @@ async def annual_summary(year: Optional[int] = None, user=Depends(get_current_us
         year = datetime.now(timezone.utc).year
     ys = str(year)
     invoices = await db.invoices.find(
-        {"user_id": user["id"], "issue_date": {"$regex": f"^{ys}"}, "status": {"$ne": "anulada"}}, {"_id": 0}).to_list(10000)
+        {"user_id": user["id"], "company_id": await active_cid(user), "issue_date": {"$regex": f"^{ys}"}, "status": {"$ne": "anulada"}}, {"_id": 0}).to_list(10000)
     expenses = await db.expenses.find(
-        {"user_id": user["id"], "date": {"$regex": f"^{ys}"}}, {"_id": 0}).to_list(10000)
+        {"user_id": user["id"], "company_id": await active_cid(user), "date": {"$regex": f"^{ys}"}}, {"_id": 0}).to_list(10000)
 
     rates = [21, 10, 4, 0]
     rep_map = {r: {"base": 0.0, "cuota": 0.0} for r in rates}
@@ -1528,6 +1687,18 @@ async def annual_summary(year: Optional[int] = None, user=Depends(get_current_us
 
     total_cuota_rep = round(sum(x["cuota"] for x in iva_repercutido), 2)
     total_cuota_sop = round(sum(x["cuota"] for x in iva_soportado), 2)
+    # Modelo 349 — entregas intracomunitarias exentas (art. 25), agrupadas por cliente
+    intracom_ops = {}
+    total_intracom = 0.0
+    for inv in invoices:
+        bi = round(float(inv.get("base_intracom", 0) or 0), 2)
+        if not bi:
+            continue
+        cl = inv.get("client", {}) or {}
+        key = (cl.get("nif") or cl.get("name") or "—")
+        e = intracom_ops.setdefault(key, {"nif": cl.get("nif", ""), "name": cl.get("name", ""), "base": 0.0})
+        e["base"] += bi
+        total_intracom += bi
     ingresos = round(sum(i.get("base", 0) for i in invoices), 2)
     gastos = round(sum(e.get("base", 0) for e in expenses), 2)
     rendimiento = round(ingresos - gastos, 2)
@@ -1543,6 +1714,12 @@ async def annual_summary(year: Optional[int] = None, user=Depends(get_current_us
             "total_cuota_repercutida": total_cuota_rep,
             "total_cuota_soportada": total_cuota_sop,
             "resultado_anual": round(total_cuota_rep - total_cuota_sop, 2),
+            "base_intracomunitaria": round(total_intracom, 2),
+        },
+        "modelo_349": {
+            "total": round(total_intracom, 2),
+            "operations": [{"nif": v["nif"], "name": v["name"], "base": round(v["base"], 2)}
+                           for v in intracom_ops.values()],
         },
         "irpf": {
             "ingresos": ingresos,
@@ -1558,7 +1735,7 @@ async def annual_summary(year: Optional[int] = None, user=Depends(get_current_us
 # ---------- Contacts (clients & providers) ----------
 @api.get("/contacts")
 async def list_contacts(kind: Optional[str] = None, user=Depends(get_current_user)):
-    q = {"user_id": user["id"]}
+    q = {"user_id": user["id"], "company_id": await active_cid(user)}
     if kind:
         q["kind"] = kind
     return await db.contacts.find(q, {"_id": 0}).sort("name", 1).to_list(2000)
@@ -1573,7 +1750,7 @@ async def create_contact(data: ContactInput, user=Depends(get_current_user)):
             raise HTTPException(status_code=403,
                 detail=f"Has alcanzado el límite de {plan['max_contacts']} contactos de tu plan {plan['name']}. Mejora tu plan para guardar más.")
     doc = data.model_dump()
-    doc.update({"id": str(uuid.uuid4()), "user_id": user["id"],
+    doc.update({"id": str(uuid.uuid4()), "user_id": user["id"], "company_id": await active_cid(user),
                 "created_at": datetime.now(timezone.utc).isoformat()})
     await db.contacts.insert_one(doc)
     doc.pop("_id", None)
@@ -1606,10 +1783,10 @@ async def scan_expense(file: UploadFile = File(...), user=Depends(get_current_us
     store_ct = MIME_TYPES.get(ext, ct or "application/octet-stream")
     path = f"{APP_NAME}/uploads/{user['id']}/{uuid.uuid4()}.{ext}"
     try:
-        result = put_object(path, data, store_ct)
+        result = await put_object(path, data, store_ct)
         stored_path = result["path"]
         await db.files.insert_one({
-            "id": str(uuid.uuid4()), "user_id": user["id"], "storage_path": stored_path,
+            "id": str(uuid.uuid4()), "user_id": user["id"], "company_id": await active_cid(user), "storage_path": stored_path,
             "original_filename": file.filename, "content_type": store_ct,
             "is_deleted": False, "created_at": datetime.now(timezone.utc).isoformat(),
         })
@@ -1645,10 +1822,10 @@ async def scan_expense(file: UploadFile = File(...), user=Depends(get_current_us
 
 @api.get("/files/{path:path}")
 async def download_file(path: str, user=Depends(get_current_user)):
-    record = await db.files.find_one({"storage_path": path, "user_id": user["id"], "is_deleted": False})
+    record = await db.files.find_one({"storage_path": path, "user_id": user["id"], "company_id": await active_cid(user), "is_deleted": False})
     if not record:
         raise HTTPException(status_code=404, detail="Archivo no encontrado")
-    data, ctype = get_object(path)
+    data, ctype = await get_object(path)
     return Response(content=data, media_type=record.get("content_type", ctype))
 
 

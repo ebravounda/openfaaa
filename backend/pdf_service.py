@@ -67,6 +67,8 @@ def _eur(v):
 
 def _iva_label(it):
     t = (it.get("iva_type", "general") or "general")
+    if t == "intracomunitaria":
+        return "Intracom. (exenta)"
     if t == "exento":
         return "Exento"
     if t == "no_sujeto":
@@ -264,6 +266,15 @@ def build_invoice_pdf(invoice: dict, company: dict, qr_png: bytes = None, verifa
         story.append(HRFlowable(width="100%", thickness=0.5, color=BORDER))
         story.append(Spacer(1, 2 * mm))
         story.append(Paragraph(comp["invoice_footer"], small))
+
+    # Leyenda de operación exenta intracomunitaria (art. 25 Ley 37/1992)
+    if invoice.get("base_intracom"):
+        story.append(Spacer(1, 5 * mm))
+        story.append(Paragraph(
+            "Operación exenta de IVA por entrega intracomunitaria de bienes/servicios "
+            "(art. 25 de la Ley 37/1992 del IVA). Inversión del sujeto pasivo. "
+            "VAT-exempt intra-Community supply · Reverse charge (Directive 2006/112/EC).",
+            ParagraphStyle("intracom", parent=small, fontSize=7.5, textColor=MUTED, leading=10)))
 
     # VeriFactu: QR + leyenda
     if qr_png and verifactu:

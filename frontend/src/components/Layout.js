@@ -3,6 +3,29 @@ import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import api from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+
+const CompanySwitcher = () => {
+  const { user, reload } = useAuth();
+  const [companies, setCompanies] = useState([]);
+  useEffect(() => { api.get("/companies").then((r) => setCompanies(r.data)).catch(() => {}); }, []);
+  if (!user) return null;
+  if (!(user.multi_company_enabled || companies.length > 1)) return null;
+  const active = user.active_company_id || companies[0]?.id;
+  const onSwitch = async (id) => {
+    if (!id || id === active) return;
+    try { await api.post("/companies/switch", { company_id: id }); await reload(); window.location.reload(); } catch (e) {}
+  };
+  return (
+    <div className="px-3 pb-1" data-testid="company-switcher">
+      <div className="text-[10px] font-semibold uppercase tracking-wider text-slate-400 px-1 mb-1">Empresa activa</div>
+      <Select value={active} onValueChange={onSwitch}>
+        <SelectTrigger className="h-9 text-sm" data-testid="company-switcher-trigger"><SelectValue placeholder="Empresa" /></SelectTrigger>
+        <SelectContent>{companies.map((c) => <SelectItem key={c.id} value={c.id} data-testid={`company-option-${c.id}`}>{c.name || "(Sin nombre)"}</SelectItem>)}</SelectContent>
+      </Select>
+    </div>
+  );
+};
 import { Seo } from "@/components/Seo";
 import { AssistantWidget } from "@/components/AssistantWidget";
 import {
@@ -12,6 +35,7 @@ import {
   Receipt,
   Users,
   Landmark,
+  Building2,
   Settings,
   LogOut,
   Sparkles,
@@ -33,6 +57,7 @@ const baseNav = [
   { to: "/impuestos", label: "Impuestos", icon: Landmark, testid: "nav-taxes" },
   { to: "/conexion", label: "Conexión", icon: Activity, testid: "nav-connection" },
   { to: "/metodos-pago", label: "Métodos de pago", icon: CreditCard, testid: "nav-payment-methods" },
+  { to: "/empresas", label: "Empresas", icon: Building2, testid: "nav-companies" },
   { to: "/precios", label: "Planes", icon: Landmark, testid: "nav-pricing" },
   { to: "/configuracion", label: "Configuración", icon: Settings, testid: "nav-settings" },
 ];
@@ -139,6 +164,7 @@ export default function Layout({ children }) {
         </div>
 
         <nav className="flex-1 overflow-y-auto px-3 py-2 space-y-0.5">
+          <CompanySwitcher />
           {nav.map((n) => (
             <NavLink
               key={n.to}

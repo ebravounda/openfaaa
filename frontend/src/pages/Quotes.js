@@ -38,6 +38,7 @@ const LINE_IVA_OPTIONS = [
   { v: "4", l: "IVA 4%" },
   { v: "0", l: "IVA 0%" },
   { v: "exento", l: "Exento" },
+  { v: "intracomunitaria", l: "Intracomunitaria (exenta art. 25)" },
   { v: "no_sujeto", l: "No sujeto" },
   { v: "suplido", l: "Suplido" },
 ];
@@ -64,7 +65,7 @@ const STATUS_LABEL = { borrador: "Borrador", enviado: "Enviado", aceptado: "Acep
 
 const emptyLine = () => ({ description: "", detail: "", quantity: 1, unit_price: 0, discount: 0, iva_sel: "21" });
 const lineToSel = (i) => (i.iva_type && i.iva_type !== "general") ? i.iva_type : String(i.iva_rate ?? 21);
-const selToTax = (sel) => (["exento", "no_sujeto", "suplido"].includes(sel))
+const selToTax = (sel) => (["exento", "intracomunitaria", "no_sujeto", "suplido"].includes(sel))
   ? { iva_type: sel, iva_rate: 0 }
   : { iva_type: "general", iva_rate: Number(sel) };
 const round2 = (n) => Math.round((n + Number.EPSILON) * 100) / 100;
@@ -138,7 +139,7 @@ export default function Quotes() {
       const net = lineNet(it);
       discountTotal += (gross - net);
       if (sel === "no_sujeto") { baseNoSujeta += net; return; }
-      if (sel === "exento") { baseExenta += net; return; }
+      if (sel === "exento" || sel === "intracomunitaria") { baseExenta += net; return; }
       const r = Number(sel); baseGeneral += net; bd[r] = (bd[r] || 0) + net;
     });
     let ivaAmount = 0, reAmount = 0;

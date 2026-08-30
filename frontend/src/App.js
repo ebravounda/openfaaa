@@ -8,6 +8,7 @@ import Register from "@/pages/Register";
 import Dashboard from "@/pages/Dashboard";
 import Invoices from "@/pages/Invoices";
 import Quotes from "@/pages/Quotes";
+import Companies from "@/pages/Companies";
 import Expenses from "@/pages/Expenses";
 import Contacts from "@/pages/Contacts";
 import Taxes from "@/pages/Taxes";
@@ -44,6 +45,7 @@ function App() {
           <Route path="/" element={<Home />} />
           <Route path="/facturas" element={<ProtectedRoute><Invoices /></ProtectedRoute>} />
           <Route path="/presupuestos" element={<ProtectedRoute><Quotes /></ProtectedRoute>} />
+          <Route path="/empresas" element={<ProtectedRoute><Companies /></ProtectedRoute>} />
           <Route path="/gastos" element={<ProtectedRoute><Expenses /></ProtectedRoute>} />
           <Route path="/contactos" element={<ProtectedRoute><Contacts /></ProtectedRoute>} />
           <Route path="/impuestos" element={<ProtectedRoute><Taxes /></ProtectedRoute>} />

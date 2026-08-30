@@ -6,8 +6,10 @@ stripe.api_key = os.environ.get("STRIPE_SECRET_KEY") or "sk_test_emergent"
 CURRENCY = "eur"
 TAX_CODE = "txcd_10103001"  # SaaS
 # Only paid plans are purchasable
-PLAN_LOOKUP = {"medio": "plan_medio_monthly", "platino": "plan_platino_monthly"}
-PLAN_LOOKUP_YEAR = {"medio": "plan_medio_yearly", "platino": "plan_platino_yearly"}
+PLAN_LOOKUP = {"medio": "plan_medio_monthly", "platino": "plan_platino_monthly",
+               "multiempresas": "plan_multiempresas_monthly", "multiempresas_50": "plan_multiempresas_50_monthly"}
+PLAN_LOOKUP_YEAR = {"medio": "plan_medio_yearly", "platino": "plan_platino_yearly",
+                    "multiempresas": "plan_multiempresas_yearly", "multiempresas_50": "plan_multiempresas_50_yearly"}
 LOOKUP_PLAN = {**{v: k for k, v in PLAN_LOOKUP.items()},
                **{v: k for k, v in PLAN_LOOKUP_YEAR.items()}}
 

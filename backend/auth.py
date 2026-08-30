@@ -91,6 +91,8 @@ def _public_user(user: dict) -> dict:
         "is_blocked": bool(user.get("is_blocked", False)),
         "activity": user.get("activity", ""),
         "trial_ends_at": user.get("trial_ends_at", ""),
+        "active_company_id": user.get("active_company_id", ""),
+        "multi_company_enabled": bool(user.get("multi_company_enabled", False)),
     }
 
 
@@ -195,6 +197,14 @@ async def register(data: RegisterInput, request: Request, response: Response):
         doc["activity"] = data.activity
     result = await db.users.insert_one(doc)
     uid = str(result.inserted_id)
+    import uuid as _uuid
+    cid = str(_uuid.uuid4())
+    await db.companies.insert_one({
+        "id": cid, "user_id": uid, "name": data.name, "tax_type": doc["tax_type"],
+        "template_id": (data.activity if data.activity in TEMPLATE_MAP else "clasico"),
+        "created_at": datetime.now(timezone.utc).isoformat()})
+    await db.users.update_one({"_id": result.inserted_id}, {"$set": {"active_company_id": cid}})
+    doc["active_company_id"] = cid
     await _register_count_inc(ip)
     _set_cookies(response, create_access_token(uid, email), create_refresh_token(uid))
     doc["_id"] = result.inserted_id

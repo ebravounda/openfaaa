@@ -1,0 +1,33 @@
+{
+  "summary": "Iter 17 – Presupuestos + conversión, Intracom (E1/E5), Multiempresa (aislamiento, switch, gating), Plan Multiempresas, Contact-sales y regresión VeriFactu. Backend pytest 18/18 OK (test_iter17_multiempresa.py). Frontend: login admin, sidebar muestra Presupuestos + Empresas + Company Switcher; /presupuestos crea PRE-2026-0002 (200€ base, 242€ total con IVA 21%) y el botón Convertir sobre PRE-2026-0001 lo marca como 'Facturado · 2026-0014' apareciendo en /facturas. /empresas muestra multi-toggle activo y lista >=2 empresas con la badge 'Activa' correcta.",
+  "backend_issues": { "critical": [], "minor": [] },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iter17_multiempresa.py",
+    "/app/test_reports/pytest/iter17.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "server.py = 1948 líneas: deuda técnica creciendo (deberia dividirse en routers: quotes, companies, invoices, admin). Ya reportado en iter 15/16.",
+    "convert_quote: al validar el límite mensual de facturas usa {'user_id': user['id'], 'issue_date': ...} SIN company_id (línea 1040). Debería contarse por empresa activa para ser coherente con el resto del sistema (aislamiento). Bug menor, pero afecta el gating cuando hay multi-empresa.",
+    "delete_company_ep sólo cuenta invoices para bloquear el borrado (línea 566), pero deja huérfanos posibles quotes/contacts/expenses/certificates de esa empresa. Recomiendo también bloquear si existen quotes/expenses/contacts o borrarlos en cascada explícita.",
+    "create_company_ep hace switch automático a la nueva empresa (línea 542-543); comportamiento adecuado pero conviene documentarlo en el frontend para evitar sorpresas.",
+    "_next_seq(quote/invoice) itera con find sin índice compuesto {user_id, company_id, number}; con muchos docs puede ser lento (idempotente, sólo N=facturas del año). Considerar índice.",
+    "verifactu_service._build_desglose: correcto. E1 (base_exenta - base_intracom) y E5 (base_intracom) generan bloques separados. Se validó XML por unit test.",
+    "compute_invoice.base_intracom se acumula además de base_exenta (línea 206-209): coherente para modelo 349 y 390.base_intracomunitaria; ambos tests /annual-summary verificados.",
+    "contact-sales devuelve 500 controlado si SMTP falla; podría degradar a 202 y encolar. No bloquea la UX si sale mail=None."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iter17_multiempresa.py (new)"
+  ],
+  "success_rate": { "backend": "100% (18/18)", "frontend": "100% flows críticos (login, quotes create+convert, companies list+multi-toggle, switcher visible)" },
+  "test_credentials": "admin@fiscalhub.es / admin123 (JWT httpOnly cookie + cabecera X-OF-Client: web)",
+  "seed_data_creation": "Backend test crea empresa 'TEST Iter17 Empresa 2', factura B-2026-0001 en esa empresa, presupuesto PRE-2026-XXXX en empresa 1 + factura convertida, factura intracom empresa 1. Cleanup borra factura intracom, factura de conversión, presupuesto e intenta borrar empresa 2 (puede quedar si tiene datos). Frontend UI dejó PRE-2026-0002 (borrador, TEST UI Cliente) y otra empresa 'TEST UI Empresa2' creada manualmente.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Rutas nuevas cubiertas: POST/GET/PUT/PATCH/DELETE /api/quotes (+ /pdf /send-email /convert), CRUD /api/companies + /switch + /multi-toggle, POST /api/contact-sales, /api/plans incluye 'multiempresas' (20) y 'multiempresas_50' (50). Backend hace switch automático a la nueva empresa al crearla. compute_invoice expone base_intracom, y annual-summary devuelve modelo_349.total y modelo_390.base_intracomunitaria. verifactu_service._build_desglose emite E1 (exento puro) y E5 (intracom) correctamente. Cabecera X-OF-Client: web sigue obligatoria en toda mutación con cookie. Testids clave: nav-quotes, nav-companies, company-switcher-trigger, company-option-<id>, new-quote-button, save-quote, quote-convert-<number>, quote-row-<number>, new-company-button, save-company, company-activate-<id>, company-delete-<id>, multi-toggle-switch. Bug menor detectado: convert_quote no filtra por company_id al chequear límite mensual."
+}
