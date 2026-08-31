@@ -19,6 +19,12 @@ def _fmt_num(x) -> str:
     return f"{float(x):.2f}"
 
 
+def importe_total(invoice) -> float:
+    """ImporteTotal VeriFactu = Base + IVA + Recargo (SIN restar IRPF).
+    invoice['total'] resta el IRPF, así que lo re-sumamos."""
+    return round(float(invoice.get("total", 0)) + float(invoice.get("irpf_amount", 0)), 2)
+
+
 def to_ddmmyyyy(iso_date: str) -> str:
     y, m, d = iso_date[:10].split("-")
     return f"{d}-{m}-{y}"
@@ -213,7 +219,7 @@ def build_registro_alta_xml(company: dict, invoice: dict, prev_number: str, prev
         f"</sum1:IDDestinatario></sum1:Destinatarios>"
         f"<sum1:Desglose>{_build_desglose(invoice)}</sum1:Desglose>"
         f"<sum1:CuotaTotal>{_fmt_num(invoice.get('iva_amount',0))}</sum1:CuotaTotal>"
-        f"<sum1:ImporteTotal>{_fmt_num(invoice.get('total',0))}</sum1:ImporteTotal>"
+        f"<sum1:ImporteTotal>{_fmt_num(importe_total(invoice))}</sum1:ImporteTotal>"
         f"{_encadenamiento(nif, prev_number, prev_huella, prev_fecha)}"
         f"{_sistema_informatico(nif, company.get('name',''))}"
         f"<sum1:FechaHoraHusoGenRegistro>{ts}</sum1:FechaHoraHusoGenRegistro>"

@@ -654,10 +654,10 @@ async def _make_invoice(user, company, data: InvoiceInput) -> dict:
         fecha = vf.to_ddmmyyyy(doc["issue_date"])
         tipo = "R1" if doc.get("invoice_type") == "rectificativa" else "F1"
         ts = vf.now_ts()
-        huella = vf.compute_fingerprint(nif, number, fecha, tipo, doc["iva_amount"], doc["total"], prev, ts)
+        huella = vf.compute_fingerprint(nif, number, fecha, tipo, doc["iva_amount"], vf.importe_total(doc), prev, ts)
         doc["verifactu"] = {
             "enabled": True, "tipo": tipo, "huella": huella, "huella_anterior": prev,
-            "timestamp": ts, "qr_url": vf.build_qr_url(nif, number, fecha, doc["total"], produccion=(company.get("verifactu_mode") == "produccion")),
+            "timestamp": ts, "qr_url": vf.build_qr_url(nif, number, fecha, vf.importe_total(doc), produccion=(company.get("verifactu_mode") == "produccion")),
             "submitted": False, "status": "Registrado (pendiente de envío)",
             "submitted_at": None, "csv": None,
         }

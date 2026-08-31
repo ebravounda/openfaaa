@@ -182,6 +182,7 @@ export default function Invoices() {
   };
   const calc = (() => {
     const bd = {};
+    const RE_MAP = { 21: 5.2, 10: 1.4, 5: 0.625, 4: 0.5, 0: 0 };
     let baseGeneral = 0, baseExenta = 0, baseNoSujeta = 0, suplidos = 0, subtotal = 0, discountTotal = 0;
     form.line_items.forEach((it) => {
       const gross = (Number(it.quantity) || 0) * (Number(it.unit_price) || 0);
