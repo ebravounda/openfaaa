@@ -682,8 +682,8 @@ export default function Invoices() {
               {form.line_items.map((it, idx) => (
                 <div key={idx} className="rounded-lg border border-slate-100 p-3 space-y-2" data-testid={`line-item-${idx}`}>
                   <div className="grid grid-cols-12 gap-2 items-end">
-                    <div className="col-span-4 space-y-1">{idx === 0 && <Label className="text-xs">Concepto</Label>}<Input value={it.description} onChange={(e) => updateItem(idx, "description", e.target.value)} data-testid={`line-desc-${idx}`} /></div>
-                    <div className="col-span-1 space-y-1">{idx === 0 && <Label className="text-xs">Cant.</Label>}<Input type="number" step="1" min="0" value={it.quantity} onChange={(e) => updateItem(idx, "quantity", e.target.value)} data-testid={`line-qty-${idx}`} /></div>
+                    <div className="col-span-3 space-y-1">{idx === 0 && <Label className="text-xs">Concepto</Label>}<Input value={it.description} onChange={(e) => updateItem(idx, "description", e.target.value)} data-testid={`line-desc-${idx}`} /></div>
+                    <div className="col-span-2 space-y-1">{idx === 0 && <Label className="text-xs">Cant.</Label>}<Input type="number" step="1" min="0" value={it.quantity} onChange={(e) => updateItem(idx, "quantity", e.target.value)} className="text-center px-1" data-testid={`line-qty-${idx}`} /></div>
                     <div className="col-span-2 space-y-1">{idx === 0 && <Label className="text-xs">Precio (€)</Label>}<Input type="number" step="0.01" value={it.unit_price} onChange={(e) => updateItem(idx, "unit_price", e.target.value)} data-testid={`line-price-${idx}`} /></div>
                     <div className="col-span-1 space-y-1">{idx === 0 && <Label className="text-xs">Dto.%</Label>}<Input type="number" step="0.01" min="0" max="100" value={it.discount} onChange={(e) => updateItem(idx, "discount", e.target.value)} data-testid={`line-discount-${idx}`} /></div>
                     <div className="col-span-3 space-y-1">{idx === 0 && <Label className="text-xs">Impuesto</Label>}
