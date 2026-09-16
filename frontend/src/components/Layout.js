@@ -44,6 +44,7 @@ import {
   UserCog,
   ArrowLeft,
   CreditCard,
+  Wallet,
   Menu,
   X,
 } from "lucide-react";
@@ -57,6 +58,7 @@ const baseNav = [
   { to: "/impuestos", label: "Impuestos", icon: Landmark, testid: "nav-taxes" },
   { to: "/conexion", label: "Conexión", icon: Activity, testid: "nav-connection" },
   { to: "/metodos-pago", label: "Métodos de pago", icon: CreditCard, testid: "nav-payment-methods" },
+  { to: "/bancos", label: "Bancos", icon: Wallet, testid: "nav-banks" },
   { to: "/empresas", label: "Empresas", icon: Building2, testid: "nav-companies" },
   { to: "/precios", label: "Planes", icon: Landmark, testid: "nav-pricing" },
   { to: "/configuracion", label: "Configuración", icon: Settings, testid: "nav-settings" },

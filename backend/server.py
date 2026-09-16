@@ -27,6 +27,8 @@ from plans import plan_for_user, plans_list
 from templates import TEMPLATE_MAP
 from pdf_service import build_invoice_pdf
 from email_service import send_email, build_invoice_email_html, build_payment_email_html
+import enablebanking_service as eb
+import hashlib
 import storage_service
 from storage_service import put_object, get_object, MIME_TYPES, APP_NAME
 from ocr_service import extract_expense
@@ -1924,6 +1926,209 @@ async def download_file(path: str, user=Depends(get_current_user)):
         raise HTTPException(status_code=404, detail="Archivo no encontrado")
     data, ctype = await get_object(path)
     return Response(content=data, media_type=record.get("content_type", ctype))
+
+
+async def _notify(user_id, company_id, ntype, title, body, email=None):
+    await db.notifications.insert_one({
+        "id": str(uuid.uuid4()), "user_id": user_id, "company_id": company_id,
+        "type": ntype, "title": title, "body": body, "read": False,
+        "created_at": datetime.now(timezone.utc).isoformat(),
+    })
+    if email:
+        try:
+            await send_email(to=email, subject=f"OpenFactura · {title}",
+                             html=f"<p style='font-family:sans-serif'><b>{title}</b></p><p style='font-family:sans-serif'>{body}</p>")
+        except Exception:
+            pass
+
+
+def _parse_txn(t, account_uid):
+    amt = t.get("transaction_amount") or {}
+    amount = float(amt.get("amount") or 0)
+    direction = "in" if t.get("credit_debit_indicator") == "CRDT" else "out"
+    booking = t.get("booking_date") or t.get("value_date") or ""
+    rem = t.get("remittance_information") or []
+    remittance = " ".join(rem) if isinstance(rem, list) else str(rem)
+    if direction == "in":
+        cp = (t.get("debtor") or {}).get("name") or ""
+    else:
+        cp = (t.get("creditor") or {}).get("name") or ""
+    ref = t.get("entry_reference") or hashlib.sha1(
+        f"{account_uid}|{booking}|{amount}|{remittance}".encode()).hexdigest()[:24]
+    return {"ref": ref, "amount": amount, "direction": direction, "booking_date": booking,
+            "remittance": remittance.strip(), "counterparty": cp}
+
+
+async def _sync_user_bank(user_id):
+    if not eb.configured():
+        return {"new": 0, "matched": 0}
+    from datetime import date, timedelta as _td
+    u = await db.users.find_one({"_id": ObjectId(user_id)})
+    email = u.get("email") if u else None
+    date_from = (date.today() - _td(days=60)).isoformat()
+    conns = await db.bank_connections.find({"user_id": user_id, "status": "active"}).to_list(100)
+    new_count = matched = 0
+    for conn in conns:
+        uid = conn["account_uid"]; cid = conn["company_id"]
+        try:
+            txns = await eb.get_transactions(uid, date_from)
+        except Exception as e:
+            logger.error(f"bank sync error {uid}: {e}")
+            continue
+        pend = await db.invoices.find({"user_id": user_id, "company_id": cid,
+                                       "status": {"$nin": ["paid", "anulada"]}}).to_list(2000)
+        for t in txns:
+            p = _parse_txn(t, uid)
+            if await db.bank_transactions.find_one({"user_id": user_id, "account_uid": uid, "ref": p["ref"]}):
+                continue
+            matched_invoice = None
+            if p["direction"] == "in":
+                for inv in pend:
+                    if abs(round(float(inv.get("total", 0)), 2) - round(p["amount"], 2)) < 0.01:
+                        await db.invoices.update_one({"id": inv["id"]}, {"$set": {
+                            "status": "paid",
+                            "payment": {"status": "paid", "method": "transfer", "date": p["booking_date"],
+                                        "source": "bank", "amount": p["amount"]}}})
+                        matched_invoice = inv.get("number")
+                        pend.remove(inv); matched += 1
+                        await _notify(user_id, cid, "cobro", "Factura cobrada",
+                                      f"La factura {matched_invoice} se ha conciliado automáticamente con una transferencia de {p['amount']:.2f} €.", email)
+                        break
+            doc = {"id": str(uuid.uuid4()), "user_id": user_id, "company_id": cid, "account_uid": uid,
+                   "ref": p["ref"], "amount": p["amount"], "direction": p["direction"],
+                   "booking_date": p["booking_date"], "remittance": p["remittance"],
+                   "counterparty": p["counterparty"], "matched_invoice": matched_invoice,
+                   "created_at": datetime.now(timezone.utc).isoformat()}
+            await db.bank_transactions.insert_one(doc)
+            new_count += 1
+            if not matched_invoice:
+                title = "Transferencia recibida" if p["direction"] == "in" else "Transferencia enviada"
+                sign = "+" if p["direction"] == "in" else "−"
+                await _notify(user_id, cid, "bank", title,
+                              f"{p['counterparty'] or p['remittance'] or 'Movimiento'} · {sign}{p['amount']:.2f} €", email)
+    return {"new": new_count, "matched": matched}
+
+
+async def _sync_all_banks():
+    uids = await db.bank_connections.distinct("user_id", {"status": "active"})
+    for uid in uids:
+        try:
+            await _sync_user_bank(uid)
+        except Exception as e:
+            logger.error(f"bank sync all error {uid}: {e}")
+
+
+@api.get("/bank/institutions")
+async def bank_institutions(user=Depends(get_current_user)):
+    if not eb.configured():
+        raise HTTPException(status_code=400, detail="La conexión bancaria no está configurada.")
+    aspsps = await eb.list_aspsps("ES")
+    return [{"name": a.get("name"), "logo": a.get("logo"), "country": a.get("country"),
+             "sandbox": bool(a.get("sandbox"))} for a in aspsps]
+
+
+@api.post("/bank/connect")
+async def bank_connect(data: dict = Body(...), user=Depends(get_current_user)):
+    if not eb.configured():
+        raise HTTPException(status_code=400, detail="La conexión bancaria no está configurada.")
+    aspsp = data.get("aspsp_name")
+    redirect_url = data.get("redirect_url")
+    if not aspsp or not redirect_url:
+        raise HTTPException(status_code=400, detail="Faltan datos (banco o URL de retorno).")
+    state = str(uuid.uuid4())
+    await db.bank_states.insert_one({"state": state, "user_id": user["id"],
+                                     "company_id": await active_cid(user), "aspsp": aspsp,
+                                     "created_at": datetime.now(timezone.utc).isoformat()})
+    try:
+        res = await eb.start_auth(aspsp, "ES", redirect_url, state)
+    except Exception as e:
+        logger.error(f"bank connect error: {e}")
+        raise HTTPException(status_code=502, detail="No se pudo iniciar la conexión con el banco.")
+    return {"auth_url": res.get("url")}
+
+
+@api.post("/bank/callback")
+async def bank_callback(data: dict = Body(...), user=Depends(get_current_user)):
+    code = data.get("code"); state = data.get("state")
+    st = await db.bank_states.find_one({"state": state, "user_id": user["id"]})
+    if not st:
+        raise HTTPException(status_code=400, detail="Estado de conexión no válido.")
+    try:
+        sess = await eb.create_session(code)
+    except Exception as e:
+        logger.error(f"bank session error: {e}")
+        raise HTTPException(status_code=502, detail="No se pudo completar la conexión bancaria.")
+    sid = sess.get("session_id")
+    aspsp = (sess.get("aspsp") or {}).get("name") or st.get("aspsp")
+    valid_until = (sess.get("access") or {}).get("valid_until", "")
+    cid = st["company_id"]
+    saved = 0
+    for acc in (sess.get("accounts") or []):
+        uid = acc if isinstance(acc, str) else (acc.get("uid") or acc.get("account_uid"))
+        if not uid:
+            continue
+        iban = ""; name = ""
+        if isinstance(acc, dict):
+            aid = acc.get("account_id") or {}
+            iban = aid.get("iban", "") if isinstance(aid, dict) else ""
+            name = acc.get("name") or acc.get("product") or ""
+        if not iban or not name:
+            try:
+                det = await eb.get_account_details(uid)
+                aid = det.get("account_id") or {}
+                iban = iban or (aid.get("iban", "") if isinstance(aid, dict) else "")
+                name = name or det.get("name") or det.get("product") or ""
+            except Exception:
+                pass
+        await db.bank_connections.update_one(
+            {"user_id": user["id"], "company_id": cid, "account_uid": uid},
+            {"$set": {"id": str(uuid.uuid4()), "user_id": user["id"], "company_id": cid,
+                      "session_id": sid, "account_uid": uid, "aspsp": aspsp, "iban": iban,
+                      "name": name, "valid_until": valid_until, "status": "active",
+                      "created_at": datetime.now(timezone.utc).isoformat()}}, upsert=True)
+        saved += 1
+    return {"connected": saved}
+
+
+@api.get("/bank/connections")
+async def bank_connections_list(user=Depends(get_current_user)):
+    cid = await active_cid(user)
+    return await db.bank_connections.find({"user_id": user["id"], "company_id": cid}, {"_id": 0}).to_list(50)
+
+
+@api.get("/bank/transactions")
+async def bank_transactions_list(user=Depends(get_current_user)):
+    cid = await active_cid(user)
+    return await db.bank_transactions.find({"user_id": user["id"], "company_id": cid}, {"_id": 0}).sort("booking_date", -1).to_list(300)
+
+
+@api.post("/bank/sync")
+async def bank_sync_now(user=Depends(get_current_user)):
+    return await _sync_user_bank(user["id"])
+
+
+@api.get("/notifications")
+async def notifications_list(user=Depends(get_current_user)):
+    items = await db.notifications.find({"user_id": user["id"]}, {"_id": 0}).sort("created_at", -1).to_list(50)
+    unread = await db.notifications.count_documents({"user_id": user["id"], "read": False})
+    return {"items": items, "unread": unread}
+
+
+@api.post("/notifications/read")
+async def notifications_read(user=Depends(get_current_user)):
+    await db.notifications.update_many({"user_id": user["id"], "read": False}, {"$set": {"read": True}})
+    return {"ok": True}
+
+
+@api.post("/cron/bank-sync")
+async def cron_bank_sync(request: Request, background: BackgroundTasks):
+    # Cron endpoints must ack 2xx immediately; enqueue/background the actual work.
+    secret = os.environ.get("WEBHOOK_CRON_SECRET", "")
+    token = request.headers.get("authorization", "").replace("Bearer ", "").strip()
+    if not secret or not hmac.compare_digest(token, secret):
+        raise HTTPException(status_code=401, detail="No autorizado")
+    background.add_task(_sync_all_banks)
+    return {"ok": True}
 
 
 app.include_router(auth_router)
