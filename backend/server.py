@@ -64,6 +64,7 @@ class Client(BaseModel):
     nif: str = ""
     address: str = ""
     email: str = ""
+    phone: str = ""
 
 
 class InvoiceInput(BaseModel):
@@ -1748,6 +1749,87 @@ async def annual_summary(year: Optional[int] = None, user=Depends(get_current_us
 
 
 # ---------- Contacts (clients & providers) ----------
+@api.post("/contacts/import")
+async def import_contacts(file: UploadFile = File(...), kind: str = Query("client"), user=Depends(get_current_user)):
+    import io as _io, csv as _csv
+    raw = await file.read()
+    fname = (file.filename or "").lower()
+    rows = []
+    if fname.endswith(".csv") or fname.endswith(".txt"):
+        text = raw.decode("utf-8-sig", errors="ignore")
+        sample = text[:2000]
+        delim = ";" if sample.count(";") >= sample.count(",") else ","
+        rows = [r for r in _csv.reader(_io.StringIO(text), delimiter=delim)]
+    elif fname.endswith(".xlsx") or fname.endswith(".xlsm"):
+        import openpyxl
+        wb = openpyxl.load_workbook(_io.BytesIO(raw), read_only=True, data_only=True)
+        ws = wb.active
+        for r in ws.iter_rows(values_only=True):
+            rows.append(["" if c is None else str(c) for c in r])
+    else:
+        raise HTTPException(status_code=400, detail="Formato no soportado. Sube un archivo .xlsx o .csv")
+    rows = [r for r in rows if any((c or "").strip() for c in r)]
+    if not rows:
+        raise HTTPException(status_code=400, detail="El archivo está vacío.")
+
+    aliases = {
+        "name": ["name", "nombre", "cliente", "razon social", "razón social", "empresa", "razonsocial"],
+        "nif": ["nif", "cif", "dni", "nif/cif", "nif / cif", "vat", "identificacion", "identificación"],
+        "email": ["email", "correo", "e-mail", "mail", "correo electronico", "correo electrónico"],
+        "phone": ["phone", "telefono", "teléfono", "tel", "movil", "móvil", "tlf"],
+        "address": ["address", "direccion", "dirección", "domicilio"],
+    }
+    headers = [((h or "").strip().lower()) for h in rows[0]]
+    hmap = {}
+    for idx, h in enumerate(headers):
+        for field, al in aliases.items():
+            if h in al and field not in hmap:
+                hmap[field] = idx
+    if "name" not in hmap:
+        raise HTTPException(status_code=400, detail="No se encontró la columna 'Nombre'. Cabeceras válidas: Nombre, NIF, Email, Teléfono, Dirección. Descarga la plantilla.")
+
+    cid = await active_cid(user)
+    existing = await db.contacts.find({"user_id": user["id"], "company_id": cid}, {"_id": 0, "nif": 1, "name": 1}).to_list(5000)
+    seen_nif = {(c.get("nif") or "").strip().upper() for c in existing if (c.get("nif") or "").strip()}
+    seen_name = {(c.get("name") or "").strip().lower() for c in existing if (c.get("name") or "").strip()}
+
+    def cell(row, f):
+        i = hmap.get(f)
+        return (row[i].strip() if (i is not None and i < len(row) and row[i]) else "")
+
+    batch, skipped = [], 0
+    for row in rows[1:]:
+        name = cell(row, "name")
+        if not name:
+            continue
+        nif = cell(row, "nif"); nif_key = nif.upper(); name_key = name.lower()
+        if (nif_key and nif_key in seen_nif) or (not nif_key and name_key in seen_name):
+            skipped += 1
+            continue
+        if nif_key:
+            seen_nif.add(nif_key)
+        seen_name.add(name_key)
+        batch.append({
+            "id": str(uuid.uuid4()), "user_id": user["id"], "company_id": cid,
+            "name": name, "nif": nif, "email": cell(row, "email"),
+            "phone": cell(row, "phone"), "address": cell(row, "address"),
+            "kind": kind if kind in ("client", "provider") else "client",
+            "created_at": datetime.now(timezone.utc).isoformat(),
+        })
+
+    errors = []
+    plan = await plan_for_user(user)
+    if plan.get("max_contacts") is not None:
+        cur = await db.contacts.count_documents({"user_id": user["id"]})
+        allowed = max(0, plan["max_contacts"] - cur)
+        if len(batch) > allowed:
+            batch = batch[:allowed]
+            errors.append(f"Límite del plan alcanzado: solo se importaron {allowed} contactos. Mejora tu plan para guardar más.")
+    if batch:
+        await db.contacts.insert_many(batch)
+    return {"imported": len(batch), "skipped": skipped, "errors": errors, "total_rows": len(rows) - 1}
+
+
 @api.get("/contacts")
 async def list_contacts(kind: Optional[str] = None, user=Depends(get_current_user)):
     q = {"user_id": user["id"], "company_id": await active_cid(user)}

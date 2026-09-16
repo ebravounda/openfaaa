@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { toast } from "sonner";
 import api, { formatApiErrorDetail } from "@/lib/api";
 import Layout from "@/components/Layout";
@@ -10,7 +10,7 @@ import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from "@/components/ui/dialog";
-import { Plus, Trash2, Users, Building2, Mail, Loader2 } from "lucide-react";
+import { Plus, Trash2, Users, Building2, Mail, Loader2, Upload, FileDown, Phone } from "lucide-react";
 
 const emptyForm = () => ({ name: "", nif: "", address: "", email: "", phone: "" });
 
@@ -21,6 +21,35 @@ export default function Contacts() {
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState(emptyForm());
   const [saving, setSaving] = useState(false);
+  const [importing, setImporting] = useState(false);
+  const fileRef = useRef(null);
+
+  const handleImport = async (e) => {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file) return;
+    setImporting(true);
+    try {
+      const fd = new FormData();
+      fd.append("file", file);
+      const { data } = await api.post(`/contacts/import?kind=${kind}`, fd, { headers: { "Content-Type": "multipart/form-data" } });
+      toast.success(`Importados: ${data.imported} · Duplicados omitidos: ${data.skipped}`);
+      (data.errors || []).forEach((msg) => toast.warning(msg));
+      load();
+    } catch (err) {
+      toast.error(formatApiErrorDetail(err.response?.data?.detail) || "No se pudo importar el archivo");
+    } finally {
+      setImporting(false);
+    }
+  };
+
+  const downloadTemplate = () => {
+    const csv = "Nombre;NIF;Email;Telefono;Direccion\nEjemplo SL;B12345678;correo@ejemplo.com;600123456;Calle Mayor 1, Madrid\n";
+    const blob = new Blob(["\ufeff" + csv], { type: "text/csv;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a"); a.href = url; a.download = "plantilla_contactos.csv"; a.click();
+    URL.revokeObjectURL(url);
+  };
 
   const load = () => {
     setLoading(true);
@@ -60,9 +89,16 @@ export default function Contacts() {
           <h1 className="font-display text-[28px] font-semibold tracking-tight text-slate-900">Contactos</h1>
           <p className="text-sm text-slate-500 mt-0.5">Guarda clientes y proveedores para reutilizarlos</p>
         </div>
-        <Button onClick={() => { setForm(emptyForm()); setOpen(true); }} className="bg-[#0052FF] hover:bg-[#0040CC] text-white rounded-xl shadow-[0_4px_14px_0_rgba(0,82,255,0.39)] transition-all hover:-translate-y-0.5 active:scale-95" data-testid="new-contact-button">
-          <Plus className="w-4 h-4 mr-2" strokeWidth={1.5} /> {isClient ? "Nuevo cliente" : "Nuevo proveedor"}
-        </Button>
+        <div className="flex items-center gap-2">
+          <input ref={fileRef} type="file" accept=".xlsx,.csv" className="hidden" onChange={handleImport} data-testid="import-file-input" />
+          <Button variant="outline" onClick={downloadTemplate} className="border-slate-200 text-slate-600 rounded-xl hover:bg-slate-50 transition-all" data-testid="download-template"><FileDown className="w-4 h-4 mr-2" strokeWidth={1.5} /> Plantilla</Button>
+          <Button variant="outline" onClick={() => fileRef.current?.click()} disabled={importing} className="border-slate-200 text-slate-700 rounded-xl hover:bg-slate-50 transition-all" data-testid="import-contacts-button">
+            {importing ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Upload className="w-4 h-4 mr-2" strokeWidth={1.5} />} Importar Excel/CSV
+          </Button>
+          <Button onClick={() => { setForm(emptyForm()); setOpen(true); }} className="bg-[#0052FF] hover:bg-[#0040CC] text-white rounded-xl shadow-[0_4px_14px_0_rgba(0,82,255,0.39)] transition-all hover:-translate-y-0.5 active:scale-95" data-testid="new-contact-button">
+            <Plus className="w-4 h-4 mr-2" strokeWidth={1.5} /> {isClient ? "Nuevo cliente" : "Nuevo proveedor"}
+          </Button>
+        </div>
       </div>
 
       <Tabs value={kind} onValueChange={setKind} className="mb-5">
@@ -96,6 +132,7 @@ export default function Contacts() {
               <div className="font-medium text-slate-900 mt-3">{c.name}</div>
               {c.nif && <div className="text-sm text-slate-500 tabular">{c.nif}</div>}
               {c.email && <div className="text-sm text-slate-400 flex items-center gap-1.5 mt-1"><Mail className="w-3.5 h-3.5" strokeWidth={1.5} />{c.email}</div>}
+              {c.phone && <div className="text-sm text-slate-400 flex items-center gap-1.5 mt-1"><Phone className="w-3.5 h-3.5" strokeWidth={1.5} />{c.phone}</div>}
             </div>
           ))}
         </div>

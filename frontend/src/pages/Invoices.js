@@ -58,7 +58,7 @@ const round2 = (n) => Math.round((n + Number.EPSILON) * 100) / 100;
 
 const emptyForm = () => ({
   issue_date: new Date().toISOString().slice(0, 10),
-  client: { name: "", nif: "", address: "", email: "" },
+  client: { name: "", nif: "", address: "", email: "", phone: "" },
   line_items: [emptyLine()],
   irpf_rate: "0",
   recargo_equivalencia: false,
@@ -135,6 +135,7 @@ export default function Invoices() {
             name: data.name,
             address: data.address || f.client.address,
             email: data.email || f.client.email,
+            phone: data.phone || f.client.phone,
           },
         }));
         toast.success(data.source === "Contactos guardados" ? `Datos cargados de tus contactos: ${data.name}` : `Encontrado: ${data.name}`);
@@ -220,7 +221,7 @@ export default function Invoices() {
 
   const pickClient = (id) => {
     const c = clients.find((x) => x.id === id);
-    if (c) setForm((f) => ({ ...f, client: { name: c.name, nif: c.nif, address: c.address, email: c.email } }));
+    if (c) setForm((f) => ({ ...f, client: { name: c.name || "", nif: c.nif || "", address: c.address || "", email: c.email || "", phone: c.phone || "" } }));
   };
 
   const openNew = async () => {
@@ -242,7 +243,7 @@ export default function Invoices() {
     } catch (e) { /* noop */ }
     setForm({
       issue_date: new Date().toISOString().slice(0, 10),
-      client: { name: inv.client?.name || "", nif: inv.client?.nif || "", address: inv.client?.address || "", email: inv.client?.email || "" },
+      client: { name: inv.client?.name || "", nif: inv.client?.nif || "", address: inv.client?.address || "", email: inv.client?.email || "", phone: inv.client?.phone || "" },
       line_items: (inv.line_items?.length ? inv.line_items : [emptyLine()])
         .map((i) => ({ description: i.description, detail: i.detail || "", quantity: i.quantity, unit_price: -Math.abs(i.unit_price), discount: i.discount || 0, iva_sel: lineToSel(i) })),
       irpf_rate: String(inv.irpf_rate || 0),
@@ -270,7 +271,7 @@ export default function Invoices() {
     setNextNumber(inv.number);
     setForm({
       issue_date: inv.issue_date,
-      client: { name: inv.client?.name || "", nif: inv.client?.nif || "", address: inv.client?.address || "", email: inv.client?.email || "" },
+      client: { name: inv.client?.name || "", nif: inv.client?.nif || "", address: inv.client?.address || "", email: inv.client?.email || "", phone: inv.client?.phone || "" },
       line_items: inv.line_items?.length ? inv.line_items.map((i) => ({ description: i.description, detail: i.detail || "", quantity: i.quantity, unit_price: i.unit_price, discount: i.discount || 0, iva_sel: lineToSel(i) })) : [emptyLine()],
       irpf_rate: String(inv.irpf_rate || 0),
       recargo_equivalencia: !!inv.recargo_equivalencia,
@@ -662,6 +663,7 @@ export default function Invoices() {
                   </div>
                 </div>
                 <div className="space-y-2"><Label>Email</Label><Input type="email" value={form.client.email} onChange={(e) => setForm({ ...form, client: { ...form.client, email: e.target.value } })} data-testid="client-email" /></div>
+                <div className="space-y-2"><Label>Teléfono</Label><Input value={form.client.phone || ""} onChange={(e) => setForm({ ...form, client: { ...form.client, phone: e.target.value } })} data-testid="client-phone" /></div>
                 <div className="space-y-2"><Label>Dirección</Label><Input value={form.client.address} onChange={(e) => setForm({ ...form, client: { ...form.client, address: e.target.value } })} data-testid="client-address" /></div>
               </div>
               {!editingId && (
@@ -681,7 +683,7 @@ export default function Invoices() {
                 <div key={idx} className="rounded-lg border border-slate-100 p-3 space-y-2" data-testid={`line-item-${idx}`}>
                   <div className="grid grid-cols-12 gap-2 items-end">
                     <div className="col-span-4 space-y-1">{idx === 0 && <Label className="text-xs">Concepto</Label>}<Input value={it.description} onChange={(e) => updateItem(idx, "description", e.target.value)} data-testid={`line-desc-${idx}`} /></div>
-                    <div className="col-span-1 space-y-1">{idx === 0 && <Label className="text-xs">Cant.</Label>}<Input type="number" step="0.01" value={it.quantity} onChange={(e) => updateItem(idx, "quantity", e.target.value)} data-testid={`line-qty-${idx}`} /></div>
+                    <div className="col-span-1 space-y-1">{idx === 0 && <Label className="text-xs">Cant.</Label>}<Input type="number" step="1" min="0" value={it.quantity} onChange={(e) => updateItem(idx, "quantity", e.target.value)} data-testid={`line-qty-${idx}`} /></div>
                     <div className="col-span-2 space-y-1">{idx === 0 && <Label className="text-xs">Precio (€)</Label>}<Input type="number" step="0.01" value={it.unit_price} onChange={(e) => updateItem(idx, "unit_price", e.target.value)} data-testid={`line-price-${idx}`} /></div>
                     <div className="col-span-1 space-y-1">{idx === 0 && <Label className="text-xs">Dto.%</Label>}<Input type="number" step="0.01" min="0" max="100" value={it.discount} onChange={(e) => updateItem(idx, "discount", e.target.value)} data-testid={`line-discount-${idx}`} /></div>
                     <div className="col-span-3 space-y-1">{idx === 0 && <Label className="text-xs">Impuesto</Label>}
