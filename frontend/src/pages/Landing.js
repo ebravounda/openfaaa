@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import {
   Sparkles, FileText, Landmark, ShieldCheck, ScanLine, Bot, Check, ArrowRight,
   Menu, TrendingUp, Zap, ReceiptText, Building2, Users, Briefcase, Star, MapPin,
-  CreditCard, Clock,
+  CreditCard, Clock, Store, ShoppingBag, MessageCircle, Wallet, Utensils,
 } from "lucide-react";
 
 const ACCENT = "#0052FF";
@@ -236,8 +236,51 @@ function PaymentMockup() {
   );
 }
 
+function PosMockup() {
+  const prods = [["Café", "1,40€"], ["Tostada", "2,20€"], ["Zumo", "2,80€"], ["Menú del día", "12,50€"], ["Caña", "1,80€"], ["Ración", "8,00€"]];
+  return (
+    <BrowserFrame>
+      <div className="p-5 sm:p-6 bg-white">
+        <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center gap-2.5">
+            <div className="w-9 h-9 rounded-lg flex items-center justify-center text-white shadow-md" style={{ background: ACCENT }}><Store className="w-4 h-4" strokeWidth={1.5} /></div>
+            <div>
+              <div className="font-outfit font-semibold text-slate-900 text-sm">TPV · Hostelería</div>
+              <div className="text-[11px] text-emerald-600 font-medium flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" /> Mesa 4 · Caja abierta</div>
+            </div>
+          </div>
+          <span className="inline-flex items-center gap-1 text-[11px] font-medium text-slate-500 bg-slate-100 px-2.5 py-1 rounded-full">Ticket 80mm</span>
+        </div>
+        <div className="grid grid-cols-3 gap-2.5">
+          {prods.map(([n, p], i) => (
+            <motion.div
+              key={n}
+              initial={{ opacity: 0, scale: 0.9 }}
+              whileInView={{ opacity: 1, scale: 1 }}
+              viewport={{ once: true }}
+              transition={{ delay: i * 0.05 }}
+              className={`rounded-xl border p-2.5 ${i === 3 ? "border-[#0052FF] shadow-[0_6px_18px_rgba(0,82,255,0.12)]" : "border-slate-100 bg-slate-50/60"}`}
+            >
+              <div className="text-[11px] font-medium text-slate-700 truncate">{n}</div>
+              <div className="text-xs font-bold tabular-nums" style={{ color: ACCENT }}>{p}</div>
+            </motion.div>
+          ))}
+        </div>
+        <div className="mt-4 rounded-xl bg-slate-900 text-white p-3.5 flex items-center justify-between">
+          <div>
+            <div className="text-[11px] text-slate-400">Total ticket</div>
+            <div className="font-outfit text-xl font-bold tabular-nums">27,90€</div>
+          </div>
+          <span className="rounded-lg px-4 py-2 text-sm font-semibold shadow-lg" style={{ background: ACCENT }}>Cobrar</span>
+        </div>
+      </div>
+    </BrowserFrame>
+  );
+}
+
 const MODULES = [
   { id: "facturacion", icon: FileText, label: "Facturación", title: "Facturas en segundos", subtitle: "Crea, envía y cobra facturas profesionales al instante.", bullets: ["Series, rectificativas y PDF automático", "Plantillas personalizables con tu logo por sector"], visual: InvoiceMockup },
+  { id: "tpv", icon: Store, label: "TPV / Punto de venta", title: "TPV para hostelería y retail", subtitle: "Vende en tu bar, restaurante o tienda con un punto de venta rápido y profesional.", bullets: ["Modo hostelería (mesas, comandas, propinas y notas) y modo retail (stock, variantes talla/color, códigos de barras)", "Cobro en efectivo, tarjeta o mixto, arqueo de caja y tickets imprimibles en 80 y 58 mm"], visual: PosMockup },
   { id: "cobros", icon: CreditCard, label: "Cobros", title: "Cobra con tarjeta por Stripe", subtitle: "Envía un enlace de pago y cobra tus facturas más rápido.", bullets: ["Botón «Enviar Cobro»: tu cliente paga con tarjeta desde el email", "La factura se marca pagada automáticamente al cobrar", "Próximamente también RedSys (TPV bancario español)"], visual: PaymentMockup },
   { id: "impuestos", icon: Landmark, label: "Impuestos", title: "IVA e IRPF automáticos", subtitle: "Tus impuestos se calculan solos mientras facturas.", bullets: ["Modelos 303, 130 y resumen anual 390 listos", "Aplica el 7% de IRPF reducido si eres nuevo autónomo"], visual: TaxMockup },
   { id: "cumplimiento", icon: ShieldCheck, label: "Cumplimiento", title: "Software compatible VeriFactu", subtitle: "Cumple con la normativa de la AEAT sin esfuerzo.", bullets: ["Registro y anulación con huella encadenada + QR", "Firma con tu certificado digital .pfx"], visual: DashboardMockup },
@@ -279,6 +322,14 @@ const NOVEDADES = [
   { icon: CreditCard, t: "Cobro con tarjeta", d: "Envía un enlace de pago por Stripe y cobra tus facturas al instante, con conciliación automática." },
 ];
 
+const PROXIMAMENTE = [
+  { icon: Landmark, t: "Conciliación bancaria", d: "Conecta tu banco de forma segura y concilia automáticamente las transferencias recibidas con tus facturas pendientes.", banks: true },
+  { icon: MessageCircle, t: "Facturas por WhatsApp", d: "Envía facturas, presupuestos y recordatorios de cobro directamente al WhatsApp de tus clientes." },
+  { icon: CreditCard, t: "Cobros con RedSys", d: "Cobra con el TPV bancario español RedSys, además de Stripe, tanto en tus facturas como en tu punto de venta." },
+];
+
+const BANKS = ["Santander", "CaixaBank", "BBVA", "Sabadell", "Bankinter", "ING"];
+
 const PLANS = [
   { name: "Básico", price: "0€", per: "/mes", desc: "Para empezar a facturar", features: ["Hasta 10 facturas al mes", "Clientes y presupuestos", "Cálculo de IVA e IRPF"], cta: "Empezar gratis", highlight: false },
   { name: "Medio", price: "9,99€", per: "/mes", desc: "Para autónomos en activo", features: ["Hasta 100 facturas al mes", "Envío de facturas por email", "Escáner de gastos con IA"], cta: "Probar 14 días gratis", highlight: false },
@@ -307,6 +358,7 @@ export default function Landing() {
           </div>
           <nav className="hidden md:flex items-center gap-8 text-sm font-medium text-slate-600">
             <a href="#facturacion" className="hover:text-slate-900 transition-colors">Facturación</a>
+            <a href="#tpv" className="hover:text-slate-900 transition-colors">TPV</a>
             <a href="#cobros" className="hover:text-slate-900 transition-colors">Cobros</a>
             <a href="#impuestos" className="hover:text-slate-900 transition-colors">Impuestos</a>
             <a href="#funcionalidades" className="hover:text-slate-900 transition-colors">Funcionalidades</a>
@@ -336,7 +388,7 @@ export default function Landing() {
             </Reveal>
             <Reveal immediate delay={0.1}>
               <p className="text-base sm:text-lg text-slate-500 mt-6 max-w-xl leading-relaxed">
-                OpenFactura es la solución en la nube con todo lo que necesitas para gestionar tu negocio. Facturas con plantillas propias, cobros con tarjeta, IVA, IRPF, VeriFactu y una IA que te ayuda, en una sola plataforma.
+                OpenFactura es la solución en la nube con todo lo que necesitas para gestionar tu negocio: facturas con plantillas propias, <strong>TPV para hostelería y retail</strong>, cobros con tarjeta, IVA, IRPF, VeriFactu y una IA que te ayuda. Todo en una sola plataforma.
               </p>
             </Reveal>
             <Reveal immediate delay={0.15}>
@@ -500,6 +552,12 @@ export default function Landing() {
               <span className="inline-flex items-center gap-2 rounded-full border border-dashed border-[#635BFF]/40 bg-[#635BFF]/5 px-4 py-2 text-sm font-medium text-[#635BFF]">
                 <Clock className="w-3.5 h-3.5" strokeWidth={2} /> RedSys · Próximamente
               </span>
+              <span className="inline-flex items-center gap-2 rounded-full border border-dashed border-emerald-500/40 bg-emerald-50 px-4 py-2 text-sm font-medium text-emerald-600">
+                <Clock className="w-3.5 h-3.5" strokeWidth={2} /> WhatsApp · Próximamente
+              </span>
+              <span className="inline-flex items-center gap-2 rounded-full border border-dashed border-[#0052FF]/40 bg-[#0052FF]/5 px-4 py-2 text-sm font-medium text-[#0052FF]">
+                <Clock className="w-3.5 h-3.5" strokeWidth={2} /> Conciliación bancaria · Próximamente
+              </span>
             </div>
           </Reveal>
         </div>
@@ -549,6 +607,37 @@ export default function Landing() {
                 <div className="w-11 h-11 rounded-xl bg-[#0052FF]/10 text-[#0052FF] flex items-center justify-center mb-4"><f.icon className="w-5 h-5" strokeWidth={1.5} /></div>
                 <div className="font-semibold text-slate-900">{f.t}</div>
                 <p className="text-sm text-slate-500 mt-1.5 leading-relaxed">{f.d}</p>
+              </motion.div>
+            ))}
+          </motion.div>
+        </div>
+      </section>
+
+      {/* Próximamente */}
+      <section id="proximamente" className="bg-slate-900 text-white overflow-hidden relative">
+        <div className="absolute -top-24 -right-24 w-96 h-96 bg-[#0052FF]/20 blur-3xl rounded-full" />
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-20 sm:py-28 relative">
+          <Reveal>
+            <span className="inline-flex items-center gap-2 text-sm font-semibold" style={{ color: "#7DA2FF" }}><Clock className="w-4 h-4" strokeWidth={2} /> Próximamente</span>
+            <h2 className="text-3xl sm:text-4xl lg:text-5xl font-bold tracking-tight mt-3 max-w-2xl">Lo que estamos construyendo para ti</h2>
+            <p className="text-slate-400 mt-4 max-w-xl">Estas potentes funciones llegarán muy pronto a OpenFactura. Ve preparando tu negocio.</p>
+          </Reveal>
+          <motion.div variants={stagger} initial="hidden" whileInView="show" viewport={{ once: true }} className="grid grid-cols-1 md:grid-cols-3 gap-5 mt-12">
+            {PROXIMAMENTE.map((f) => (
+              <motion.div key={f.t} variants={fadeUp} className="group rounded-2xl border border-slate-800 bg-slate-800/40 p-6 hover:border-[#0052FF]/50 hover:bg-slate-800/70 transition-colors duration-300 backdrop-blur-sm" data-testid={`soon-${f.t}`}>
+                <div className="flex items-center justify-between mb-4">
+                  <div className="w-11 h-11 rounded-xl bg-[#0052FF]/15 text-[#7DA2FF] flex items-center justify-center"><f.icon className="w-5 h-5" strokeWidth={1.5} /></div>
+                  <span className="text-[10px] font-semibold uppercase tracking-wider bg-white/10 text-slate-300 rounded-full px-2.5 py-1">Pronto</span>
+                </div>
+                <div className="font-semibold text-lg">{f.t}</div>
+                <p className="text-sm text-slate-400 mt-1.5 leading-relaxed">{f.d}</p>
+                {f.banks && (
+                  <div className="flex flex-wrap gap-2 mt-4">
+                    {BANKS.map((b) => (
+                      <span key={b} className="text-[11px] font-semibold rounded-md bg-white/90 text-slate-800 px-2.5 py-1">{b}</span>
+                    ))}
+                  </div>
+                )}
               </motion.div>
             ))}
           </motion.div>
