@@ -444,6 +444,8 @@ async def upsert_company(data: CompanyInput, user=Depends(get_current_user)):
     doc = data.model_dump()
     doc["user_id"] = user["id"]
     doc["id"] = cid
+    if user.get("role") != "admin" and TEMPLATE_MAP.get(doc.get("template_id", ""), {}).get("layout") == "goroky":
+        doc["template_id"] = "clasico"
     if not doc.get("logo") and comp.get("logo"):
         doc["logo"] = comp["logo"]
     await db.companies.update_one({"id": cid, "user_id": user["id"]}, {"$set": doc})
@@ -482,6 +484,14 @@ async def delete_company_logo(user=Depends(get_current_user)):
     return {"status": "ok"}
 
 
+def _gate_template(company, user):
+    """La plantilla GoRoky solo está disponible para el admin; el resto usa 'clasico'."""
+    c = company or {}
+    if (user or {}).get("role") != "admin" and TEMPLATE_MAP.get(c.get("template_id", ""), {}).get("layout") == "goroky":
+        c = {**c, "template_id": "clasico"}
+    return c
+
+
 @api.post("/company/preview-pdf")
 async def preview_company_pdf(overrides: dict = Body(default={}), user=Depends(get_current_user)):
     """Genera una miniatura PNG del PDF real con los ajustes de aspecto indicados (sin guardar)."""
@@ -507,7 +517,7 @@ async def preview_company_pdf(overrides: dict = Body(default={}), user=Depends(g
         "irpf_rate": 15, "recargo_equivalencia": False, "global_discount": 0,
         "notes": "Factura de muestra para la vista previa.",
     })
-    pdf = build_invoice_pdf(sample, company)
+    pdf = build_invoice_pdf(sample, _gate_template(company, user))
     import pymupdf
     pdoc = pymupdf.open(stream=pdf, filetype="pdf")
     png = pdoc.load_page(0).get_pixmap(dpi=110).tobytes("png")
@@ -519,6 +529,8 @@ async def preview_company_pdf(overrides: dict = Body(default={}), user=Depends(g
 @api.get("/templates")
 async def list_templates(user=Depends(get_current_user)):
     from templates import TEMPLATES
+    if user.get("role") != "admin":
+        return [t for t in TEMPLATES if t.get("layout") != "goroky"]
     return TEMPLATES
 
 
@@ -567,6 +579,8 @@ async def update_company_ep(company_id: str, data: CompanyInput, user=Depends(ge
     doc = data.model_dump()
     doc["user_id"] = user["id"]
     doc["id"] = company_id
+    if user.get("role") != "admin" and TEMPLATE_MAP.get(doc.get("template_id", ""), {}).get("layout") == "goroky":
+        doc["template_id"] = "clasico"
     if not doc.get("logo") and existing.get("logo"):
         doc["logo"] = existing["logo"]
     await db.companies.update_one({"id": company_id, "user_id": user["id"]}, {"$set": doc})
@@ -892,7 +906,7 @@ async def invoice_pdf(invoice_id: str, user=Depends(get_current_user)):
             qr_png = vf.generate_qr_png(vfd["qr_url"])
         except Exception as e:
             logger.error(f"QR generation failed: {e}")
-    pdf = build_invoice_pdf(inv, company, qr_png=qr_png, verifactu=vfd)
+    pdf = build_invoice_pdf(inv, _gate_template(company, user), qr_png=qr_png, verifactu=vfd)
     return Response(content=pdf, media_type="application/pdf",
                     headers={"Content-Disposition": f'inline; filename="factura-{inv["number"]}.pdf"'})
 
@@ -1457,7 +1471,7 @@ async def send_invoice_payment(invoice_id: str, data: SendPaymentReq, user=Depen
             qr_png = vf.generate_qr_png(vfd["qr_url"])
         except Exception:
             pass
-    pdf = build_invoice_pdf(inv, await _merge_global_goroky(company), qr_png=qr_png, verifactu=vfd)
+    pdf = build_invoice_pdf(inv, _gate_template(await _merge_global_goroky(company), user), qr_png=qr_png, verifactu=vfd)
     attachments = [{"filename": f"factura-{inv['number']}.pdf", "content": _b64.b64encode(pdf).decode()}]
     html = build_payment_email_html(inv, company, session.url)
     subject = f"Factura {inv['number']} · Pago pendiente"
