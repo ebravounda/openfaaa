@@ -106,9 +106,12 @@ def _totals_rows(invoice):
         rows.append((f"IVA ({invoice.get('iva_rate', 0):g}%)", _eur(invoice.get("iva_amount", 0)), False))
     if invoice.get("suplidos_total"):
         rows.append(("Suplidos", _eur(invoice.get("suplidos_total", 0)), False))
-    if invoice.get("irpf_rate"):
-        rows.append((f"Retención IRPF (-{invoice['irpf_rate']}%)", f"-{_eur(invoice.get('irpf_amount', 0))}", False))
-    rows.append(("TOTAL", _eur(invoice.get("total", 0)), True))
+    has_irpf = bool(invoice.get("irpf_rate"))
+    if has_irpf:
+        importe_factura = (invoice.get("total", 0) or 0) + (invoice.get("irpf_amount", 0) or 0)
+        rows.append(("TOTAL FACTURA", _eur(importe_factura), False))
+        rows.append((f"Retención IRPF ({invoice['irpf_rate']:g}%)", f"-{_eur(invoice.get('irpf_amount', 0))}", False))
+    rows.append(("TOTAL A PAGAR" if has_irpf else "TOTAL", _eur(invoice.get("total", 0)), True))
     return rows
 
 
@@ -502,7 +505,7 @@ def build_goroky_invoice_pdf(invoice: dict, company: dict, qr_png: bytes = None,
     rows = []
     for lbl, val, is_total in _totals_rows(invoice):
         if is_total:
-            rows.append([Paragraph("TOTAL", ParagraphStyle("grktl", parent=amt_l, fontName="Helvetica-Bold",
+            rows.append([Paragraph(lbl, ParagraphStyle("grktl", parent=amt_l, fontName="Helvetica-Bold",
                          fontSize=13, textColor=GRK_BLUE)),
                          Paragraph(val, ParagraphStyle("grktr", parent=amt_r,
                          fontName="Helvetica-Bold", fontSize=13, textColor=GRK_BLUE))])
