@@ -72,27 +72,35 @@ export default function Pos() {
 
   return (
     <Layout>
-      <div className="flex items-center justify-between mb-5">
-        <div>
-          <h1 className="font-display text-[28px] font-semibold text-slate-900 flex items-center gap-2" data-testid="pos-title">
-            <Store className="w-6 h-6 text-[#0052FF]" strokeWidth={1.5} /> TPV
-          </h1>
-          <p className="text-sm text-slate-500">Punto de venta {isHost ? "· Hostelería" : "· Retail"}</p>
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-6 p-4 sm:p-5 rounded-[24px] bg-white border border-slate-200/80 shadow-[0_4px_20px_rgb(0,0,0,0.03)]">
+        <div className="flex items-center gap-3.5">
+          <div className="relative w-12 h-12 rounded-2xl bg-[#0052FF] flex items-center justify-center shadow-lg shadow-[#0052FF]/25">
+            <Store className="w-6 h-6 text-white" strokeWidth={1.75} />
+            <span className="absolute inset-0 rounded-2xl ring-1 ring-inset ring-white/20" />
+          </div>
+          <div>
+            <h1 className="font-display text-2xl font-bold tracking-tight text-slate-900" data-testid="pos-title">TPV</h1>
+            <p className="text-sm text-slate-500 flex items-center gap-1.5">
+              {isHost ? <Utensils className="w-3.5 h-3.5" /> : <Tag className="w-3.5 h-3.5" />}
+              Punto de venta · {isHost ? "Hostelería" : "Retail"}
+            </p>
+          </div>
         </div>
-        <Badge className={`rounded-full ${session ? "bg-emerald-100 text-emerald-700" : "bg-slate-100 text-slate-500"}`} data-testid="pos-session-badge">
+        <div className={`flex items-center gap-2 px-3.5 py-1.5 rounded-full text-xs font-semibold tracking-wide ${session ? "bg-emerald-50 text-emerald-700 border border-emerald-200/60" : "bg-slate-100 text-slate-500 border border-slate-200"}`} data-testid="pos-session-badge">
+          <span className={`w-2 h-2 rounded-full ${session ? "bg-emerald-500 animate-pulse" : "bg-slate-400"}`} />
           {session ? "Caja abierta" : "Caja cerrada"}
-        </Badge>
+        </div>
       </div>
 
       <Tabs value={tab} onValueChange={setTab}>
-        <TabsList className="flex-wrap h-auto">
-          <TabsTrigger value="vender" data-testid="pos-tab-vender"><ShoppingCart className="w-4 h-4 mr-1.5" />Vender</TabsTrigger>
-          {isHost && <TabsTrigger value="mesas" data-testid="pos-tab-mesas"><Utensils className="w-4 h-4 mr-1.5" />Mesas</TabsTrigger>}
-          <TabsTrigger value="productos" data-testid="pos-tab-productos"><Tag className="w-4 h-4 mr-1.5" />Productos</TabsTrigger>
-          <TabsTrigger value="categorias" data-testid="pos-tab-categorias"><LayoutGrid className="w-4 h-4 mr-1.5" />Categorías</TabsTrigger>
-          <TabsTrigger value="caja" data-testid="pos-tab-caja"><Coins className="w-4 h-4 mr-1.5" />Caja</TabsTrigger>
-          <TabsTrigger value="ventas" data-testid="pos-tab-ventas"><Receipt className="w-4 h-4 mr-1.5" />Ventas</TabsTrigger>
-          <TabsTrigger value="ajustes" data-testid="pos-tab-ajustes"><Settings2 className="w-4 h-4 mr-1.5" />Ajustes</TabsTrigger>
+        <TabsList className="bg-slate-100/80 p-1.5 rounded-2xl border border-slate-200/60 inline-flex flex-wrap gap-1 h-auto">
+          <TabsTrigger value="vender" data-testid="pos-tab-vender" className="rounded-xl px-4 py-2 text-xs sm:text-sm font-medium text-slate-600 data-[state=active]:bg-white data-[state=active]:text-[#0052FF] data-[state=active]:shadow-sm data-[state=active]:font-semibold"><ShoppingCart className="w-4 h-4 mr-1.5" />Vender</TabsTrigger>
+          {isHost && <TabsTrigger value="mesas" data-testid="pos-tab-mesas" className="rounded-xl px-4 py-2 text-xs sm:text-sm font-medium text-slate-600 data-[state=active]:bg-white data-[state=active]:text-[#0052FF] data-[state=active]:shadow-sm data-[state=active]:font-semibold"><Utensils className="w-4 h-4 mr-1.5" />Mesas</TabsTrigger>}
+          <TabsTrigger value="productos" data-testid="pos-tab-productos" className="rounded-xl px-4 py-2 text-xs sm:text-sm font-medium text-slate-600 data-[state=active]:bg-white data-[state=active]:text-[#0052FF] data-[state=active]:shadow-sm data-[state=active]:font-semibold"><Tag className="w-4 h-4 mr-1.5" />Productos</TabsTrigger>
+          <TabsTrigger value="categorias" data-testid="pos-tab-categorias" className="rounded-xl px-4 py-2 text-xs sm:text-sm font-medium text-slate-600 data-[state=active]:bg-white data-[state=active]:text-[#0052FF] data-[state=active]:shadow-sm data-[state=active]:font-semibold"><LayoutGrid className="w-4 h-4 mr-1.5" />Categorías</TabsTrigger>
+          <TabsTrigger value="caja" data-testid="pos-tab-caja" className="rounded-xl px-4 py-2 text-xs sm:text-sm font-medium text-slate-600 data-[state=active]:bg-white data-[state=active]:text-[#0052FF] data-[state=active]:shadow-sm data-[state=active]:font-semibold"><Coins className="w-4 h-4 mr-1.5" />Caja</TabsTrigger>
+          <TabsTrigger value="ventas" data-testid="pos-tab-ventas" className="rounded-xl px-4 py-2 text-xs sm:text-sm font-medium text-slate-600 data-[state=active]:bg-white data-[state=active]:text-[#0052FF] data-[state=active]:shadow-sm data-[state=active]:font-semibold"><Receipt className="w-4 h-4 mr-1.5" />Ventas</TabsTrigger>
+          <TabsTrigger value="ajustes" data-testid="pos-tab-ajustes" className="rounded-xl px-4 py-2 text-xs sm:text-sm font-medium text-slate-600 data-[state=active]:bg-white data-[state=active]:text-[#0052FF] data-[state=active]:shadow-sm data-[state=active]:font-semibold"><Settings2 className="w-4 h-4 mr-1.5" />Ajustes</TabsTrigger>
         </TabsList>
 
         <div className="mt-5">
@@ -187,37 +195,39 @@ function SellScreen({ settings, categories, products, tables, session, isHost, r
   }
 
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
+    <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
       {/* Products */}
-      <div className="lg:col-span-2 space-y-4">
+      <div className="lg:col-span-7 xl:col-span-8 space-y-5">
         {isHost && (
           <div className="flex items-center gap-2 flex-wrap" data-testid="pos-tables-strip">
             {tables.map((t) => (
               <button key={t.id} onClick={() => resumeTable(t)} data-testid={`pos-table-${t.name}`}
-                className={`px-3 py-2 rounded-xl text-sm border transition-colors ${tableId === t.id ? "bg-[#0052FF] text-white border-[#0052FF]" : t.open_ticket_id ? "bg-amber-50 border-amber-200 text-amber-800" : "bg-white border-slate-200 text-slate-600 hover:border-slate-300"}`}>
+                className={`px-3.5 py-2 rounded-xl text-sm font-medium border transition-[transform,box-shadow,background-color,border-color] active:scale-95 ${tableId === t.id ? "bg-[#0052FF] text-white border-[#0052FF] shadow-lg shadow-[#0052FF]/20" : t.open_ticket_id ? "bg-amber-50 border-amber-300 text-amber-900" : "bg-white border-slate-200 text-slate-600 hover:border-slate-300 hover:shadow-sm"}`}>
                 {t.name}{t.open_ticket_id ? ` · ${money(t.open_total)}` : ""}
               </button>
             ))}
             {tables.length === 0 && <span className="text-sm text-slate-400">Crea mesas en la pestaña Mesas.</span>}
           </div>
         )}
-        <div className="flex items-center gap-2 flex-wrap">
-          <button onClick={() => setCatFilter("all")} className={`px-3 py-1.5 rounded-full text-sm ${catFilter === "all" ? "bg-slate-900 text-white" : "bg-slate-100 text-slate-600"}`} data-testid="pos-cat-all">Todo</button>
+        <div className="flex items-center gap-2 overflow-x-auto pb-1 [&::-webkit-scrollbar]:hidden">
+          <button onClick={() => setCatFilter("all")} className={`shrink-0 px-4 py-2 rounded-full text-xs font-semibold transition-[transform,background-color] active:scale-95 ${catFilter === "all" ? "bg-slate-900 text-white shadow-md shadow-slate-900/10" : "bg-slate-100 text-slate-600 hover:bg-slate-200/70"}`} data-testid="pos-cat-all">Todo</button>
           {categories.map((c) => (
             <button key={c.id} onClick={() => setCatFilter(c.id)} data-testid={`pos-cat-${c.name}`}
-              className={`px-3 py-1.5 rounded-full text-sm ${catFilter === c.id ? "text-white" : "text-slate-600 bg-slate-100"}`}
+              className={`shrink-0 px-4 py-2 rounded-full text-xs font-semibold transition-[transform,background-color] active:scale-95 ${catFilter === c.id ? "text-white shadow-md shadow-slate-900/10" : "text-slate-600 bg-slate-100 hover:bg-slate-200/70"}`}
               style={catFilter === c.id ? { backgroundColor: c.color || "#0052FF" } : {}}>{c.name}</button>
           ))}
         </div>
         <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-4 gap-3">
-          {activeProducts.map((p) => (
+          {activeProducts.map((p, idx) => (
             <button key={p.id} onClick={() => onProductClick(p)} data-testid={`pos-product-${p.name}`}
-              className="rounded-2xl border border-slate-200 bg-white p-3 text-left hover:border-[#0052FF] hover:shadow-sm transition-all">
-              <div className="text-sm font-medium text-slate-900 line-clamp-2 min-h-[40px]">{p.name}</div>
-              <div className="mt-1 flex items-center justify-between">
-                <span className="text-[#0052FF] font-semibold">{money(p.price)}</span>
-                {p.track_stock && p.stock != null && <span className="text-[11px] text-slate-400">{p.stock} ud</span>}
+              style={{ animationDelay: `${Math.min(idx * 30, 300)}ms` }}
+              className="of-fade-up group relative flex flex-col justify-between p-4 rounded-[20px] bg-white border border-slate-200/80 hover:border-[#0052FF]/50 shadow-[0_4px_16px_rgb(0,0,0,0.02)] hover:shadow-[0_12px_28px_rgba(0,82,255,0.08)] hover:-translate-y-0.5 active:scale-[0.98] transition-[transform,box-shadow,border-color] duration-200 cursor-pointer overflow-hidden text-left min-h-[112px]">
+              <div className="font-medium text-sm text-slate-800 group-hover:text-[#0052FF] line-clamp-2 transition-colors">{p.name}</div>
+              <div className="mt-2 flex items-center justify-between">
+                <span className="font-display text-base font-bold text-[#0052FF] tabular-nums">{money(p.price)}</span>
+                {p.track_stock && p.stock != null && <span className="text-[11px] px-2 py-0.5 rounded-md font-medium bg-slate-100 text-slate-500">{p.stock} ud</span>}
               </div>
+              <span className="absolute inset-x-0 bottom-0 h-1 bg-[#0052FF] opacity-0 group-hover:opacity-100 transition-opacity" />
             </button>
           ))}
           {activeProducts.length === 0 && <p className="text-sm text-slate-400 col-span-full">No hay productos. Créalos en la pestaña Productos.</p>}
@@ -225,7 +235,7 @@ function SellScreen({ settings, categories, products, tables, session, isHost, r
       </div>
 
       {/* Cart */}
-      <div className="rounded-2xl border border-slate-200 bg-white p-4 h-fit lg:sticky lg:top-4" data-testid="pos-cart">
+      <div className="lg:col-span-5 xl:col-span-4 rounded-[24px] border border-slate-200/80 bg-white/95 backdrop-blur-xl p-5 h-fit lg:sticky lg:top-4 shadow-[0_12px_36px_rgb(0,0,0,0.05)]" data-testid="pos-cart">
         <div className="flex items-center justify-between mb-3">
           <h3 className="font-semibold text-slate-900 flex items-center gap-2"><ShoppingCart className="w-4 h-4" />{isHost && tableName ? tableName : "Ticket"}</h3>
           {cart.length > 0 && <button onClick={clearCart} className="text-xs text-slate-400 hover:text-red-500" data-testid="pos-cart-clear">Vaciar</button>}
@@ -257,15 +267,15 @@ function SellScreen({ settings, categories, products, tables, session, isHost, r
             </div>
           </div>
         )}
-        <div className="flex items-center justify-between mt-3 pt-3 border-t border-slate-200">
-          <span className="font-semibold text-slate-900">Total</span>
-          <span className="text-xl font-bold text-[#0052FF]" data-testid="pos-cart-total">{money(cartTotal)}</span>
+        <div className="p-4 rounded-2xl bg-slate-50 border border-slate-100 mt-4 flex items-center justify-between">
+          <span className="font-display font-semibold text-slate-900">Total</span>
+          <span className="font-display text-2xl font-bold text-[#0052FF] tabular-nums" data-testid="pos-cart-total">{money(cartTotal)}</span>
         </div>
         <div className="mt-3 space-y-2">
-          <Button className="w-full h-11 bg-[#0052FF] hover:bg-[#0043cc]" disabled={!cart.length} onClick={() => setCheckout(true)} data-testid="pos-checkout-btn">
+          <Button className="w-full h-[52px] rounded-2xl bg-[#0052FF] hover:bg-[#0043CC] font-display text-base font-semibold shadow-lg shadow-[#0052FF]/25 hover:shadow-xl hover:shadow-[#0052FF]/35 active:scale-[0.99] transition-[transform,box-shadow] duration-200" disabled={!cart.length} onClick={() => setCheckout(true)} data-testid="pos-checkout-btn">
             <CreditCard className="w-4 h-4 mr-2" /> Cobrar {money(cartTotal)}
           </Button>
-          {isHost && <Button variant="outline" className="w-full" disabled={!cart.length} onClick={saveComanda} data-testid="pos-save-comanda-btn"><Utensils className="w-4 h-4 mr-2" />Guardar comanda</Button>}
+          {isHost && <Button variant="outline" className="w-full rounded-2xl" disabled={!cart.length} onClick={saveComanda} data-testid="pos-save-comanda-btn"><Utensils className="w-4 h-4 mr-2" />Guardar comanda</Button>}
         </div>
       </div>
 
@@ -308,19 +318,24 @@ function CheckoutDialog({ total, onConfirm, onClose }) {
     <Dialog open onOpenChange={onClose}>
       <DialogContent data-testid="pos-checkout-dialog">
         <DialogHeader><DialogTitle>Cobrar {money(total)}</DialogTitle><DialogDescription className="sr-only">Ventana del TPV</DialogDescription></DialogHeader>
-        <div className="grid grid-cols-3 gap-2">
-          {[["efectivo", "Efectivo", Banknote], ["tarjeta", "Tarjeta", CreditCard], ["mixto", "Mixto", Coins]].map(([k, l, Icon]) => (
+        <div className="grid grid-cols-3 gap-3">
+          {[["efectivo", "Efectivo", Banknote, "border-emerald-500 bg-emerald-50 text-emerald-700"], ["tarjeta", "Tarjeta", CreditCard, "border-[#0052FF] bg-blue-50 text-[#0052FF]"], ["mixto", "Mixto", Coins, "border-purple-500 bg-purple-50 text-purple-700"]].map(([k, l, Icon, active]) => (
             <button key={k} onClick={() => setMethod(k)} data-testid={`pos-method-${k}`}
-              className={`rounded-xl border p-3 flex flex-col items-center gap-1 text-sm ${method === k ? "border-[#0052FF] bg-blue-50 text-[#0052FF]" : "border-slate-200 text-slate-600"}`}>
-              <Icon className="w-5 h-5" /> {l}
+              className={`flex flex-col items-center justify-center gap-2 p-4 rounded-2xl border-2 text-sm font-semibold transition-[transform,background-color,border-color] active:scale-95 ${method === k ? active : "border-slate-200 text-slate-500 hover:border-slate-300"}`}>
+              <Icon className="w-6 h-6" /> {l}
             </button>
           ))}
         </div>
         {method === "efectivo" && (
-          <div className="mt-2">
+          <div className="mt-3">
             <Label className="text-sm">Entregado</Label>
-            <Input type="number" step="0.5" value={given} onChange={(e) => setGiven(e.target.value)} placeholder={total.toFixed(2)} className="mt-1" data-testid="pos-cash-given" />
-            {change != null && change >= 0 && <p className="text-sm text-emerald-600 mt-1" data-testid="pos-change">Cambio: {money(change)}</p>}
+            <Input type="number" step="0.5" value={given} onChange={(e) => setGiven(e.target.value)} placeholder={total.toFixed(2)} className="mt-1 rounded-xl" data-testid="pos-cash-given" />
+            <div className="flex gap-2 mt-2 flex-wrap">
+              {[total, Math.ceil(total / 5) * 5, Math.ceil(total / 10) * 10, Math.ceil(total / 20) * 20].filter((v, i, a) => a.indexOf(v) === i).map((v) => (
+                <button key={v} onClick={() => setGiven(String(v))} className="px-3 py-1.5 rounded-xl border border-slate-200 bg-slate-50 hover:bg-slate-100 text-xs font-medium text-slate-700 active:scale-95 transition-transform">{money(v)}</button>
+              ))}
+            </div>
+            {change != null && change >= 0 && <p className="text-sm text-emerald-600 mt-2 font-medium" data-testid="pos-change">Cambio: {money(change)}</p>}
           </div>
         )}
         {method === "mixto" && (
@@ -369,14 +384,22 @@ function TablesTab({ tables, reload }) {
   return (
     <div>
       <div className="flex justify-end mb-3"><Button onClick={() => setEdit({ name: "", room: "", sort: 0 })} data-testid="pos-add-table"><Plus className="w-4 h-4 mr-1" />Nueva mesa</Button></div>
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
         {tables.map((t) => (
-          <div key={t.id} className="rounded-2xl border border-slate-200 bg-white p-4" data-testid={`pos-table-card-${t.name}`}>
-            <div className="font-semibold text-slate-900">{t.name}</div>
-            <div className="text-xs text-slate-400">{t.room || "Sala principal"}</div>
-            <div className="flex gap-2 mt-3">
-              <Button size="sm" variant="ghost" onClick={() => setEdit(t)} data-testid={`pos-edit-table-${t.name}`}>Editar</Button>
-              <Button size="sm" variant="ghost" className="text-red-500" onClick={() => remove(t)}>Eliminar</Button>
+          <div key={t.id} className="group relative rounded-[22px] border border-slate-200/90 bg-white p-5 shadow-[0_4px_20px_rgb(0,0,0,0.03)] hover:shadow-md hover:-translate-y-0.5 transition-[transform,box-shadow] min-h-[128px] flex flex-col justify-between" data-testid={`pos-table-card-${t.name}`}>
+            <div className="flex items-center justify-between">
+              <Utensils className="w-5 h-5 text-slate-300" strokeWidth={1.5} />
+              {t.open_ticket_id
+                ? <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-amber-50 text-amber-800 border border-amber-200/80"><span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse" />Ocupada</span>
+                : <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200/60"><span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />Libre</span>}
+            </div>
+            <div>
+              <div className="font-display font-bold text-slate-900">{t.name}</div>
+              <div className="text-xs text-slate-400">{t.room || "Sala principal"}{t.open_ticket_id ? ` · ${money(t.open_total)}` : ""}</div>
+            </div>
+            <div className="flex gap-1 mt-2 opacity-0 group-hover:opacity-100 transition-opacity">
+              <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => setEdit(t)} data-testid={`pos-edit-table-${t.name}`}>Editar</Button>
+              <Button size="sm" variant="ghost" className="h-7 text-xs text-red-500" onClick={() => remove(t)}>Eliminar</Button>
             </div>
           </div>
         ))}

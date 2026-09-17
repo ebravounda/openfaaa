@@ -1,91 +1,231 @@
 {
-  "theme": "light",
-  "typography": {
-    "headings": "Use the existing 'font-display' class for all headings (H1, H2, H3). Apply 'tracking-tight' to enhance the modern feel.",
-    "body": "Use a clean geometric sans-serif for body copy. Maintain high legibility for data-dense areas.",
-    "numbers": "For all invoice amounts, totals, and numerical metrics, apply 'font-semibold' or 'font-bold' combined with 'tabular-nums' to prevent horizontal layout jitter.",
-    "hierarchy": "H1: text-3xl to text-4xl. Card Metrics: text-4xl font-display font-bold. Maintain a clear 2-step hierarchy gap."
+  "project": "OpenFactura - TPV / POS Module (Square / Lightspeed / Holded Style)",
+  "context": "Modern, ultra-pro visual redesign for the Spanish POS invoicing module in /app/frontend/src/pages/Pos.js. Follows Holded design language with rounded-[20px]/rounded-[24px] surfaces, soft depth shadows shadow-[0_8px_30px_rgb(0,0,0,0.04)], brand blue #0052FF, display typography, and smooth micro-interactions.",
+  "tech_stack": {
+    "framework": "React.js (.js files)",
+    "styling": "Tailwind CSS + shadcn/ui primitives",
+    "icons": "lucide-react",
+    "notifications": "sonner",
+    "fonts": [
+      "Manrope (font-display for headings & totals)",
+      "IBM Plex Sans (body)",
+      "IBM Plex Mono (font-mono tabular-nums for money & tickets)"
+    ]
   },
-  "colors": {
+  "color_system": {
     "primary": "#0052FF",
-    "primary_hover": "#0040CC",
-    "background": "#F9FAFB",
+    "primary_hover": "#0043CC",
+    "primary_light": "#EFF4FF",
+    "primary_glow": "rgba(0, 82, 255, 0.15)",
+    "background": "#F8FAFC",
     "surface": "#FFFFFF",
-    "text_main": "#111827",
-    "text_muted": "#6B7280",
-    "badges": {
-      "paid": "bg-emerald-50 text-emerald-700 ring-1 ring-emerald-600/20",
-      "pending": "bg-amber-50 text-amber-700 ring-1 ring-amber-600/20",
-      "card_paid": "bg-blue-50 text-blue-700 ring-1 ring-blue-600/20",
-      "cancelled": "bg-red-50 text-red-700 ring-1 ring-red-600/20",
-      "rectificativa": "bg-purple-50 text-purple-700 ring-1 ring-purple-600/20"
+    "border_subtle": "rgba(226, 232, 240, 0.8)",
+    "border_active": "#0052FF",
+    "text": {
+      "main": "#0F172A",
+      "muted": "#64748B",
+      "subtle": "#94A3B8"
+    },
+    "table_states": {
+      "free": {
+        "bg": "bg-slate-50 hover:bg-slate-100",
+        "border": "border-slate-200",
+        "text": "text-slate-700",
+        "badge": "bg-slate-200/60 text-slate-600"
+      },
+      "occupied": {
+        "bg": "bg-amber-50/80 hover:bg-amber-100/80",
+        "border": "border-amber-300",
+        "text": "text-amber-900",
+        "badge": "bg-amber-500 text-white font-medium"
+      },
+      "active_selected": {
+        "bg": "bg-[#0052FF] text-white",
+        "border": "border-[#0052FF]",
+        "text": "text-white",
+        "shadow": "shadow-lg shadow-[#0052FF]/20"
+      }
+    },
+    "payment_methods": {
+      "efectivo": {
+        "color": "#10B981",
+        "bg_active": "bg-emerald-50 border-emerald-500 text-emerald-700"
+      },
+      "tarjeta": {
+        "color": "#0052FF",
+        "bg_active": "bg-blue-50 border-[#0052FF] text-[#0052FF]"
+      },
+      "mixto": {
+        "color": "#8B5CF6",
+        "bg_active": "bg-purple-50 border-purple-500 text-purple-700"
+      }
     }
   },
-  "visual_enhancers": {
-    "shadows": {
-      "card_default": "shadow-[0_8px_30px_rgb(0,0,0,0.04)]",
-      "card_hover": "shadow-[0_20px_40px_rgb(0,0,0,0.08)]",
-      "button_primary": "shadow-[0_4px_14px_0_rgba(0,82,255,0.39)]"
+  "layout_and_architecture": {
+    "header_session_bar": {
+      "wrapper": "flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-6 p-5 rounded-[24px] bg-white border border-slate-200/80 shadow-[0_4px_20px_rgb(0,0,0,0.03)] backdrop-blur-md",
+      "title_badge": "font-display text-2xl font-bold tracking-tight text-slate-900 flex items-center gap-2.5",
+      "session_indicator": "flex items-center gap-2 px-3.5 py-1.5 rounded-full text-xs font-semibold tracking-wide"
     },
-    "radii": {
-      "card": "rounded-[20px]",
-      "button": "rounded-xl",
-      "input": "rounded-xl",
-      "badge": "rounded-full"
+    "tab_navigation": {
+      "wrapper": "bg-slate-100/80 p-1.5 rounded-2xl border border-slate-200/60 inline-flex flex-wrap gap-1",
+      "trigger": "px-4 py-2 rounded-xl text-xs sm:text-sm font-medium transition-all duration-200 data-[state=active]:bg-white data-[state=active]:text-[#0052FF] data-[state=active]:shadow-sm data-[state=active]:font-semibold text-slate-600 hover:text-slate-900"
     },
-    "borders": "Use subtle borders (border-gray-100 or border-gray-200/60) around white cards to increase crispness against the #F9FAFB background."
-  },
-  "layouts": {
-    "login_screen": {
-      "structure": "Split screen layout (lg:grid lg:grid-cols-2 min-h-screen).",
-      "left_form": "Flex col, vertically centered, max-w-md mx-auto w-full px-8. Emphasize spacing (gap-6). Logo 'openfactura by GoRoky' at the top.",
-      "right_visual": "Visible only on lg screens. Use the provided abstract 3D image as a full-cover background. Overlay a glassmorphism floating card (backdrop-blur-xl bg-white/10 border border-white/20 text-white) displaying a mock metric or 'Tax Compliant' badge to build trust and add a 'pro' visual effect."
-    },
-    "invoices_dashboard": {
-      "structure": "Main content wrapped in a subtle background (#F9FAFB). Use generous padding (p-6 lg:p-10).",
-      "header": "Title 'Facturas' aligned left. Primary action 'Nueva factura' (blue) and 'Guía rectificativa' (secondary) aligned right.",
-      "summary_cards": "A 3-column Bento grid (grid-cols-1 md:grid-cols-3 gap-6 mb-8). Each card: bright icon in a rounded-full bg chip, bold metric (tabular-nums), and subtle label.",
-      "table_area": "Enclose the entire search/filter bar and data table within a single massive white card (bg-white rounded-[20px] shadow-[0_8px_30px_rgb(0,0,0,0.04)] p-2 sm:p-4)."
+    "sell_screen_grid": {
+      "container": "grid grid-cols-1 lg:grid-cols-12 gap-6 items-start",
+      "products_column": "lg:col-span-7 xl:col-span-8 space-y-5",
+      "cart_column": "lg:col-span-5 xl:col-span-4"
     }
   },
-  "components": {
-    "buttons": "Primary: bg-[#0052FF] text-white hover:bg-[#0040CC] shadow-[0_4px_14px_0_rgba(0,82,255,0.39)] transition-all hover:-translate-y-0.5 active:scale-95. Secondary: bg-white text-gray-700 border border-gray-200 hover:bg-gray-50.",
-    "inputs": "Height 12 (h-12), rounded-xl, bg-gray-50 border-transparent focus:bg-white focus:border-[#0052FF] focus:ring-2 focus:ring-[#0052FF]/20 transition-all.",
-    "badges": "Pill-shaped (rounded-full), px-3 py-1 text-xs font-semibold. See 'colors.badges' for exact classes.",
-    "table": "Cardless look inside the main wrapper card. Header: text-xs uppercase tracking-wider text-gray-500 bg-gray-50/50. Rows: hover:bg-gray-50/50 transition-colors border-b border-gray-100 last:border-0.",
-    "verifactu_indicators": "VeriFactu status badges. Check (✓) text-emerald-600, Cross (✕) text-red-600, Hourglass (⏳) text-amber-600. Wrap in a standard shadcn Tooltip component to display the AEAT CSV.",
-    "action_row": "Use a minimal dropdown (shadcn DropdownMenu) or an inline row of subtle icon buttons (lucide-react) for row actions (PDF, email, Stripe, pay, edit, delete)."
-  },
-  "motion": {
-    "page_load": "Use framer-motion (if available) or CSS animations for staggered entrance of dashboard cards and the table wrapper (fade in and slide up slightly).",
-    "interactions": "Hover states on all interactive elements. Use specific transition utilities (transition-all duration-200 ease-out)."
-  },
-  "accessibility": {
-    "contrast": "Ensure all text, especially within badges and table headers, meets WCAG AA standards (4.5:1).",
-    "testing": "CRITICAL: Maintain all existing data-testid attributes for testing compatibility.",
-    "focus": "All inputs and buttons must have visible focus rings to support keyboard navigation."
-  },
-  "image_urls": {
-    "login_side_panel": {
-      "url": "https://images.unsplash.com/photo-1653299832314-5d3dc1e5a83c?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjY2NzN8MHwxfHNlYXJjaHwyfHxhYnN0cmFjdCUyMGJsdWUlMjBncmFkaWVudCUyMDNkJTIwc2hhcGVzfGVufDB8fHx8MTc4ODEwMjI1OXww&ixlib=rb-4.1.0&q=85",
-      "description": "Abstract 3D blue waves. Use as the right-side cover image for the Login screen.",
-      "category": "marketing_visual"
+  "component_design_specs": {
+    "product_card": {
+      "class_name": "group relative flex flex-col justify-between p-4 rounded-[20px] bg-white border border-slate-200/80 hover:border-[#0052FF]/50 shadow-[0_4px_16px_rgb(0,0,0,0.02)] hover:shadow-[0_12px_28px_rgba(0,82,255,0.08)] active:scale-[0.98] transition-all duration-200 cursor-pointer overflow-hidden text-left min-h-[110px]",
+      "title": "font-medium text-sm text-slate-800 group-hover:text-[#0052FF] line-clamp-2 transition-colors",
+      "price_tag": "font-display text-base font-bold text-[#0052FF] tabular",
+      "stock_badge": "text-[11px] px-2 py-0.5 rounded-md font-medium bg-slate-100 text-slate-500",
+      "hover_accent": "absolute inset-x-0 bottom-0 h-1 bg-[#0052FF] opacity-0 group-hover:opacity-100 transition-opacity"
+    },
+    "category_filter_pills": {
+      "container": "flex items-center gap-2 overflow-x-auto pb-1 no-scrollbar",
+      "pill_active": "px-4 py-2 rounded-full text-xs font-semibold text-white shadow-md shadow-slate-900/10 scale-[1.02] transition-all",
+      "pill_inactive": "px-4 py-2 rounded-full text-xs font-medium bg-slate-100 text-slate-600 hover:bg-slate-200/70 transition-all cursor-pointer"
+    },
+    "cart_sidebar": {
+      "container": "rounded-[24px] border border-slate-200/80 bg-white/95 backdrop-blur-xl p-5 shadow-[0_12px_36px_rgb(0,0,0,0.05)] h-fit lg:sticky lg:top-4 space-y-4",
+      "header": "flex items-center justify-between border-b border-slate-100 pb-3",
+      "item_row": "group relative flex items-center justify-between gap-3 p-2.5 rounded-xl hover:bg-slate-50 transition-colors border border-transparent hover:border-slate-100",
+      "quantity_control": "flex items-center gap-1 bg-slate-100/80 rounded-lg p-1 border border-slate-200/50",
+      "qty_button": "w-7 h-7 rounded-md bg-white hover:bg-slate-200/80 flex items-center justify-center text-slate-700 shadow-2xs active:scale-95 transition-transform",
+      "total_summary_box": "p-4 rounded-2xl bg-slate-50 border border-slate-100 space-y-2 mt-4",
+      "checkout_button": "w-full h-13 rounded-2xl bg-[#0052FF] hover:bg-[#0043CC] text-white font-display text-base font-semibold shadow-lg shadow-[#0052FF]/25 hover:shadow-xl hover:shadow-[#0052FF]/35 active:scale-[0.99] transition-all duration-200 flex items-center justify-center gap-2"
+    },
+    "tables_grid_view": {
+      "table_card": "group relative rounded-[22px] border border-slate-200/90 bg-white p-5 shadow-[0_4px_20px_rgb(0,0,0,0.03)] hover:shadow-md transition-all cursor-pointer flex flex-col justify-between min-h-[120px]",
+      "table_header": "flex items-center justify-between",
+      "status_badge_free": "inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200/60",
+      "status_badge_occupied": "inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-amber-50 text-amber-800 border border-amber-200/80 animate-pulse"
+    },
+    "checkout_modal": {
+      "dialog_content": "rounded-[28px] border border-slate-200/80 bg-white/95 backdrop-blur-2xl p-6 shadow-2xl max-w-md w-full",
+      "payment_tile": "group flex flex-col items-center justify-center gap-2 p-4 rounded-2xl border-2 transition-all cursor-pointer text-sm font-semibold active:scale-95",
+      "tendered_quick_buttons": "flex gap-2 mt-2",
+      "quick_chip": "px-3 py-1.5 rounded-xl border border-slate-200 bg-slate-50 hover:bg-slate-100 text-xs font-medium text-slate-700 active:scale-95 transition-all"
     }
   },
-  "instructions_to_main_agent": [
-    "You must generate and edit .js/.jsx files ONLY, do not create or use .tsx files.",
-    "Do NOT use complete transparent backgrounds for overlays, dropdowns, or headers. Always use solid colors or glassmorphism (backdrop-blur with a semi-opaque background).",
-    "Implement the 'Holded' aesthetic: lots of whitespace, rounded corners (~20px), soft drop shadows, and a clean white/gray canvas.",
-    "Ensure the invoice creation flow, badges, tooltips, and all functional state logic remains intact. This is purely a visual redesign.",
-    "For empty states and loading skeletons, design them to match the new rounded, soft-shadow card aesthetic."
+  "micro_interactions_and_animations": {
+    "fade_up": "of-fade-up",
+    "button_press": "active:scale-[0.97] transition-transform duration-150",
+    "card_hover_lift": "hover:-translate-y-0.5 transition-transform duration-200",
+    "badge_pulse": "animate-pulse"
+  },
+  "critical_data_testids_to_preserve": [
+    "pos-loading",
+    "pos-title",
+    "pos-session-badge",
+    "pos-tab-vender",
+    "pos-tab-mesas",
+    "pos-tab-productos",
+    "pos-tab-categorias",
+    "pos-tab-caja",
+    "pos-tab-ventas",
+    "pos-tab-ajustes",
+    "pos-tables-strip",
+    "pos-table-${name}",
+    "pos-cat-all",
+    "pos-cat-${name}",
+    "pos-product-${name}",
+    "pos-cart",
+    "pos-cart-clear",
+    "pos-cart-item-${name}",
+    "pos-qty-minus-${name}",
+    "pos-qty-plus-${name}",
+    "pos-note-${name}",
+    "pos-remove-${name}",
+    "pos-tip-input",
+    "pos-cart-total",
+    "pos-checkout-btn",
+    "pos-save-comanda-btn",
+    "pos-variant-dialog",
+    "pos-variant-${name}",
+    "pos-checkout-dialog",
+    "pos-method-${method}",
+    "pos-cash-given",
+    "pos-change",
+    "pos-cash-part",
+    "pos-confirm-pay",
+    "pos-sale-done",
+    "pos-new-sale",
+    "pos-print-receipt",
+    "pos-add-table",
+    "pos-table-card-${name}",
+    "pos-edit-table-${name}",
+    "pos-table-dialog",
+    "pos-table-name",
+    "pos-table-room",
+    "pos-table-save",
+    "pos-add-product",
+    "pos-product-row-${name}",
+    "pos-edit-product-${name}",
+    "pos-product-dialog",
+    "pos-product-name",
+    "pos-product-price",
+    "pos-product-tax",
+    "pos-product-category",
+    "pos-product-sku",
+    "pos-product-barcode",
+    "pos-product-track-stock",
+    "pos-product-stock",
+    "pos-add-variant",
+    "pos-product-save",
+    "pos-add-category",
+    "pos-category-card-${name}",
+    "pos-edit-category-${name}",
+    "pos-category-dialog",
+    "pos-category-name",
+    "pos-category-color",
+    "pos-category-save",
+    "pos-open-session",
+    "pos-opening-cash",
+    "pos-open-session-btn",
+    "pos-cash-summary",
+    "pos-expected-cash",
+    "pos-withdraw-btn",
+    "pos-deposit-btn",
+    "pos-close-session-btn",
+    "pos-movement-dialog",
+    "pos-movement-amount",
+    "pos-movement-reason",
+    "pos-movement-save",
+    "pos-close-dialog",
+    "pos-close-cash",
+    "pos-close-confirm",
+    "pos-ticket-row-${id}",
+    "pos-print-${id}",
+    "pos-refund-${id}",
+    "pos-settings",
+    "pos-settings-type",
+    "pos-settings-width",
+    "pos-settings-bizname",
+    "pos-settings-footer",
+    "pos-settings-tip",
+    "pos-settings-verifactu",
+    "pos-settings-save"
   ],
   "UNIVERSAL GUIDELINES FOR MAIN AGENT": [
-    "Never use generic centered layouts for apps. Maintain left-alignment for data and forms.",
-    "Do not apply 'transition: all' globally; apply specifically to interactive elements.",
+    "You tend to converge toward generic, 'on distribution' outputs. In frontend design, this creates what users call the 'AI slop' aesthetic. Avoid this: make creative, distinctive frontends that surprise and delight.",
+    "Dark colors look good when used independently without gradients. DO NOT use dark colors as gradients.",
+    "Don't make generic centered layouts, simplistic gradients, and uniform styling.",
     "Create depth through layered design elements with z-index hierarchy.",
     "Use glass-morphism effects with backdrop filters (12-24px blur).",
+    "You MUST NOT apply universal transition (e.g. transition: all). This results in breaking transforms. Always add transitions for specific interactive elements like button, input excluding transforms.",
+    "You MUST NOT center align the app container, i.e. do not add .App { text-align: center; } in the css file.",
     "Always use modern button styles like pill-shaped, or sharp button with interaction animations & color relevant to the app style.",
-    "NEVER use AI assistant Emoji characters like 🤖🧠💭💡🔮🎯 etc for icons. Use lucide-react.",
-    "Prioritize using pre-existing components from src/components/ui when applicable."
+    "NEVER use AI assistant Emoji characters like 🤖🧠💭💡🔮🎯 etc for icons.",
+    "Every interaction needs micro-animations - hover states, transitions, parallax effects, and entrance animations.",
+    "Use generous spacing (2-3x more spacing than default). Cramped designs look cheap.",
+    "Subtle grain textures, noise overlays, custom cursors, selection states, and loading animations separate good from extraordinary.",
+    "Prioritize using pre-existing components from src/components/ui when applicable.",
+    "Use sonner for toasts.",
+    "All interactive and key informational elements MUST include data-testid attributes."
   ]
 }
