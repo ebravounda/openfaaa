@@ -11,7 +11,7 @@ import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
-  Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter,
 } from "@/components/ui/dialog";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
@@ -280,7 +280,7 @@ function VariantDialog({ product, onPick, onClose }) {
   return (
     <Dialog open onOpenChange={onClose}>
       <DialogContent data-testid="pos-variant-dialog">
-        <DialogHeader><DialogTitle>{product.name} — elige variante</DialogTitle></DialogHeader>
+        <DialogHeader><DialogTitle>{product.name} — elige variante</DialogTitle><DialogDescription className="sr-only">Ventana del TPV</DialogDescription></DialogHeader>
         <div className="grid grid-cols-2 gap-2">
           {(product.variants || []).map((v) => (
             <button key={v.id} onClick={() => onPick(v)} data-testid={`pos-variant-${v.name}`} className="rounded-xl border border-slate-200 p-3 text-left hover:border-[#0052FF]">
@@ -307,7 +307,7 @@ function CheckoutDialog({ total, onConfirm, onClose }) {
   return (
     <Dialog open onOpenChange={onClose}>
       <DialogContent data-testid="pos-checkout-dialog">
-        <DialogHeader><DialogTitle>Cobrar {money(total)}</DialogTitle></DialogHeader>
+        <DialogHeader><DialogTitle>Cobrar {money(total)}</DialogTitle><DialogDescription className="sr-only">Ventana del TPV</DialogDescription></DialogHeader>
         <div className="grid grid-cols-3 gap-2">
           {[["efectivo", "Efectivo", Banknote], ["tarjeta", "Tarjeta", CreditCard], ["mixto", "Mixto", Coins]].map(([k, l, Icon]) => (
             <button key={k} onClick={() => setMethod(k)} data-testid={`pos-method-${k}`}
@@ -343,7 +343,7 @@ function SaleDoneDialog({ ticket, width, onClose }) {
   return (
     <Dialog open onOpenChange={onClose}>
       <DialogContent data-testid="pos-sale-done">
-        <DialogHeader><DialogTitle className="flex items-center gap-2"><Check className="w-5 h-5 text-emerald-500" />Venta {ticket.number} cobrada</DialogTitle></DialogHeader>
+        <DialogHeader><DialogTitle className="flex items-center gap-2"><Check className="w-5 h-5 text-emerald-500" />Venta {ticket.number} cobrada</DialogTitle><DialogDescription className="sr-only">Ventana del TPV</DialogDescription></DialogHeader>
         <p className="text-2xl font-bold text-slate-900">{money(ticket.total)}</p>
         <p className="text-sm text-slate-500">Método: {ticket.payment_method}</p>
         <DialogFooter>
@@ -384,7 +384,7 @@ function TablesTab({ tables, reload }) {
       {edit && (
         <Dialog open onOpenChange={() => setEdit(null)}>
           <DialogContent data-testid="pos-table-dialog">
-            <DialogHeader><DialogTitle>{edit.id ? "Editar mesa" : "Nueva mesa"}</DialogTitle></DialogHeader>
+            <DialogHeader><DialogTitle>{edit.id ? "Editar mesa" : "Nueva mesa"}</DialogTitle><DialogDescription className="sr-only">Ventana del TPV</DialogDescription></DialogHeader>
             <Label>Nombre</Label>
             <Input value={edit.name} onChange={(e) => setEdit({ ...edit, name: e.target.value })} data-testid="pos-table-name" />
             <Label>Sala</Label>
@@ -447,7 +447,7 @@ function ProductDialog({ edit, setEdit, categories, onSave }) {
   return (
     <Dialog open onOpenChange={() => setEdit(null)}>
       <DialogContent className="max-w-lg max-h-[85vh] overflow-y-auto" data-testid="pos-product-dialog">
-        <DialogHeader><DialogTitle>{edit.id ? "Editar producto" : "Nuevo producto"}</DialogTitle></DialogHeader>
+        <DialogHeader><DialogTitle>{edit.id ? "Editar producto" : "Nuevo producto"}</DialogTitle><DialogDescription className="sr-only">Ventana del TPV</DialogDescription></DialogHeader>
         <div className="grid grid-cols-2 gap-3">
           <div className="col-span-2"><Label>Nombre</Label><Input value={edit.name} onChange={(e) => setEdit({ ...edit, name: e.target.value })} data-testid="pos-product-name" /></div>
           <div><Label>Precio (con IVA)</Label><Input type="number" step="0.01" value={edit.price} onChange={(e) => setEdit({ ...edit, price: e.target.value })} data-testid="pos-product-price" /></div>
@@ -517,7 +517,7 @@ function CategoriesTab({ categories, reload }) {
       {edit && (
         <Dialog open onOpenChange={() => setEdit(null)}>
           <DialogContent data-testid="pos-category-dialog">
-            <DialogHeader><DialogTitle>{edit.id ? "Editar categoría" : "Nueva categoría"}</DialogTitle></DialogHeader>
+            <DialogHeader><DialogTitle>{edit.id ? "Editar categoría" : "Nueva categoría"}</DialogTitle><DialogDescription className="sr-only">Ventana del TPV</DialogDescription></DialogHeader>
             <Label>Nombre</Label><Input value={edit.name} onChange={(e) => setEdit({ ...edit, name: e.target.value })} data-testid="pos-category-name" />
             <Label>Color</Label><input type="color" value={edit.color} onChange={(e) => setEdit({ ...edit, color: e.target.value })} className="h-10 w-20 rounded border" data-testid="pos-category-color" />
             <DialogFooter><Button variant="outline" onClick={() => setEdit(null)}>Cancelar</Button><Button onClick={save} data-testid="pos-category-save">Guardar</Button></DialogFooter>
@@ -598,7 +598,7 @@ function CashTab({ session, reload }) {
       {mv && (
         <Dialog open onOpenChange={() => setMv(null)}>
           <DialogContent data-testid="pos-movement-dialog">
-            <DialogHeader><DialogTitle>{mv.type === "withdrawal" ? "Retirar efectivo" : "Ingresar efectivo"}</DialogTitle></DialogHeader>
+            <DialogHeader><DialogTitle>{mv.type === "withdrawal" ? "Retirar efectivo" : "Ingresar efectivo"}</DialogTitle><DialogDescription className="sr-only">Ventana del TPV</DialogDescription></DialogHeader>
             <Label>Importe (€)</Label><Input type="number" step="0.01" value={mvAmount} onChange={(e) => setMvAmount(e.target.value)} data-testid="pos-movement-amount" />
             <Label>Motivo</Label><Input value={mvReason} onChange={(e) => setMvReason(e.target.value)} placeholder="Pago proveedor, cambio..." data-testid="pos-movement-reason" />
             <DialogFooter><Button variant="outline" onClick={() => setMv(null)}>Cancelar</Button><Button onClick={doMovement} data-testid="pos-movement-save">Registrar</Button></DialogFooter>
@@ -608,7 +608,7 @@ function CashTab({ session, reload }) {
       {closing && (
         <Dialog open onOpenChange={() => setClosing(null)}>
           <DialogContent data-testid="pos-close-dialog">
-            <DialogHeader><DialogTitle>Cerrar caja</DialogTitle></DialogHeader>
+            <DialogHeader><DialogTitle>Cerrar caja</DialogTitle><DialogDescription className="sr-only">Ventana del TPV</DialogDescription></DialogHeader>
             <p className="text-sm text-slate-500">Esperado en cajón: <b>{money(s.expected_cash)}</b></p>
             <Label>Efectivo contado (€)</Label><Input type="number" step="0.01" value={closeCash} onChange={(e) => setCloseCash(e.target.value)} data-testid="pos-close-cash" />
             <p className="text-sm">Descuadre: <b className={Number(closeCash) - s.expected_cash === 0 ? "text-emerald-600" : "text-amber-600"}>{money((Number(closeCash) || 0) - s.expected_cash)}</b></p>

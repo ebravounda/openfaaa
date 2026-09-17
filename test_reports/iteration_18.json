@@ -1,0 +1,38 @@
+{
+  "summary": "Full backend + frontend validation of new TPV/POS module. Backend: 10/10 pytest tests pass covering gating (403 for basico user, 200 for admin, admin toggle flip flow), settings validation, categories/products (incl. variants + stock, category delete detaches products), tables CRUD (open_ticket_id surfaced), cash session (single-open guard, movements validation, expected_cash summary), retail sale (mixto: base 16.53 / iva 3.47 / total 21 / cash 5 / card 16, stock 10->8; tarjeta: cash 0 / card total), refund replenishing stock, hostelería open comanda + update + pay (stock decrement only on pay) + delete-open-only, receipt HTML at 80/58mm. Frontend: /pos loads, sidebar TPV nav visible, Ajustes save Hostelería/58mm reveals Mesas tab, create category+product from UI, Caja shows session (already open) and withdraw works updating expected cash to 46,00 €, Vender adds product (cart total 5,00 €), Cobrar -> Efectivo -> Confirmar -> SaleDone dialog with Imprimir button, Ventas tab lists 5 tickets, Admin /admin table shows pos-{email} TPV button which toggles (toast 'TPV desactivado para demo_pricing@example.com' visible).",
+  "backend_issues": { "critical": [], "minor": [] },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "POS dialogs (Product, Category, Table, Checkout, SaleDone, Movement, Close)", "issues": ["Radix Dialog warning: 'Missing Description or aria-describedby={undefined} for DialogContent' — a11y improvement: add DialogDescription in each modal."]}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_pos_module.py",
+    "/app/test_reports/pytest/pos_results.xml"
+  ],
+  "action_items": [
+    "(Optional a11y) Add <DialogDescription> to POS dialogs to silence Radix warning and improve screen reader UX."
+  ],
+  "critical_code_review_comments": [
+    "pos_routes.py `require_pos` grants access based on user.get('pos_enabled') stored in the JWT/user doc; toggle takes effect immediately for new logins (verified in test). No issue.",
+    "`_compute_ticket` treats unit_price as PVP con IVA (documented in code); base = gross/(1+rate/100). Rounding to 2 dp verified.",
+    "`_finalize_sale` uses `pos_counters` per company_id — good scoping.",
+    "`delete_category` sets `category_id: None` on affected products — verified.",
+    "`refund_ticket` correctly restores stock and refuses re-refund (status becomes 'refunded').",
+    "Minor: `list_tables` iterates tables in Python to attach open_ticket_id — acceptable for small N; consider aggregation if scales.",
+    "Missing DialogDescription on multiple Radix Dialogs (a11y warnings)."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_pos_module.py (new)",
+    "/app/test_reports/pytest/pos_results.xml (new)"
+  ],
+  "success_rate": { "backend": "100%", "frontend": "100%" },
+  "test_credentials": "admin@fiscalhub.es / admin123 ; demo_pricing@example.com / test1234",
+  "seed_data_creation": "Ephemeral TEST_* categories/products/tables/tickets created and cleaned up. Admin's existing open cash session was reused (as noted in context).",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "POS module fully validated. Admin session is persistent and shared per company; some TEST_ tickets remain in the sales history (paid + refunded + open-then-deleted comandas). Reverted settings to retail/80mm at end of tests. If retesting, be aware /api/pos/session/open returns 400 when a session is already open (expected).",
+  "rca of the issue": "N/A — no issues found."
+}
