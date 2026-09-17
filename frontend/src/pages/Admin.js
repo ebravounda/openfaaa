@@ -17,7 +17,7 @@ import {
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
-import { Users, ShieldOff, FileText, Search, UserCog, Ban, CheckCircle2, Loader2, Save, CreditCard, History, TrendingUp, Euro, Rocket, UserPlus, Mail } from "lucide-react";
+import { Users, ShieldOff, FileText, Search, UserCog, Ban, CheckCircle2, Loader2, Save, CreditCard, History, TrendingUp, Euro, Rocket, UserPlus, Mail, Store } from "lucide-react";
 
 const PLAN_LABEL = { basico: "Básico", medio: "Medio", platino: "Platino" };
 const actionLabel = (a) => {
@@ -132,6 +132,17 @@ export default function Admin() {
       const { data } = await api.post(`/admin/users/${u.id}/${path}`);
       setUsers((list) => list.map((x) => (x.id === u.id ? { ...x, is_blocked: data.is_blocked } : x)));
       toast.success(data.is_blocked ? `${u.email} bloqueado` : `${u.email} desbloqueado`);
+    } catch (e) {
+      toast.error(formatApiErrorDetail(e.response?.data?.detail));
+    } finally { setBusyId(null); }
+  };
+
+  const togglePos = async (u) => {
+    setBusyId(u.id);
+    try {
+      const { data } = await api.post(`/admin/users/${u.id}/pos-toggle`);
+      setUsers((list) => list.map((x) => (x.id === u.id ? { ...x, is_pos_enabled: data.is_pos_enabled } : x)));
+      toast.success(data.is_pos_enabled ? `TPV activado para ${u.email}` : `TPV desactivado para ${u.email}`);
     } catch (e) {
       toast.error(formatApiErrorDetail(e.response?.data?.detail));
     } finally { setBusyId(null); }
@@ -298,6 +309,10 @@ export default function Admin() {
                       <div className="flex items-center justify-end gap-1">
                         <Button variant="ghost" size="sm" onClick={() => impersonate(u)} disabled={busyId === u.id} title="Entrar como este usuario" data-testid={`impersonate-${u.email}`} className="h-8 text-slate-600 hover:text-[#0052FF]">
                           <UserCog className="w-4 h-4 mr-1" strokeWidth={1.5} /> Entrar
+                        </Button>
+                        <Button variant="ghost" size="sm" onClick={() => togglePos(u)} disabled={busyId === u.id} title={u.is_pos_enabled ? "Desactivar TPV" : "Activar TPV"} data-testid={`pos-${u.email}`} className={`h-8 ${u.is_pos_enabled ? "text-[#0052FF]" : "text-slate-500"}`}>
+                          <Store className="w-4 h-4 mr-1" strokeWidth={1.5} />
+                          {u.is_pos_enabled ? "TPV ✓" : "TPV"}
                         </Button>
                         <Button variant="ghost" size="sm" onClick={() => toggleBlock(u)} disabled={busyId === u.id} title={u.is_blocked ? "Desbloquear" : "Bloquear"} data-testid={`block-${u.email}`} className={`h-8 ${u.is_blocked ? "text-emerald-600" : "text-red-600"}`}>
                           {u.is_blocked ? <CheckCircle2 className="w-4 h-4 mr-1" strokeWidth={1.5} /> : <Ban className="w-4 h-4 mr-1" strokeWidth={1.5} />}

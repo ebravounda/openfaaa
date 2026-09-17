@@ -45,6 +45,7 @@ import {
   ArrowLeft,
   CreditCard,
   Wallet,
+  Store,
   Menu,
   X,
 } from "lucide-react";
@@ -76,14 +77,17 @@ export default function Layout({ children }) {
   const [mobileOpen, setMobileOpen] = useState(false);
 
   const isAdmin = user?.role === "admin" && !user?.is_impersonating;
-  const nav = isAdmin
-    ? [...baseNav, { to: "/admin", label: "Administración", icon: Shield, testid: "nav-admin" }]
-    : baseNav;
+  const [posPlan, setPosPlan] = useState(false);
+  const hasPos = isAdmin || !!user?.pos_enabled || posPlan;
+  const nav = [...baseNav];
+  if (hasPos) nav.splice(4, 0, { to: "/pos", label: "TPV", icon: Store, testid: "nav-pos" });
+  if (isAdmin) nav.push({ to: "/admin", label: "Administración", icon: Shield, testid: "nav-admin" });
 
   const [usageWarn, setUsageWarn] = useState(null);
   useEffect(() => {
     if (!user || user.role === "admin") { setUsageWarn(null); return; }
     api.get("/plan").then(({ data }) => {
+      setPosPlan(!!data.plan?.features?.pos);
       const pl = data.plan, u = data.usage;
       const iPct = pl.max_invoices != null ? u.invoices_month / pl.max_invoices : 0;
       const cPct = pl.max_contacts != null ? u.contacts / pl.max_contacts : 0;

@@ -93,6 +93,7 @@ def _public_user(user: dict) -> dict:
         "trial_ends_at": user.get("trial_ends_at", ""),
         "active_company_id": user.get("active_company_id", ""),
         "multi_company_enabled": bool(user.get("multi_company_enabled", False)),
+        "pos_enabled": bool(user.get("pos_enabled", False)),
     }
 
 

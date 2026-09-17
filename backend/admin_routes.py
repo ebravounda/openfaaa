@@ -56,6 +56,7 @@ async def _user_row(u: dict) -> dict:
         "role": u.get("role", "user"),
         "plan": u.get("plan", "basico"),
         "is_blocked": bool(u.get("is_blocked", False)),
+        "is_pos_enabled": bool(u.get("pos_enabled", False)),
         "created_at": u.get("created_at"),
         "company_name": (company or {}).get("name", ""),
         "usage": {"invoices_total": inv_total, "invoices_month": inv_month, "contacts": contacts},
@@ -184,6 +185,17 @@ async def unblock_user(user_id: str, admin_user=Depends(require_admin)):
         raise HTTPException(status_code=404, detail="Usuario no encontrado")
     await _audit(admin_user["id"], "unblock", user_id)
     return {"status": "ok", "is_blocked": False}
+
+
+@admin.post("/users/{user_id}/pos-toggle")
+async def toggle_pos(user_id: str, admin_user=Depends(require_admin)):
+    target = await db.users.find_one({"_id": ObjectId(user_id)})
+    if not target:
+        raise HTTPException(status_code=404, detail="Usuario no encontrado")
+    new_val = not bool(target.get("pos_enabled", False))
+    await db.users.update_one({"_id": ObjectId(user_id)}, {"$set": {"pos_enabled": new_val}})
+    await _audit(admin_user["id"], f"pos:{'on' if new_val else 'off'}", user_id)
+    return {"status": "ok", "is_pos_enabled": new_val}
 
 
 @admin.post("/users/{user_id}/plan")

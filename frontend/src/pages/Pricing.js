@@ -12,6 +12,7 @@ const FEATURES = [
   { key: "email", label: "Envío de facturas por email" },
   { key: "ocr", label: "Escaneo de recibos con IA (OCR)" },
   { key: "verifactu", label: "VeriFactu AEAT" },
+  { key: "pos", label: "TPV / Punto de venta" },
 ];
 
 function limitText(v) {

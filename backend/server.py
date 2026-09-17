@@ -2135,6 +2135,8 @@ app.include_router(auth_router)
 app.include_router(admin_router)
 from payments_routes import payments as payments_router
 app.include_router(payments_router)
+from pos_routes import pos as pos_router
+app.include_router(pos_router)
 app.include_router(api)
 
 

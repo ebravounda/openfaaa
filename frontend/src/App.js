@@ -16,6 +16,7 @@ import Connection from "@/pages/Connection";
 import Settings from "@/pages/Settings";
 import PaymentMethods from "@/pages/PaymentMethods";
 import Bancos from "@/pages/Bancos";
+import Pos from "@/pages/Pos";
 import Admin from "@/pages/Admin";
 import Pricing from "@/pages/Pricing";
 import PreciosRoute from "@/pages/PreciosRoute";
@@ -58,6 +59,7 @@ function App() {
           <Route path="/metodos-pago" element={<ProtectedRoute><PaymentMethods /></ProtectedRoute>} />
           <Route path="/bancos" element={<ProtectedRoute><Bancos /></ProtectedRoute>} />
           <Route path="/bancos/callback" element={<ProtectedRoute><Bancos /></ProtectedRoute>} />
+          <Route path="/pos" element={<ProtectedRoute><Pos /></ProtectedRoute>} />
           <Route path="/precios" element={<PreciosRoute />} />
           <Route path="/blog" element={<Blog />} />
           <Route path="/blog/:slug" element={<BlogPost />} />
