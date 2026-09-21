@@ -6,25 +6,23 @@ import { formatApiErrorDetail } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Loader2, ShieldCheck, CheckCircle2, TrendingUp, ArrowRight } from "lucide-react";
+import { Loader2, ShieldCheck, TrendingUp, ArrowRight, Eye, EyeOff, FileText, ScanLine, Receipt } from "lucide-react";
 
 const perks = [
-  "Facturas con IVA e IRPF en segundos",
-  "Escaneo de tickets y gastos con IA",
-  "Modelo 303 y 130 calculados por trimestre",
+  { icon: FileText, t: "Facturas con IVA e IRPF en segundos" },
+  { icon: ScanLine, t: "Escaneo de tickets y gastos con IA" },
+  { icon: Receipt, t: "Modelo 303 y 130 calculados por trimestre" },
 ];
 
-const SIDE_IMG =
-  "https://images.unsplash.com/photo-1653299832314-5d3dc1e5a83c?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjY2NzN8MHwxfHNlYXJjaHwyfHxhYnN0cmFjdCUyMGJsdWUlMjBncmFkaWVudCUyMDNkJTIwc2hhcGVzfGVufDB8fHx8MTc4ODEwMjI1OXww&ixlib=rb-4.1.0&q=85";
-
 const inputCls =
-  "h-12 rounded-xl bg-slate-50 border-transparent focus:bg-white focus:border-[#0052FF] focus-visible:ring-2 focus-visible:ring-[#0052FF]/20 transition-all";
+  "h-12 rounded-xl bg-slate-50 border border-slate-200/70 focus:bg-white focus:border-[#0052FF] focus-visible:ring-4 focus-visible:ring-[#0052FF]/10 transition-all";
 
 export default function Login() {
   const { login } = useAuth();
   const navigate = useNavigate();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [showPw, setShowPw] = useState(false);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
@@ -46,21 +44,73 @@ export default function Login() {
     <div className="min-h-screen grid lg:grid-cols-2 bg-white">
       <Seo path="/login" title="Iniciar sesión" description="Accede a tu panel de OpenFactura para gestionar facturas, IVA, IRPF y VeriFactu." />
 
+      {/* Visual side */}
+      <div className="hidden lg:block relative overflow-hidden bg-[#070C1B]">
+        {/* animated aurora orbs */}
+        <div className="absolute -top-24 -left-20 w-[26rem] h-[26rem] rounded-full bg-[#0052FF]/40 blur-[110px] of-float" />
+        <div className="absolute bottom-[-6rem] right-[-4rem] w-[30rem] h-[30rem] rounded-full bg-indigo-500/30 blur-[130px] of-float" style={{ animationDelay: "1.8s" }} />
+        <div className="absolute top-1/3 right-1/4 w-72 h-72 rounded-full bg-cyan-400/20 blur-[110px] of-float" style={{ animationDelay: "3.4s" }} />
+        {/* dotted grid overlay */}
+        <div className="absolute inset-0 opacity-[0.5]" style={{ backgroundImage: "radial-gradient(circle at 1px 1px, rgba(255,255,255,0.09) 1px, transparent 0)", backgroundSize: "30px 30px", maskImage: "radial-gradient(ellipse at center, black 40%, transparent 78%)" }} />
+
+        <div className="absolute inset-0 flex flex-col justify-between p-12 xl:p-16 text-white">
+          <img src="/openfactura-logo-white.png" alt="OpenFactura by GoRoky" className="h-8 w-auto max-w-[220px] object-contain self-start" />
+
+          <div className="of-fade-up" style={{ animationDelay: "120ms" }}>
+            <div className="inline-flex items-center gap-2 rounded-full bg-white/10 backdrop-blur-xl border border-white/15 px-4 py-2 text-sm mb-7 shadow-lg shadow-black/20">
+              <ShieldCheck className="w-4 h-4 text-emerald-300" strokeWidth={2} /> Homologado VeriFactu · AEAT
+            </div>
+            <h1 className="font-display text-4xl xl:text-[3.25rem] font-bold tracking-tight leading-[1.06] max-w-lg">
+              La facturación de tu negocio, <span className="bg-gradient-to-r from-[#7FB0FF] to-[#B9CCFF] bg-clip-text text-transparent">sin complicaciones.</span>
+            </h1>
+
+            <div className="mt-9 space-y-4">
+              {perks.map((p, i) => (
+                <div key={p.t} className="flex items-center gap-3.5 text-white/85 of-fade-up" style={{ animationDelay: `${200 + i * 90}ms` }}>
+                  <div className="w-9 h-9 rounded-xl bg-white/10 border border-white/15 backdrop-blur-md flex items-center justify-center shrink-0">
+                    <p.icon className="w-4 h-4 text-[#9CC0FF]" strokeWidth={1.75} />
+                  </div>
+                  <span className="text-[15px]">{p.t}</span>
+                </div>
+              ))}
+            </div>
+
+            {/* floating glass stat cards */}
+            <div className="mt-11 flex items-end gap-4">
+              <div className="rounded-2xl bg-white/10 backdrop-blur-2xl border border-white/15 p-5 w-56 of-float shadow-2xl shadow-black/30">
+                <div className="text-white/55 text-xs">Facturado este trimestre</div>
+                <div className="font-display text-3xl font-bold mt-1 tabular-nums">24.980 €</div>
+                <div className="flex items-center gap-1.5 text-emerald-300 text-xs mt-1.5">
+                  <TrendingUp className="w-3.5 h-3.5" strokeWidth={2} /> +18% vs. anterior
+                </div>
+              </div>
+              <div className="rounded-2xl bg-emerald-400/15 backdrop-blur-2xl border border-emerald-300/25 p-4 w-40 of-float shadow-xl shadow-black/20" style={{ animationDelay: "2.2s" }}>
+                <div className="flex items-center gap-1.5 text-emerald-200 text-xs font-medium"><span className="w-1.5 h-1.5 rounded-full bg-emerald-300 animate-pulse" /> Factura cobrada</div>
+                <div className="font-display text-xl font-bold mt-1 tabular-nums">1.815 €</div>
+                <div className="text-white/45 text-[11px] mt-0.5">Stripe · hace 2 min</div>
+              </div>
+            </div>
+          </div>
+
+          <div className="text-white/40 text-xs">Diseñado para autónomos y empresas en España</div>
+        </div>
+      </div>
+
       {/* Form side */}
-      <div className="flex items-center justify-center p-6 sm:p-10 order-2 lg:order-2">
+      <div className="flex items-center justify-center p-6 sm:p-10 bg-gradient-to-b from-white to-slate-50/60">
         <form onSubmit={submit} className="w-full max-w-md space-y-7 of-fade-up" data-testid="login-form">
           <div className="flex items-center gap-2.5">
-            <div className="w-9 h-9 rounded-xl bg-[#0052FF] flex items-center justify-center text-white font-display font-bold shadow-[0_4px_14px_0_rgba(0,82,255,0.39)]">O</div>
+            <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-[#0052FF] to-[#4C86FF] flex items-center justify-center text-white font-display font-bold shadow-[0_8px_20px_-4px_rgba(0,82,255,0.5)]">O</div>
             <span className="font-display text-xl font-semibold tracking-tight text-slate-900">openfactura</span>
           </div>
 
           <div>
-            <h2 className="font-display text-3xl font-semibold tracking-tight text-slate-900">Bienvenido de nuevo</h2>
+            <h2 className="font-display text-[2rem] font-bold tracking-tight text-slate-900">Bienvenido de nuevo</h2>
             <p className="text-sm text-slate-500 mt-1.5">Accede a tu panel de facturación</p>
           </div>
 
           {error && (
-            <div className="text-sm text-red-600 bg-red-50 border border-red-100 px-3 py-2.5 rounded-xl" data-testid="login-error">
+            <div className="text-sm text-red-600 bg-red-50 border border-red-100 px-3 py-2.5 rounded-xl of-fade-up" data-testid="login-error">
               {error}
             </div>
           )}
@@ -70,13 +120,16 @@ export default function Login() {
             <Input id="email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="tu@empresa.es" required className={inputCls} data-testid="login-email" />
           </div>
           <div className="space-y-2">
-            <div className="flex items-center justify-between">
-              <Label htmlFor="password">Contraseña</Label>
+            <Label htmlFor="password">Contraseña</Label>
+            <div className="relative">
+              <Input id="password" type={showPw ? "text" : "password"} value={password} onChange={(e) => setPassword(e.target.value)} required className={`${inputCls} pr-11`} data-testid="login-password" />
+              <button type="button" onClick={() => setShowPw((v) => !v)} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 transition-colors" tabIndex={-1} aria-label="Mostrar contraseña" data-testid="toggle-password">
+                {showPw ? <EyeOff className="w-4 h-4" strokeWidth={1.75} /> : <Eye className="w-4 h-4" strokeWidth={1.75} />}
+              </button>
             </div>
-            <Input id="password" type="password" value={password} onChange={(e) => setPassword(e.target.value)} required className={inputCls} data-testid="login-password" />
           </div>
 
-          <Button type="submit" disabled={loading} data-testid="login-submit" className="w-full h-12 bg-[#0052FF] hover:bg-[#0040CC] text-white rounded-xl shadow-[0_4px_14px_0_rgba(0,82,255,0.39)] transition-all hover:-translate-y-0.5 active:scale-[0.98] group">
+          <Button type="submit" disabled={loading} data-testid="login-submit" className="w-full h-12 bg-gradient-to-r from-[#0052FF] to-[#2E6BFF] hover:from-[#0043CC] hover:to-[#245BE6] text-white rounded-xl shadow-[0_8px_20px_-4px_rgba(0,82,255,0.5)] transition-all hover:-translate-y-0.5 active:scale-[0.98] group">
             {loading ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : null}
             Entrar
             {!loading && <ArrowRight className="w-4 h-4 ml-2 transition-transform group-hover:translate-x-0.5" strokeWidth={2} />}
@@ -92,43 +145,6 @@ export default function Login() {
             Homologado VeriFactu · Datos cifrados
           </div>
         </form>
-      </div>
-
-      {/* Visual side */}
-      <div className="hidden lg:block relative order-1 lg:order-1 overflow-hidden">
-        <img src={SIDE_IMG} alt="" className="absolute inset-0 w-full h-full object-cover" />
-        <div className="absolute inset-0 bg-gradient-to-br from-[#0A1B3D]/85 via-[#0A1B3D]/70 to-[#0052FF]/50" />
-
-        <div className="absolute inset-0 flex flex-col justify-between p-12 xl:p-16 text-white">
-          <img src="/openfactura-logo-white.png" alt="OpenFactura by GoRoky" className="h-8 w-auto max-w-[220px] object-contain self-start" />
-
-          <div className="of-fade-up" style={{ animationDelay: "120ms" }}>
-            <div className="inline-flex items-center gap-2 rounded-full bg-white/10 backdrop-blur-xl border border-white/20 px-4 py-2 text-sm mb-7">
-              <ShieldCheck className="w-4 h-4 text-emerald-300" strokeWidth={2} /> Homologado VeriFactu · AEAT
-            </div>
-            <h1 className="font-display text-4xl xl:text-5xl font-semibold tracking-tight leading-[1.08] max-w-lg">
-              La facturación de tu negocio, sin complicaciones.
-            </h1>
-            <div className="mt-8 space-y-3.5">
-              {perks.map((p) => (
-                <div key={p} className="flex items-center gap-3 text-white/85">
-                  <CheckCircle2 className="w-5 h-5 text-[#7FB0FF] shrink-0" strokeWidth={1.75} />
-                  <span className="text-[15px]">{p}</span>
-                </div>
-              ))}
-            </div>
-
-            <div className="mt-10 rounded-2xl bg-white/10 backdrop-blur-xl border border-white/20 p-5 max-w-xs of-float shadow-2xl">
-              <div className="text-white/60 text-xs">Facturado este trimestre</div>
-              <div className="font-display text-3xl font-bold mt-1 tabular">24.980 €</div>
-              <div className="flex items-center gap-1.5 text-emerald-300 text-xs mt-1.5">
-                <TrendingUp className="w-3.5 h-3.5" strokeWidth={2} /> +18% vs. trimestre anterior
-              </div>
-            </div>
-          </div>
-
-          <div className="text-white/40 text-xs">Diseñado para autónomos y empresas en España</div>
-        </div>
       </div>
     </div>
   );
