@@ -318,3 +318,13 @@ Sistema de facturación para España: crear facturas introduciendo datos (CIF/NI
 - ✅ **Panel Admin (`pages/Admin.js`)**: dashboard con 8 tarjetas (Clientes, Activos, Clientes de baja, Altas mes, Retención %, Churn %, Permanencia media, Facturas). Botón "Detalles" por fila abre modal (Dialog) con todos los datos de cuenta y facturación del cliente.
 - Verificado: registro e2e (curl), stats y user row (curl con admin), capturas de /registro y /admin (dashboard + modal). Pendiente despliegue Plesk por el usuario.
 
+
+
+## Iteración 27 (2026-06) — Analíticas del cliente + tono/ámbito del Asistente IA + OCR
+- ✅ **Asistente IA (`ai_service.py` `ASSISTANT_SYSTEM`)**: tono amable/cercano (emoji ocasional) y ámbito ESTRICTO a fiscalidad/tributos de España (AEAT, autónomos, SL/pymes, IVA, IRPF, modelos, VeriFactu, facturación, uso de OpenFactura). Rechaza con simpatía cualquier tema ajeno. Verificado por curl.
+- ✅ **Analíticas (nueva sección `/analiticas`)**: página `pages/Analiticas.js` + nav "Analíticas" (`Layout.js`) + ruta (`App.js`).
+  - Backend: `GET /api/analytics?year=` (`server.py` `_build_analytics`) → balance (facturado, cobrado, pendiente_cobro, gastos, beneficio=cobrado-gastos), evolución mensual (ingresos/gastos/beneficio), estado facturas (cobradas/pendientes/vencidas por due_date), top 10 clientes. Scope user_id+company_id activa, excluye anuladas.
+  - Backend: `GET /api/analytics/export?year=` → CSV (delimitador `;`, BOM UTF-8) descargable, abre en Excel.
+  - Frontend: cards de balance, cards de estado, gráfico ComposedChart (barras ingresos/gastos + línea beneficio), ranking top clientes, selector de año, botón Exportar. Verificado por curl + captura.
+- ✅ **OCR escaneo**: confirmado que FUNCIONA en preview (extracción correcta). Añadido `asyncio.wait_for(..., 90s)` en `/api/expenses/scan` → si la IA se cuelga devuelve 504 limpio en vez de provocar 520 en el origin. El fallo del usuario es SOLO en producción (Plesk) → pendiente: verificar en prod que `emergentintegrations` está en el venv, que `EMERGENT_LLM_KEY` está en el env de producción, y subir `proxy_read_timeout` en Nginx/Plesk (posible causa del 520 de Cloudflare).
+- Pendiente: despliegue Plesk por el usuario (Save to Github + deploy.sh).

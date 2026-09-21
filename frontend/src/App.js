@@ -12,6 +12,7 @@ import Companies from "@/pages/Companies";
 import Expenses from "@/pages/Expenses";
 import Contacts from "@/pages/Contacts";
 import Taxes from "@/pages/Taxes";
+import Analiticas from "@/pages/Analiticas";
 import Connection from "@/pages/Connection";
 import Settings from "@/pages/Settings";
 import PaymentMethods from "@/pages/PaymentMethods";
@@ -54,6 +55,7 @@ function App() {
           <Route path="/gastos" element={<ProtectedRoute><Expenses /></ProtectedRoute>} />
           <Route path="/contactos" element={<ProtectedRoute><Contacts /></ProtectedRoute>} />
           <Route path="/impuestos" element={<ProtectedRoute><Taxes /></ProtectedRoute>} />
+          <Route path="/analiticas" element={<ProtectedRoute><Analiticas /></ProtectedRoute>} />
           <Route path="/conexion" element={<ProtectedRoute><Connection /></ProtectedRoute>} />
           <Route path="/configuracion" element={<ProtectedRoute><Settings /></ProtectedRoute>} />
           <Route path="/metodos-pago" element={<ProtectedRoute><PaymentMethods /></ProtectedRoute>} />

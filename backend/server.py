@@ -1684,6 +1684,140 @@ async def available_years(user=Depends(get_current_user)):
     return sorted(years, reverse=True)
 
 
+ANALYTICS_MONTHS = ["Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"]
+
+
+def _exp_total(e: dict) -> float:
+    if e.get("total") is not None:
+        return e.get("total", 0)
+    return e.get("base", 0) + e.get("iva_amount", 0)
+
+
+async def _build_analytics(year: Optional[int], user: dict) -> dict:
+    if year is None:
+        year = datetime.now(timezone.utc).year
+    ys = str(year)
+    cid = await active_cid(user)
+    invoices = await db.invoices.find(
+        {"user_id": user["id"], "company_id": cid, "issue_date": {"$regex": f"^{ys}"},
+         "status": {"$ne": "anulada"}}, {"_id": 0}).to_list(10000)
+    expenses = await db.expenses.find(
+        {"user_id": user["id"], "company_id": cid, "date": {"$regex": f"^{ys}"}}, {"_id": 0}).to_list(10000)
+
+    monthly = [{"month": i + 1, "label": ANALYTICS_MONTHS[i], "ingresos": 0.0, "gastos": 0.0} for i in range(12)]
+    for inv in invoices:
+        try:
+            m = int(inv["issue_date"][5:7]) - 1
+        except Exception:
+            continue
+        if 0 <= m < 12:
+            monthly[m]["ingresos"] += inv.get("total", 0)
+    for exp in expenses:
+        try:
+            m = int(exp["date"][5:7]) - 1
+        except Exception:
+            continue
+        if 0 <= m < 12:
+            monthly[m]["gastos"] += _exp_total(exp)
+    for row in monthly:
+        row["ingresos"] = round(row["ingresos"], 2)
+        row["gastos"] = round(row["gastos"], 2)
+        row["beneficio"] = round(row["ingresos"] - row["gastos"], 2)
+
+    total_facturado = round(sum(i.get("total", 0) for i in invoices), 2)
+    total_cobrado = round(sum(i.get("total", 0) for i in invoices if i.get("status") == "paid"), 2)
+    total_gastos = round(sum(_exp_total(e) for e in expenses), 2)
+    pendiente_cobro = round(sum(i.get("total", 0) for i in invoices if i.get("status") == "pending"), 2)
+    beneficio = round(total_cobrado - total_gastos, 2)
+
+    today = date.today().isoformat()
+    cobradas = {"count": 0, "amount": 0.0}
+    pendientes = {"count": 0, "amount": 0.0}
+    vencidas = {"count": 0, "amount": 0.0}
+    for i in invoices:
+        st = i.get("status")
+        tot = i.get("total", 0)
+        if st == "paid":
+            cobradas["count"] += 1
+            cobradas["amount"] += tot
+        else:
+            dd = i.get("due_date") or ""
+            if dd and dd < today:
+                vencidas["count"] += 1
+                vencidas["amount"] += tot
+            else:
+                pendientes["count"] += 1
+                pendientes["amount"] += tot
+    for d in (cobradas, pendientes, vencidas):
+        d["amount"] = round(d["amount"], 2)
+
+    agg = {}
+    for i in invoices:
+        c = i.get("client") or {}
+        name = (c.get("name") or "").strip() or "Sin cliente"
+        e = agg.setdefault(name, {"client": name, "nif": c.get("nif", ""), "count": 0, "total": 0.0})
+        e["count"] += 1
+        e["total"] += i.get("total", 0)
+    top_clients = sorted(agg.values(), key=lambda x: x["total"], reverse=True)[:10]
+    for e in top_clients:
+        e["total"] = round(e["total"], 2)
+
+    return {
+        "year": year,
+        "balance": {
+            "total_facturado": total_facturado, "total_cobrado": total_cobrado,
+            "total_gastos": total_gastos, "beneficio": beneficio, "pendiente_cobro": pendiente_cobro,
+        },
+        "monthly": monthly,
+        "invoice_status": {"cobradas": cobradas, "pendientes": pendientes, "vencidas": vencidas},
+        "top_clients": top_clients,
+        "invoice_count": len(invoices),
+        "expense_count": len(expenses),
+    }
+
+
+@api.get("/analytics")
+async def analytics(year: Optional[int] = None, user=Depends(get_current_user)):
+    return await _build_analytics(year, user)
+
+
+@api.get("/analytics/export")
+async def analytics_export(year: Optional[int] = None, user=Depends(get_current_user)):
+    from fastapi.responses import Response
+    import io
+    import csv
+    d = await _build_analytics(year, user)
+    b = d["balance"]
+    st = d["invoice_status"]
+    buf = io.StringIO()
+    buf.write("\ufeff")
+    w = csv.writer(buf, delimiter=";")
+    w.writerow([f"Analíticas OpenFactura - Ejercicio {d['year']}"])
+    w.writerow([])
+    w.writerow(["BALANCE"])
+    w.writerow(["Total facturado", b["total_facturado"]])
+    w.writerow(["Total cobrado", b["total_cobrado"]])
+    w.writerow(["Pendiente de cobro", b["pendiente_cobro"]])
+    w.writerow(["Gastos", b["total_gastos"]])
+    w.writerow(["Beneficio (cobrado - gastos)", b["beneficio"]])
+    w.writerow([])
+    w.writerow(["ESTADO DE FACTURAS", "Nº", "Importe"])
+    w.writerow(["Cobradas", st["cobradas"]["count"], st["cobradas"]["amount"]])
+    w.writerow(["Pendientes", st["pendientes"]["count"], st["pendientes"]["amount"]])
+    w.writerow(["Vencidas", st["vencidas"]["count"], st["vencidas"]["amount"]])
+    w.writerow([])
+    w.writerow(["EVOLUCIÓN MENSUAL", "Ingresos", "Gastos", "Beneficio"])
+    for m in d["monthly"]:
+        w.writerow([m["label"], m["ingresos"], m["gastos"], m["beneficio"]])
+    w.writerow([])
+    w.writerow(["TOP CLIENTES", "NIF/CIF", "Nº facturas", "Total facturado"])
+    for c in d["top_clients"]:
+        w.writerow([c["client"], c["nif"], c["count"], c["total"]])
+    headers = {"Content-Disposition": f'attachment; filename="analiticas_{d["year"]}.csv"'}
+    return Response(content=buf.getvalue(), media_type="text/csv; charset=utf-8", headers=headers)
+
+
+
 @api.get("/annual-summary")
 async def annual_summary(year: Optional[int] = None, user=Depends(get_current_user)):
     if year is None:
@@ -1925,7 +2059,10 @@ async def scan_expense(file: UploadFile = File(...), user=Depends(get_current_us
         raise HTTPException(status_code=400, detail="No se pudo procesar el documento")
 
     try:
-        extracted = await extract_expense(image_b64)
+        extracted = await asyncio.wait_for(extract_expense(image_b64), timeout=90)
+    except asyncio.TimeoutError:
+        logger.error("OCR timeout (90s)")
+        raise HTTPException(status_code=504, detail="El análisis con IA tardó demasiado. Inténtalo de nuevo.")
     except Exception as e:
         logger.error(f"OCR failed: {e}")
         raise HTTPException(status_code=502, detail="No se pudo analizar el documento con IA")
