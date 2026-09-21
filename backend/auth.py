@@ -69,8 +69,12 @@ def _set_cookies(response: Response, access: str, refresh: str):
 
 class RegisterInput(BaseModel):
     name: str
+    last_name: str = ""
     email: EmailStr
     password: str
+    phone: str = ""
+    address: str = ""
+    tax_id: str = ""
     tax_type: str = "autonomo"
     activity: str = ""
 
@@ -84,6 +88,10 @@ def _public_user(user: dict) -> dict:
     return {
         "id": str(user["_id"]),
         "name": user.get("name", ""),
+        "last_name": user.get("last_name", ""),
+        "phone": user.get("phone", ""),
+        "address": user.get("address", ""),
+        "tax_id": user.get("tax_id", ""),
         "email": user["email"],
         "role": user.get("role", "user"),
         "tax_type": user.get("tax_type", "autonomo"),
@@ -185,6 +193,10 @@ async def register(data: RegisterInput, request: Request, response: Response):
         raise HTTPException(status_code=400, detail="Este email ya está registrado")
     doc = {
         "name": data.name,
+        "last_name": data.last_name,
+        "phone": data.phone,
+        "address": data.address,
+        "tax_id": data.tax_id,
         "email": email,
         "password_hash": hash_password(data.password),
         "role": "user",
@@ -202,6 +214,7 @@ async def register(data: RegisterInput, request: Request, response: Response):
     cid = str(_uuid.uuid4())
     await db.companies.insert_one({
         "id": cid, "user_id": uid, "name": data.name, "tax_type": doc["tax_type"],
+        "nif": data.tax_id, "address": data.address, "phone": data.phone, "email": email,
         "template_id": (data.activity if data.activity in TEMPLATE_MAP else "clasico"),
         "created_at": datetime.now(timezone.utc).isoformat()})
     await db.users.update_one({"_id": result.inserted_id}, {"$set": {"active_company_id": cid}})

@@ -17,7 +17,10 @@ import {
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
-import { Users, ShieldOff, FileText, Search, UserCog, Ban, CheckCircle2, Loader2, Save, CreditCard, History, TrendingUp, Euro, Rocket, UserPlus, Mail, Store } from "lucide-react";
+import {
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription,
+} from "@/components/ui/dialog";
+import { Users, ShieldOff, FileText, Search, UserCog, Ban, CheckCircle2, Loader2, Save, CreditCard, History, TrendingUp, Euro, Rocket, UserPlus, Mail, Store, Eye, Phone, MapPin, IdCard, Percent, Clock, UserMinus, UserCheck } from "lucide-react";
 
 const PLAN_LABEL = { basico: "Básico", medio: "Medio", platino: "Platino" };
 const actionLabel = (a) => {
@@ -53,6 +56,7 @@ export default function Admin() {
   const [savingInteg, setSavingInteg] = useState(false);
   const [testTo, setTestTo] = useState("");
   const [sendingTest, setSendingTest] = useState(false);
+  const [detailUser, setDetailUser] = useState(null);
 
   const load = (query = "") => {
     setLoading(true);
@@ -198,10 +202,16 @@ export default function Admin() {
   };
 
   const statCards = [
-    { label: "Usuarios", value: stats?.total_users, icon: Users, color: "text-[#0052FF] bg-[#0052FF]/10" },
-    { label: "Bloqueados", value: stats?.blocked, icon: ShieldOff, color: "text-red-600 bg-red-50" },
-    { label: "Facturas totales", value: stats?.total_invoices, icon: FileText, color: "text-emerald-600 bg-emerald-50" },
+    { label: "Clientes", value: stats?.clients, icon: Users, color: "text-[#0052FF] bg-[#0052FF]/10" },
+    { label: "Activos", value: stats?.active_clients, icon: UserCheck, color: "text-emerald-600 bg-emerald-50" },
+    { label: "Clientes de baja", value: stats?.bajas, icon: UserMinus, color: "text-red-600 bg-red-50" },
+    { label: "Altas este mes", value: stats?.altas_mes, icon: UserPlus, color: "text-violet-600 bg-violet-50" },
+    { label: "Retención", value: stats ? `${stats.retention_rate}%` : undefined, icon: Percent, color: "text-emerald-600 bg-emerald-50" },
+    { label: "Churn (bajas)", value: stats ? `${stats.churn_rate}%` : undefined, icon: TrendingUp, color: "text-red-600 bg-red-50" },
+    { label: "Permanencia media", value: stats ? `${stats.avg_permanencia_days} d` : undefined, icon: Clock, color: "text-amber-600 bg-amber-50" },
+    { label: "Facturas totales", value: stats?.total_invoices, icon: FileText, color: "text-slate-700 bg-slate-100" },
   ];
+  const fmtDate = (d) => (d ? new Date(d).toLocaleDateString("es-ES", { day: "2-digit", month: "short", year: "numeric" }) : "—");
 
   return (
     <Layout>
@@ -210,7 +220,7 @@ export default function Admin() {
         <p className="text-sm text-slate-500 mt-0.5">Gestiona usuarios, planes y plantillas globales</p>
       </div>
 
-      <div className="grid grid-cols-3 gap-4 mb-6">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
         {statCards.map((c) => (
           <div key={c.label} className="bg-white border border-slate-200 rounded-lg shadow-sm p-4 flex items-center gap-3" data-testid={`stat-${c.label}`}>
             <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${c.color}`}><c.icon className="w-5 h-5" strokeWidth={1.5} /></div>
@@ -305,21 +315,26 @@ export default function Admin() {
                       : <Badge className="bg-emerald-100 text-emerald-700 hover:bg-emerald-100 rounded-full">Activo</Badge>}
                   </TableCell>
                   <TableCell className="text-right">
-                    {u.role !== "admin" && (
-                      <div className="flex items-center justify-end gap-1">
-                        <Button variant="ghost" size="sm" onClick={() => impersonate(u)} disabled={busyId === u.id} title="Entrar como este usuario" data-testid={`impersonate-${u.email}`} className="h-8 text-slate-600 hover:text-[#0052FF]">
-                          <UserCog className="w-4 h-4 mr-1" strokeWidth={1.5} /> Entrar
-                        </Button>
-                        <Button variant="ghost" size="sm" onClick={() => togglePos(u)} disabled={busyId === u.id} title={u.is_pos_enabled ? "Desactivar TPV" : "Activar TPV"} data-testid={`pos-${u.email}`} className={`h-8 ${u.is_pos_enabled ? "text-[#0052FF]" : "text-slate-500"}`}>
-                          <Store className="w-4 h-4 mr-1" strokeWidth={1.5} />
-                          {u.is_pos_enabled ? "TPV ✓" : "TPV"}
-                        </Button>
-                        <Button variant="ghost" size="sm" onClick={() => toggleBlock(u)} disabled={busyId === u.id} title={u.is_blocked ? "Desbloquear" : "Bloquear"} data-testid={`block-${u.email}`} className={`h-8 ${u.is_blocked ? "text-emerald-600" : "text-red-600"}`}>
-                          {u.is_blocked ? <CheckCircle2 className="w-4 h-4 mr-1" strokeWidth={1.5} /> : <Ban className="w-4 h-4 mr-1" strokeWidth={1.5} />}
-                          {u.is_blocked ? "Desbloquear" : "Bloquear"}
-                        </Button>
-                      </div>
-                    )}
+                    <div className="flex items-center justify-end gap-1">
+                      <Button variant="ghost" size="sm" onClick={() => setDetailUser(u)} title="Ver detalles" data-testid={`details-${u.email}`} className="h-8 text-slate-600 hover:text-[#0052FF]">
+                        <Eye className="w-4 h-4 mr-1" strokeWidth={1.5} /> Detalles
+                      </Button>
+                      {u.role !== "admin" && (
+                        <>
+                          <Button variant="ghost" size="sm" onClick={() => impersonate(u)} disabled={busyId === u.id} title="Entrar como este usuario" data-testid={`impersonate-${u.email}`} className="h-8 text-slate-600 hover:text-[#0052FF]">
+                            <UserCog className="w-4 h-4 mr-1" strokeWidth={1.5} /> Entrar
+                          </Button>
+                          <Button variant="ghost" size="sm" onClick={() => togglePos(u)} disabled={busyId === u.id} title={u.is_pos_enabled ? "Desactivar TPV" : "Activar TPV"} data-testid={`pos-${u.email}`} className={`h-8 ${u.is_pos_enabled ? "text-[#0052FF]" : "text-slate-500"}`}>
+                            <Store className="w-4 h-4 mr-1" strokeWidth={1.5} />
+                            {u.is_pos_enabled ? "TPV ✓" : "TPV"}
+                          </Button>
+                          <Button variant="ghost" size="sm" onClick={() => toggleBlock(u)} disabled={busyId === u.id} title={u.is_blocked ? "Desbloquear" : "Bloquear"} data-testid={`block-${u.email}`} className={`h-8 ${u.is_blocked ? "text-emerald-600" : "text-red-600"}`}>
+                            {u.is_blocked ? <CheckCircle2 className="w-4 h-4 mr-1" strokeWidth={1.5} /> : <Ban className="w-4 h-4 mr-1" strokeWidth={1.5} />}
+                            {u.is_blocked ? "Desbloquear" : "Bloquear"}
+                          </Button>
+                        </>
+                      )}
+                    </div>
                   </TableCell>
                 </TableRow>
               ))}
@@ -543,6 +558,42 @@ export default function Admin() {
           </table>
         )}
       </div>
+      <Dialog open={!!detailUser} onOpenChange={(o) => !o && setDetailUser(null)}>
+        <DialogContent className="sm:max-w-lg" data-testid="user-detail-dialog">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              {detailUser?.name || detailUser?.email}
+              {detailUser?.role === "admin" && <Badge className="bg-[#0052FF]/10 text-[#0052FF] hover:bg-[#0052FF]/10 rounded-full text-[10px]">admin</Badge>}
+            </DialogTitle>
+            <DialogDescription>Datos de la cuenta y de facturación del cliente</DialogDescription>
+          </DialogHeader>
+          {detailUser && (
+            <div className="space-y-1 text-sm" data-testid="user-detail-body">
+              {[
+                { icon: Users, label: "Nombre / Razón social", value: [detailUser.name, detailUser.last_name].filter(Boolean).join(" ") || "—" },
+                { icon: IdCard, label: "DNI / NIE / CIF", value: detailUser.tax_id || "—" },
+                { icon: Mail, label: "Email", value: detailUser.email },
+                { icon: Phone, label: "Teléfono", value: detailUser.phone || "—" },
+                { icon: MapPin, label: "Dirección", value: detailUser.address || "—" },
+                { icon: Store, label: "Empresa", value: detailUser.company_name || "—" },
+                { icon: CreditCard, label: "Plan", value: PLAN_LABEL[detailUser.plan] || detailUser.plan },
+                { icon: FileText, label: "Facturas (total / mes)", value: `${detailUser.usage?.invoices_total ?? 0} / ${detailUser.usage?.invoices_month ?? 0}` },
+                { icon: UserPlus, label: "Alta", value: fmtDate(detailUser.created_at) },
+                { icon: Clock, label: "Fin de prueba", value: detailUser.trial_ends_at ? fmtDate(detailUser.trial_ends_at) : "—" },
+                { icon: detailUser.is_blocked ? Ban : CheckCircle2, label: "Estado", value: detailUser.is_blocked ? "De baja / bloqueado" : "Activo" },
+              ].map((row) => (
+                <div key={row.label} className="flex items-start gap-3 py-2 border-b border-slate-100 last:border-0">
+                  <div className="w-7 h-7 rounded-lg bg-slate-100 flex items-center justify-center shrink-0 mt-0.5"><row.icon className="w-3.5 h-3.5 text-slate-500" strokeWidth={1.75} /></div>
+                  <div className="min-w-0 flex-1">
+                    <div className="text-xs text-slate-400">{row.label}</div>
+                    <div className="text-slate-800 font-medium break-words">{row.value}</div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </Layout>
   );
 }

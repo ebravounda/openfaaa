@@ -52,12 +52,18 @@ async def _user_row(u: dict) -> dict:
     return {
         "id": uid,
         "name": u.get("name", ""),
+        "last_name": u.get("last_name", ""),
         "email": u.get("email", ""),
+        "phone": u.get("phone", ""),
+        "address": u.get("address", ""),
+        "tax_id": u.get("tax_id", ""),
         "role": u.get("role", "user"),
         "plan": u.get("plan", "basico"),
+        "tax_type": u.get("tax_type", "autonomo"),
         "is_blocked": bool(u.get("is_blocked", False)),
         "is_pos_enabled": bool(u.get("pos_enabled", False)),
         "created_at": u.get("created_at"),
+        "trial_ends_at": u.get("trial_ends_at", ""),
         "company_name": (company or {}).get("name", ""),
         "usage": {"invoices_total": inv_total, "invoices_month": inv_month, "contacts": contacts},
     }
@@ -135,8 +141,33 @@ async def stats(admin_user=Depends(require_admin)):
     by_plan = {}
     for p in PLAN_ORDER:
         by_plan[p] = await db.users.count_documents({"plan": p, "role": {"$ne": "admin"}})
+    clients = await db.users.count_documents({"role": {"$ne": "admin"}})
+    active_clients = await db.users.count_documents({"role": {"$ne": "admin"}, "is_blocked": {"$ne": True}})
+    bajas = await db.users.count_documents({"role": {"$ne": "admin"}, "is_blocked": True})
+    mp = _month_prefix()
+    altas_mes = await db.users.count_documents({"role": {"$ne": "admin"}, "created_at": {"$regex": f"^{mp}"}})
+    retention_rate = round(active_clients / clients * 100, 1) if clients else 0.0
+    churn_rate = round(bajas / clients * 100, 1) if clients else 0.0
+    now = datetime.now(timezone.utc)
+    total_days, counted = 0, 0
+    async for u in db.users.find({"role": {"$ne": "admin"}}, {"created_at": 1}):
+        ca = u.get("created_at")
+        if not ca:
+            continue
+        try:
+            d = datetime.fromisoformat(ca)
+            if d.tzinfo is None:
+                d = d.replace(tzinfo=timezone.utc)
+            total_days += (now - d).days
+            counted += 1
+        except Exception:
+            pass
+    avg_permanencia_days = int(round(total_days / counted)) if counted else 0
     return {"total_users": total_users, "blocked": blocked,
-            "total_invoices": total_invoices, "by_plan": by_plan}
+            "total_invoices": total_invoices, "by_plan": by_plan,
+            "clients": clients, "active_clients": active_clients, "bajas": bajas,
+            "altas_mes": altas_mes, "retention_rate": retention_rate,
+            "churn_rate": churn_rate, "avg_permanencia_days": avg_permanencia_days}
 
 
 @admin.get("/audit")

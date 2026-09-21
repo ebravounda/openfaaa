@@ -40,6 +40,10 @@ export default function Register() {
   const { register } = useAuth();
   const navigate = useNavigate();
   const [name, setName] = useState("");
+  const [lastName, setLastName] = useState("");
+  const [phone, setPhone] = useState("");
+  const [address, setAddress] = useState("");
+  const [taxId, setTaxId] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPw, setShowPw] = useState(false);
@@ -53,7 +57,17 @@ export default function Register() {
     setError("");
     setLoading(true);
     try {
-      await register(name, email, password, taxType, activity === "none" ? "" : activity);
+      await register({
+        name,
+        last_name: lastName,
+        phone,
+        address,
+        tax_id: taxId,
+        email,
+        password,
+        tax_type: taxType,
+        activity: activity === "none" ? "" : activity,
+      });
       navigate("/bienvenida");
     } catch (err) {
       setError(formatApiErrorDetail(err.response?.data?.detail) || err.message);
@@ -151,9 +165,29 @@ export default function Register() {
             </div>
           </div>
 
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div className="space-y-2">
+              <Label htmlFor="name">{taxType === "empresa" ? "Razón social" : "Nombre"}</Label>
+              <Input id="name" value={name} onChange={(e) => setName(e.target.value)} required className={inputCls} placeholder={taxType === "empresa" ? "Mi Empresa S.L." : "Juan"} data-testid="register-name" />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="lastName">Apellidos <span className="text-slate-400 font-normal">(opcional)</span></Label>
+              <Input id="lastName" value={lastName} onChange={(e) => setLastName(e.target.value)} className={inputCls} placeholder="Pérez García" data-testid="register-last-name" />
+            </div>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div className="space-y-2">
+              <Label htmlFor="taxId">DNI / NIE / CIF</Label>
+              <Input id="taxId" value={taxId} onChange={(e) => setTaxId(e.target.value)} required className={inputCls} placeholder="12345678Z" data-testid="register-tax-id" />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="phone">Teléfono</Label>
+              <Input id="phone" type="tel" value={phone} onChange={(e) => setPhone(e.target.value)} required className={inputCls} placeholder="600 000 000" data-testid="register-phone" />
+            </div>
+          </div>
           <div className="space-y-2">
-            <Label htmlFor="name">Nombre</Label>
-            <Input id="name" value={name} onChange={(e) => setName(e.target.value)} required className={inputCls} data-testid="register-name" />
+            <Label htmlFor="address">Dirección</Label>
+            <Input id="address" value={address} onChange={(e) => setAddress(e.target.value)} required className={inputCls} placeholder="Calle Mayor 1, 28013 Madrid" data-testid="register-address" />
           </div>
           <div className="space-y-2">
             <Label htmlFor="email">Email</Label>
