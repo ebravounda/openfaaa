@@ -2048,8 +2048,9 @@ async def scan_expense(file: UploadFile = File(...), user=Depends(get_current_us
             import fitz
             doc = fitz.open(stream=data, filetype="pdf")
             page = doc.load_page(0)
-            pix = page.get_pixmap(dpi=150)
-            img_bytes = pix.tobytes("png")
+            pix = page.get_pixmap(dpi=110)
+            img_bytes = pix.tobytes("jpeg", jpg_quality=75)
+            pix = None
             doc.close()
         else:
             img_bytes = data
