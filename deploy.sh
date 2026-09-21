@@ -28,7 +28,8 @@ rsync -a --delete --exclude='.htaccess' --exclude='.well-known' \
 echo "▶ 4/5 Backend (dependencias + reinicio)..."
 cd "$APP/backend"
 source "$APP/venv/bin/activate"
-pip install -q -r requirements.txt
+# El índice extra de Emergent es necesario para 'emergentintegrations' (OCR / IA), que no está en PyPI.
+pip install -q -r requirements.txt --extra-index-url https://d33sy5i8bnduwe.cloudfront.net/simple/
 systemctl restart openfactura-api
 
 echo "▶ 5/5 Verificación en vivo..."
