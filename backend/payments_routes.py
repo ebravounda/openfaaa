@@ -156,20 +156,27 @@ async def stripe_webhook(request: Request):
         raise HTTPException(status_code=400, detail="Firma inválida")
     obj, t = event["data"]["object"], event["type"]
 
-    if t == "checkout.session.completed" and obj.get("mode") == "setup":
+    if t == "checkout.session.completed" and (obj.get("metadata") or {}).get("purpose", "").startswith("sepa"):
         meta = obj.get("metadata") or {}
+        uid = meta.get("user_id")
+        cust = obj.get("customer")
+        sub = obj.get("subscription")
         try:
-            si = stripe.SetupIntent.retrieve(obj.get("setup_intent"))
-            pm = si.get("payment_method")
-            cust = si.get("customer") or obj.get("customer")
-            if pm and cust:
-                stripe.Customer.modify(cust, invoice_settings={"default_payment_method": pm})
-            uid = meta.get("user_id")
+            if obj.get("mode") == "setup" and obj.get("setup_intent"):
+                si = stripe.SetupIntent.retrieve(obj.get("setup_intent"))
+                pm = si.get("payment_method")
+                target_cust = cust or si.get("customer")
+                if pm and target_cust:
+                    stripe.Customer.modify(target_cust, invoice_settings={"default_payment_method": pm})
             if uid:
-                await db.users.update_one({"_id": ObjectId(uid)},
-                                          {"$set": {"sepa_active": True, "stripe_customer_id": cust}})
+                upd = {"sepa_active": True}
+                if cust:
+                    upd["stripe_customer_id"] = cust
+                if sub:
+                    upd["stripe_subscription_id"] = sub
+                await db.users.update_one({"_id": ObjectId(uid)}, {"$set": upd})
         except Exception as e:
-            logger.error(f"sepa setup webhook failed: {e}")
+            logger.error(f"sepa webhook failed: {e}")
         return {"status": "ok"}
 
     if t == "checkout.session.completed":

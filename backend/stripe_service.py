@@ -1,5 +1,6 @@
 import os
 import stripe
+from datetime import datetime, timezone
 
 stripe.api_key = os.environ.get("STRIPE_SECRET_KEY") or "sk_test_emergent"
 
@@ -132,6 +133,13 @@ def plan_from_subscription(sub_obj) -> str:
         return None
 
 
+def next_month_first_ts() -> int:
+    """Timestamp del día 1 del próximo mes (00:00 UTC) para anclar el ciclo de facturación."""
+    now = datetime.now(timezone.utc)
+    y, m = (now.year + 1, 1) if now.month == 12 else (now.year, now.month + 1)
+    return int(datetime(y, m, 1, tzinfo=timezone.utc).timestamp())
+
+
 def create_subscription_session(price_id: str, origin_url: str, metadata: dict):
     kwargs = dict(
         line_items=[{"price": price_id, "quantity": 1}],
@@ -139,7 +147,7 @@ def create_subscription_session(price_id: str, origin_url: str, metadata: dict):
         success_url=f"{origin_url}/payment/success?session_id={{CHECKOUT_SESSION_ID}}",
         cancel_url=f"{origin_url}/payment/cancel",
         metadata=metadata,
-        subscription_data={"metadata": metadata},
+        subscription_data={"metadata": metadata, "billing_cycle_anchor": next_month_first_ts()},
     )
     # 1) Tarjeta + domiciliación bancaria SEPA (si la cuenta lo permite)
     try:

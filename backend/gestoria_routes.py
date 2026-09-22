@@ -247,6 +247,9 @@ async def billing_checkout(req: BillingCheckoutInput, g=Depends(require_gestoria
     if total <= 0:
         raise HTTPException(status_code=400, detail="Aún no tienes importe que domiciliar (sin clientes de pago).")
     amount_cents = int(round(total * 100))
+    now = datetime.now(timezone.utc)
+    _y, _m = (now.year + 1, 1) if now.month == 12 else (now.year, now.month + 1)
+    anchor = int(datetime(_y, _m, 1, tzinfo=timezone.utc).timestamp())
     line_items = [{"price_data": {
         "currency": "eur",
         "product_data": {"name": f"OpenFactura · Gestoría ({len(clients)} clientes)"},
@@ -257,8 +260,9 @@ async def billing_checkout(req: BillingCheckoutInput, g=Depends(require_gestoria
         mode="subscription", line_items=line_items,
         success_url=f"{req.origin_url}/gestoria?sepa=ok",
         cancel_url=f"{req.origin_url}/gestoria?sepa=cancel",
-        metadata={"gestoria_id": g["id"], "type": "gestoria_sepa"},
-        subscription_data={"metadata": {"gestoria_id": g["id"], "type": "gestoria_sepa"}},
+        metadata={"gestoria_id": g["id"], "user_id": g["id"], "purpose": "sepa_subscription"},
+        subscription_data={"billing_cycle_anchor": anchor,
+                           "metadata": {"gestoria_id": g["id"], "user_id": g["id"], "purpose": "sepa_subscription"}},
     )
     try:
         try:

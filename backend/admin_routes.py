@@ -380,12 +380,41 @@ async def sepa_link(data: SepaLinkInput, admin_user=Depends(require_admin)):
         cust = c.id
         await db.users.update_one({"_id": u["_id"]}, {"$set": {"stripe_customer_id": cust}})
     origin = (data.origin_url or os.environ.get("APP_BASE_URL", "https://openfactura.es")).rstrip("/")
+    import stripe_service as ss
+    from plans import load_plans
+    plans = await load_plans()
+    if u.get("role") == "gestoria":
+        clients = await db.users.find({"gestoria_id": str(u["_id"])}, {"plan": 1}).to_list(100000)
+        total = sum((plans.get(c.get("plan", "basico"), {}).get("price", 0) or 0) * RESELLER_RATE for c in clients)
+        if total <= 0:
+            raise HTTPException(status_code=400, detail="La gestoría aún no tiene importe que domiciliar (sin clientes de pago).")
+        line_items = [{"price_data": {"currency": "eur",
+                                      "product_data": {"name": f"OpenFactura · Gestoría ({len(clients)} clientes)"},
+                                      "unit_amount": int(round(total * 100)),
+                                      "recurring": {"interval": "month"}}, "quantity": 1}]
+    else:
+        plan = u.get("plan", "basico")
+        if plan not in ss.PLAN_LOOKUP:
+            raise HTTPException(status_code=400, detail="Este cliente está en un plan gratuito. Asígnale un plan de pago antes de domiciliar.")
+        ss.ensure_tax_settings()
+        ss.sync_catalog(plans)
+        price_id = ss.get_price_id(ss.lookup_for(plan, "monthly"))
+        if not price_id:
+            raise HTTPException(status_code=500, detail="Precio no disponible en Stripe")
+        line_items = [{"price": price_id, "quantity": 1}]
+    anchor = ss.next_month_first_ts()
+    base = dict(
+        mode="subscription", customer=cust, line_items=line_items,
+        success_url=f"{origin}/?sepa=ok", cancel_url=f"{origin}/?sepa=cancel",
+        metadata={"user_id": data.user_id, "purpose": "sepa_subscription"},
+        subscription_data={"billing_cycle_anchor": anchor,
+                           "metadata": {"user_id": data.user_id, "purpose": "sepa_subscription"}},
+    )
     try:
-        session = stripe.checkout.Session.create(
-            mode="setup", customer=cust, payment_method_types=["sepa_debit"],
-            success_url=f"{origin}/?sepa=ok", cancel_url=f"{origin}/?sepa=cancel",
-            metadata={"user_id": data.user_id, "purpose": "sepa_setup"},
-        )
+        try:
+            session = stripe.checkout.Session.create(**base, payment_method_types=["sepa_debit", "card"])
+        except stripe.error.InvalidRequestError:
+            session = stripe.checkout.Session.create(**base, payment_method_types=["card"])
     except stripe.error.StripeError as e:
         logger.error(f"sepa-link failed: {e}")
         raise HTTPException(status_code=502, detail="No pudimos generar el enlace SEPA. Revisa la configuración de Stripe.")

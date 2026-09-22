@@ -366,3 +366,10 @@ Sistema de facturación para España: crear facturas introduciendo datos (CIF/NI
 - ✅ **Frontend (`Admin.js`)**: botón "SEPA" en cada fila de usuarios y "Enviar enlace SEPA" en cada gestoría → llama al endpoint, envía email y copia el enlace al portapapeles.
 - Verificado por curl: URL de Stripe generada para cliente y gestoría, aislamiento 403. El email a destinatarios reales se enviará en producción (en sandbox Resend rechaza dominios de prueba).
 
+## Iteración 34 (2026-06) — Suscripción SEPA automática con ciclo el día 1 + prorrateo
+- ✅ **Cobro automático mensual anclado al día 1**: `stripe_service.next_month_first_ts()` calcula el timestamp del día 1 del próximo mes; se pasa como `subscription_data.billing_cycle_anchor` en TODAS las suscripciones. El primer periodo parcial se **prorratea** automáticamente (proration_behavior por defecto de Stripe al anclar a fecha futura), de modo que todos los cobros recurrentes caen el día 1.
+- ✅ Aplicado en: (1) checkout de planes de clientes (`create_subscription_session`), (2) domiciliación de gestorías (`/api/gestoria/billing/checkout`), (3) **enlace SEPA de admin** (`/api/admin/sepa-link`) que ahora crea la **suscripción** (mode=subscription) en vez de solo guardar el mandato: cliente → precio de su plan; gestoría → total al 50%. Cliente en plan gratuito → 400 (asignar plan de pago antes).
+- ✅ **Webhook**: `checkout.session.completed` con `metadata.purpose` que empieza por "sepa" marca `sepa_active=True` y guarda `stripe_customer_id`/`stripe_subscription_id`; para setup (legacy) fija el método de pago por defecto.
+- Verificado por curl: sesiones subscription con `['sepa_debit','card']` para cliente de pago y gestoría; `billing_cycle_anchor` aceptado por Stripe; guard de plan gratuito 400.
+- Nota producción: requiere SEPA habilitado en Stripe y webhook en /api/stripe/webhook. SEPA es asíncrono (el cobro se confirma en días).
+
