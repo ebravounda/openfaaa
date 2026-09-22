@@ -360,3 +360,9 @@ Sistema de facturación para España: crear facturas introduciendo datos (CIF/NI
 - ✅ **Gestorías**: `POST /api/gestoria/billing/checkout` crea una suscripción mensual por el importe total al 50% (price_data EUR dinámico) con `sepa_debit`+card. Botón "Domiciliar pago (SEPA)" en el panel de gestoría. Verificado (amount 17,49 €, URL Stripe válida).
 - Nota: en producción requiere que SEPA esté habilitado en la cuenta Stripe y el webhook de Stripe apuntando a /api/stripe/webhook. El importe de la gestoría es fijo al domiciliar; si cambia el nº de clientes, re-domiciliar actualiza el importe (mejora futura: ajuste automático de la suscripción).
 
+## Iteración 33 (2026-06) — Admin: "Enviar enlace SEPA"
+- ✅ **Backend (`admin_routes.py`)**: `POST /api/admin/sepa-link` {user_id, origin_url} → crea/reutiliza Stripe Customer del usuario y genera una Checkout Session `mode="setup"` con `payment_method_types=["sepa_debit"]` (el destinatario introduce IBAN + firma mandato). Envía el enlace por email (Resend) y devuelve la URL. require_admin (gestoría → 403).
+- ✅ **Webhook (`payments_routes.py`)**: nuevo branch `checkout.session.completed` con `mode=="setup"` → recupera el SetupIntent, fija el método de pago como predeterminado del customer y marca `sepa_active=True` en el usuario.
+- ✅ **Frontend (`Admin.js`)**: botón "SEPA" en cada fila de usuarios y "Enviar enlace SEPA" en cada gestoría → llama al endpoint, envía email y copia el enlace al portapapeles.
+- Verificado por curl: URL de Stripe generada para cliente y gestoría, aislamiento 403. El email a destinatarios reales se enviará en producción (en sandbox Resend rechaza dominios de prueba).
+

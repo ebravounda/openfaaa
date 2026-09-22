@@ -1,5 +1,6 @@
 from datetime import datetime, timezone
 import re
+import os
 import asyncio
 import uuid
 import html as html_lib
@@ -341,6 +342,63 @@ async def gestoria_clients(gid: str, admin_user=Depends(require_admin)):
             "is_blocked": bool(u.get("is_blocked", False)),
         })
     return out
+
+
+def _sepa_link_html(name: str, link: str) -> str:
+    saludo = f"Hola {name}," if name else "Hola,"
+    return (
+        "<div style='font-family:Arial,Helvetica,sans-serif;max-width:520px;margin:0 auto;color:#0f172a'>"
+        "<div style='text-align:center;padding:8px 0 18px'><span style='font-size:22px;font-weight:700;color:#0052FF'>openfactura</span></div>"
+        "<div style='background:#fff;border:1px solid #e2e8f0;border-radius:16px;padding:28px'>"
+        "<h1 style='font-size:19px;margin:0 0 12px'>Domicilia tu pago por SEPA</h1>"
+        f"<p style='font-size:15px;line-height:1.6;color:#475569;margin:0 0 8px'>{saludo}</p>"
+        "<p style='font-size:15px;line-height:1.6;color:#475569;margin:0 0 22px'>Para activar la domiciliación bancaria de tu cuenta en OpenFactura, "
+        "pulsa el botón, introduce tu IBAN y firma el mandato SEPA. Es seguro y solo lleva un minuto.</p>"
+        f"<div style='text-align:center;margin:0 0 22px'><a href='{link}' style='display:inline-block;background:#0052FF;color:#fff;text-decoration:none;font-weight:600;padding:14px 28px;border-radius:12px;font-size:15px'>Domiciliar mi cuenta</a></div>"
+        f"<p style='font-size:12px;color:#cbd5e1;margin:0;word-break:break-all'>O copia este enlace: {link}</p>"
+        "</div></div>"
+    )
+
+
+class SepaLinkInput(BaseModel):
+    user_id: str
+    origin_url: str = ""
+
+
+@admin.post("/sepa-link")
+async def sepa_link(data: SepaLinkInput, admin_user=Depends(require_admin)):
+    import stripe
+    from integrations_config import get_stripe
+    cfg = await get_stripe()
+    stripe.api_key = cfg.get("secret_key") or ""
+    u = await db.users.find_one({"_id": ObjectId(data.user_id)})
+    if not u:
+        raise HTTPException(status_code=404, detail="Usuario no encontrado")
+    cust = u.get("stripe_customer_id")
+    if not cust:
+        c = stripe.Customer.create(email=u["email"], name=u.get("name", ""), metadata={"user_id": data.user_id})
+        cust = c.id
+        await db.users.update_one({"_id": u["_id"]}, {"$set": {"stripe_customer_id": cust}})
+    origin = (data.origin_url or os.environ.get("APP_BASE_URL", "https://openfactura.es")).rstrip("/")
+    try:
+        session = stripe.checkout.Session.create(
+            mode="setup", customer=cust, payment_method_types=["sepa_debit"],
+            success_url=f"{origin}/?sepa=ok", cancel_url=f"{origin}/?sepa=cancel",
+            metadata={"user_id": data.user_id, "purpose": "sepa_setup"},
+        )
+    except stripe.error.StripeError as e:
+        logger.error(f"sepa-link failed: {e}")
+        raise HTTPException(status_code=502, detail="No pudimos generar el enlace SEPA. Revisa la configuración de Stripe.")
+    sent = False
+    try:
+        import email_service
+        await email_service.send_email(to=u["email"], subject="Domicilia tu pago por SEPA · OpenFactura",
+                                       html=_sepa_link_html(u.get("name", ""), session.url))
+        sent = True
+    except Exception as e:
+        logger.error(f"sepa-link email failed: {e}")
+    await _audit(admin_user["id"], "sepa:link", data.user_id)
+    return {"url": session.url, "email_sent": sent, "email": u["email"]}
 
 
 @admin.post("/impersonate/{user_id}")

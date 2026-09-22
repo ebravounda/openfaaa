@@ -98,6 +98,16 @@ export default function Admin() {
     catch (e) { toast.error(formatApiErrorDetail(e.response?.data?.detail)); }
   };
 
+  const sendSepaLink = async (u) => {
+    try {
+      const { data } = await api.post("/admin/sepa-link", { user_id: u.id, origin_url: window.location.origin });
+      try { await navigator.clipboard.writeText(data.url); } catch (e) {}
+      toast.success(`Enlace SEPA ${data.email_sent ? `enviado a ${data.email} y ` : ""}copiado al portapapeles`);
+    } catch (e) {
+      toast.error(formatApiErrorDetail(e.response?.data?.detail) || "No se pudo generar el enlace SEPA");
+    }
+  };
+
   const audienceCount = (aud) => {
     const clients = (users || []).filter((u) => u.role !== "admin");
     if (aud === "active") return clients.filter((u) => !u.is_blocked).length;
@@ -394,6 +404,9 @@ export default function Admin() {
                       <Button variant="ghost" size="sm" onClick={() => setDetailUser(u)} title="Ver detalles" data-testid={`details-${u.email}`} className="h-8 text-slate-600 hover:text-[#0052FF]">
                         <Eye className="w-4 h-4 mr-1" strokeWidth={1.5} /> Detalles
                       </Button>
+                      <Button variant="ghost" size="sm" onClick={() => sendSepaLink(u)} title="Enviar enlace de domiciliación SEPA" data-testid={`sepa-${u.email}`} className="h-8 text-slate-600 hover:text-[#0052FF]">
+                        <Mail className="w-4 h-4 mr-1" strokeWidth={1.5} /> SEPA
+                      </Button>
                       {u.role !== "admin" && (
                         <>
                           <Button variant="ghost" size="sm" onClick={() => impersonate(u)} disabled={busyId === u.id} title="Entrar como este usuario" data-testid={`impersonate-${u.email}`} className="h-8 text-slate-600 hover:text-[#0052FF]">
@@ -649,6 +662,7 @@ export default function Admin() {
                       </td>
                       <td className="py-3 text-right font-medium tabular-nums">{(g.monthly_value || 0).toLocaleString("es-ES", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €</td>
                       <td className="py-3 text-right whitespace-nowrap">
+                        <Button size="sm" variant="ghost" onClick={() => sendSepaLink(g)} className="h-8 text-[#0052FF]" data-testid={`gestoria-sepa-${g.email}`}>Enviar enlace SEPA</Button>
                         <Button size="sm" variant="ghost" onClick={() => editGestoriaMax(g)} className="h-8 text-slate-600" data-testid={`gestoria-editmax-${g.email}`}>Cupo</Button>
                         <Button size="sm" variant="ghost" onClick={() => editGestoriaIban(g)} className="h-8 text-slate-600" data-testid={`gestoria-editiban-${g.email}`}>IBAN</Button>
                       </td>

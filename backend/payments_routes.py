@@ -156,6 +156,22 @@ async def stripe_webhook(request: Request):
         raise HTTPException(status_code=400, detail="Firma inválida")
     obj, t = event["data"]["object"], event["type"]
 
+    if t == "checkout.session.completed" and obj.get("mode") == "setup":
+        meta = obj.get("metadata") or {}
+        try:
+            si = stripe.SetupIntent.retrieve(obj.get("setup_intent"))
+            pm = si.get("payment_method")
+            cust = si.get("customer") or obj.get("customer")
+            if pm and cust:
+                stripe.Customer.modify(cust, invoice_settings={"default_payment_method": pm})
+            uid = meta.get("user_id")
+            if uid:
+                await db.users.update_one({"_id": ObjectId(uid)},
+                                          {"$set": {"sepa_active": True, "stripe_customer_id": cust}})
+        except Exception as e:
+            logger.error(f"sepa setup webhook failed: {e}")
+        return {"status": "ok"}
+
     if t == "checkout.session.completed":
         res = await db.payment_transactions.update_one(
             {"session_id": obj["id"], "payment_status": {"$ne": "paid"}},
