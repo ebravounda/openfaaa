@@ -638,13 +638,22 @@ export default function Landing() {
             transition={{ duration: 0.8, ease: [0.22, 1, 0.36, 1] }}
             className="relative"
           >
-            <div className="absolute -inset-6 bg-[#0052FF]/10 blur-3xl rounded-full -z-10" />
-            <DashboardMockup />
+            <motion.div
+              className="absolute -inset-6 bg-[#0052FF]/10 blur-3xl rounded-full -z-10"
+              animate={{ opacity: [0.55, 1, 0.55], scale: [1, 1.08, 1] }}
+              transition={{ duration: 5, repeat: Infinity, ease: "easeInOut" }}
+            />
+            <motion.div
+              animate={{ y: [0, -14, 0] }}
+              transition={{ duration: 6, repeat: Infinity, ease: "easeInOut" }}
+            >
+              <DashboardMockup />
+            </motion.div>
             <motion.div
               className="hidden sm:block absolute -bottom-8 -left-6 w-56"
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.5, duration: 0.6 }}
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1, y: [0, -10, 0] }}
+              transition={{ opacity: { delay: 0.5, duration: 0.6 }, y: { duration: 4.5, repeat: Infinity, ease: "easeInOut" } }}
             >
               <div className="bg-white rounded-xl border border-slate-200 shadow-xl p-3.5">
                 <div className="flex items-center gap-2">
@@ -656,7 +665,42 @@ export default function Landing() {
                 </div>
               </div>
             </motion.div>
+            <motion.div
+              className="hidden sm:flex absolute -top-6 -right-4 items-center gap-2.5 bg-white rounded-xl border border-slate-200 shadow-xl px-3.5 py-2.5"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1, y: [0, 10, 0] }}
+              transition={{ opacity: { delay: 0.7, duration: 0.6 }, y: { duration: 5.5, repeat: Infinity, ease: "easeInOut" } }}
+            >
+              <span className="w-8 h-8 rounded-lg bg-[#0052FF]/10 text-[#0052FF] flex items-center justify-center shrink-0"><FileText className="w-4 h-4" strokeWidth={1.5} /></span>
+              <div>
+                <div className="text-xs font-semibold text-slate-900">Nueva factura</div>
+                <div className="text-[11px] text-slate-400 tabular-nums">1.991,66€ · enviada</div>
+              </div>
+            </motion.div>
           </motion.div>
+        </div>
+      </section>
+
+      {/* Acompañamiento */}
+      <section className="bg-white">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-10">
+          <Reveal>
+            <div className="relative overflow-hidden rounded-2xl px-6 sm:px-8 py-6 sm:py-7 text-white flex flex-col sm:flex-row items-center gap-5 sm:gap-8 shadow-[0_20px_45px_-15px_rgba(0,82,255,0.5)]" style={{ background: ACCENT }}>
+              <div className="absolute -right-10 -bottom-16 w-56 h-56 rounded-full bg-white/10 blur-2xl" />
+              <div className="flex items-center gap-4 relative">
+                <span className="w-12 h-12 rounded-xl bg-white/15 flex items-center justify-center shrink-0"><Users className="w-6 h-6" strokeWidth={1.5} /></span>
+                <div>
+                  <div className="font-outfit text-lg sm:text-xl font-semibold">Te acompañamos en toda tu integración, paso a paso</div>
+                  <div className="text-sm text-white/80 mt-0.5">De la mano hasta que crees tu primera factura. Sin tecnicismos.</div>
+                </div>
+              </div>
+              <a href="https://wa.me/34633377358" target="_blank" rel="noopener noreferrer" className="sm:ml-auto relative w-full sm:w-auto" data-testid="onboarding-whatsapp">
+                <Button className="bg-white text-[#0052FF] hover:bg-white/90 rounded-full px-6 font-semibold w-full sm:w-auto">
+                  <MessageCircle className="w-4 h-4 mr-2" strokeWidth={2} /> Habla con nosotros
+                </Button>
+              </a>
+            </div>
+          </Reveal>
         </div>
       </section>
 
@@ -1076,6 +1120,22 @@ export default function Landing() {
           </div>
         </div>
       </footer>
+
+      {/* WhatsApp flotante */}
+      <a
+        href="https://wa.me/34633377358"
+        target="_blank"
+        rel="noopener noreferrer"
+        data-testid="whatsapp-float"
+        aria-label="Escríbenos por WhatsApp"
+        className="fixed bottom-6 right-6 z-50 group flex items-center"
+      >
+        <span className="hidden sm:block mr-3 bg-white text-slate-800 text-sm font-medium px-3.5 py-1.5 rounded-full shadow-lg border border-slate-100 opacity-0 translate-x-2 group-hover:opacity-100 group-hover:translate-x-0 transition-all duration-300 whitespace-nowrap">¿Hablamos? Estamos aquí</span>
+        <span className="relative flex items-center justify-center w-14 h-14 rounded-full shadow-xl transition-transform duration-300 group-hover:scale-110" style={{ background: "#25D366" }}>
+          <span className="absolute inset-0 rounded-full animate-ping" style={{ background: "#25D366", opacity: 0.35 }} />
+          <MessageCircle className="w-7 h-7 text-white relative" strokeWidth={2} />
+        </span>
+      </a>
     </div>
   );
 }
