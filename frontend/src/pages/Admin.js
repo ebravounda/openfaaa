@@ -57,6 +57,45 @@ export default function Admin() {
   const [testTo, setTestTo] = useState("");
   const [sendingTest, setSendingTest] = useState(false);
   const [detailUser, setDetailUser] = useState(null);
+  const [bulkSubject, setBulkSubject] = useState("");
+  const [bulkMessage, setBulkMessage] = useState("");
+  const [bulkAudience, setBulkAudience] = useState("all");
+  const [bulkSending, setBulkSending] = useState(false);
+  const [bulkJob, setBulkJob] = useState(null);
+
+  const audienceCount = (aud) => {
+    const clients = (users || []).filter((u) => u.role !== "admin");
+    if (aud === "active") return clients.filter((u) => !u.is_blocked).length;
+    if (aud === "blocked") return clients.filter((u) => u.is_blocked).length;
+    return clients.length;
+  };
+
+  const sendBulk = async () => {
+    if (!bulkSubject.trim() || !bulkMessage.trim()) { toast.error("Indica un asunto y un mensaje."); return; }
+    const n = audienceCount(bulkAudience);
+    if (n === 0) { toast.error("No hay destinatarios para ese criterio."); return; }
+    if (!window.confirm(`¿Enviar este email a ${n} cliente(s)? Esta acción no se puede deshacer.`)) return;
+    setBulkSending(true);
+    setBulkJob(null);
+    try {
+      const { data } = await api.post("/admin/broadcast", { subject: bulkSubject, message: bulkMessage, audience: bulkAudience });
+      setBulkJob({ ...data, sent: 0, failed: 0 });
+      const poll = setInterval(async () => {
+        try {
+          const r = await api.get(`/admin/broadcast/${data.job_id}`);
+          setBulkJob(r.data);
+          if (r.data.status === "done") {
+            clearInterval(poll);
+            setBulkSending(false);
+            toast.success(`Envío completado: ${r.data.sent} enviados, ${r.data.failed} fallidos.`);
+          }
+        } catch { clearInterval(poll); setBulkSending(false); }
+      }, 1500);
+    } catch (e) {
+      setBulkSending(false);
+      toast.error(formatApiErrorDetail(e.response?.data?.detail) || "No se pudo iniciar el envío");
+    }
+  };
 
   const load = (query = "") => {
     setLoading(true);
@@ -525,6 +564,65 @@ export default function Admin() {
           <Button onClick={saveInteg} disabled={savingInteg} className="bg-[#0052FF] hover:bg-[#0040CC] text-white" data-testid="save-integrations">
             {savingInteg ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Save className="w-4 h-4 mr-2" strokeWidth={1.5} />}Guardar integraciones
           </Button>
+        </div>
+      </div>
+
+      <div className="bg-white border border-slate-200 rounded-lg shadow-sm max-w-3xl overflow-hidden mt-8" data-testid="bulk-email-section">
+        <div className="px-5 py-4 border-b border-slate-100 flex items-center gap-2">
+          <Mail className="w-4 h-4 text-[#0052FF]" strokeWidth={1.5} />
+          <div className="font-medium text-slate-900">Envíos masivos</div>
+        </div>
+        <div className="p-5 space-y-4">
+          <p className="text-sm text-slate-500">Envía un correo a todos tus clientes de una vez. Puedes usar <span className="font-mono text-[13px] bg-slate-100 px-1 rounded">{"{nombre}"}</span> en el mensaje para personalizarlo con el nombre de cada cliente.</p>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label>Destinatarios</Label>
+              <Select value={bulkAudience} onValueChange={setBulkAudience} disabled={bulkSending}>
+                <SelectTrigger data-testid="bulk-audience"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Todos los clientes ({audienceCount("all")})</SelectItem>
+                  <SelectItem value="active">Solo activos ({audienceCount("active")})</SelectItem>
+                  <SelectItem value="blocked">Solo de baja ({audienceCount("blocked")})</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label>Asunto</Label>
+              <Input placeholder="Novedades de OpenFactura" value={bulkSubject} onChange={(e) => setBulkSubject(e.target.value)} disabled={bulkSending} data-testid="bulk-subject" />
+            </div>
+          </div>
+
+          <div className="space-y-2">
+            <Label>Mensaje</Label>
+            <Textarea rows={7} placeholder={"Hola {nombre},\n\nQueremos contarte que..."} value={bulkMessage} onChange={(e) => setBulkMessage(e.target.value)} disabled={bulkSending} data-testid="bulk-message" />
+          </div>
+
+          {bulkJob && (
+            <div className="rounded-lg bg-slate-50 border border-slate-200 p-4 text-sm" data-testid="bulk-progress">
+              <div className="flex items-center justify-between mb-2">
+                <span className="font-medium text-slate-700">
+                  {bulkJob.status === "done" ? "Envío completado" : "Enviando…"}
+                </span>
+                <span className="text-slate-500 tabular-nums">{(bulkJob.sent || 0) + (bulkJob.failed || 0)} / {bulkJob.total}</span>
+              </div>
+              <div className="h-2 rounded-full bg-slate-200 overflow-hidden">
+                <div className="h-full bg-[#0052FF] transition-all" style={{ width: `${bulkJob.total ? Math.round(((bulkJob.sent || 0) + (bulkJob.failed || 0)) / bulkJob.total * 100) : 0}%` }} />
+              </div>
+              <div className="flex gap-4 mt-2 text-xs text-slate-500">
+                <span className="text-emerald-600">✓ {bulkJob.sent || 0} enviados</span>
+                {(bulkJob.failed || 0) > 0 && <span className="text-red-600">✕ {bulkJob.failed} fallidos</span>}
+              </div>
+            </div>
+          )}
+
+          <div className="flex items-center gap-3">
+            <Button onClick={sendBulk} disabled={bulkSending} className="bg-[#0052FF] hover:bg-[#0040CC] text-white" data-testid="bulk-send">
+              {bulkSending ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Mail className="w-4 h-4 mr-2" strokeWidth={1.5} />}
+              Enviar a {audienceCount(bulkAudience)} cliente{audienceCount(bulkAudience) === 1 ? "" : "s"}
+            </Button>
+            <span className="text-xs text-amber-600">Requiere Resend configurado en Integraciones.</span>
+          </div>
         </div>
       </div>
 

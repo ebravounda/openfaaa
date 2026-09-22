@@ -342,3 +342,9 @@ Sistema de facturación para España: crear facturas introduciendo datos (CIF/NI
 - Verificado e2e por backend: register 200, forgot 200 genérico, reset débil 422, reset válido 200, reuse 400, login antiguo 401, login nuevo 200. UI verificada por captura.
 - Nota: el enlace usa el header Origin (en prod → https://openfactura.es). Requiere Resend configurado (ya lo está) para enviar el email.
 
+
+## Iteración 30 (2026-06) — Envíos masivos (bulk email) desde Admin
+- ✅ **Backend (`admin_routes.py`)**: `POST /api/admin/broadcast` {subject, message, audience: all|active|blocked} → crea job en `email_broadcasts`, envía en segundo plano (`asyncio.create_task`, `Semaphore(5)`) vía `email_service.send_email`; personaliza con `{nombre}`/`{name}`; escapa HTML. `GET /api/admin/broadcast/{job_id}` → estado {total, sent, failed, status}. Solo `require_admin`, excluye role admin.
+- ✅ **Frontend (`Admin.js`)**: nueva tarjeta "Envíos masivos" (`data-testid="bulk-email-section"`) con selector de audiencia + recuento en vivo (desde `users`), asunto, textarea con soporte `{nombre}`, confirmación previa, barra de progreso con polling cada 1.5s y toast al terminar.
+- Verificado: validación 400 en vacío, job iniciado a audiencia 'blocked', envío completado (1 enviado, 0 fallidos, proveedor 202). UI verificada por captura. Requiere Resend configurado.
+

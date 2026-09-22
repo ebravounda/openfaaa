@@ -1,5 +1,11 @@
 from datetime import datetime, timezone
 import re
+import asyncio
+import uuid
+import html as html_lib
+import logging
+
+logger = logging.getLogger("admin")
 
 from fastapi import APIRouter, HTTPException, Depends, Response, Request
 from pydantic import BaseModel
@@ -411,4 +417,86 @@ async def send_test_email(data: TestEmailInput, admin_user=Depends(require_admin
     mid = await email_service.send_email(
         to=to, subject="Prueba de configuración · OpenFactura", html=html)
     return {"status": "ok", "to": to, "id": mid, "provider": provider}
+
+
+class BulkEmailInput(BaseModel):
+    subject: str
+    message: str
+    audience: str = "all"  # all | active | blocked
+
+
+def _bulk_html(subject: str, message: str, name: str) -> str:
+    body = html_lib.escape(message)
+    body = body.replace("{nombre}", html_lib.escape(name or "")).replace("{name}", html_lib.escape(name or ""))
+    body = body.replace("\n", "<br>")
+    return (
+        "<div style='font-family:Arial,Helvetica,sans-serif;max-width:560px;margin:0 auto;color:#0f172a'>"
+        "<div style='text-align:center;padding:8px 0 18px'><span style='font-size:22px;font-weight:700;color:#0052FF'>openfactura</span></div>"
+        "<div style='background:#fff;border:1px solid #e2e8f0;border-radius:16px;padding:28px'>"
+        f"<h1 style='font-size:19px;margin:0 0 16px'>{html_lib.escape(subject)}</h1>"
+        f"<div style='font-size:15px;line-height:1.65;color:#334155'>{body}</div>"
+        "</div>"
+        "<p style='text-align:center;font-size:12px;color:#94a3b8;margin:16px 0 0'>© OpenFactura · Facturación para autónomos y empresas en España</p>"
+        "</div>"
+    )
+
+
+async def _run_broadcast(job_id: str, recipients: list, subject: str, message: str):
+    import email_service
+    sem = asyncio.Semaphore(5)
+    counters = {"sent": 0, "failed": 0}
+    total = len(recipients)
+
+    async def _one(r):
+        async with sem:
+            try:
+                await email_service.send_email(
+                    to=r["email"], subject=subject, html=_bulk_html(subject, message, r.get("name", "")))
+                counters["sent"] += 1
+            except Exception as e:
+                counters["failed"] += 1
+                logger.error(f"broadcast send failed to {r.get('email')}: {e}")
+            done = counters["sent"] + counters["failed"]
+            if done % 5 == 0 or done == total:
+                await db.email_broadcasts.update_one(
+                    {"id": job_id}, {"$set": {"sent": counters["sent"], "failed": counters["failed"]}})
+
+    await asyncio.gather(*[_one(r) for r in recipients])
+    await db.email_broadcasts.update_one(
+        {"id": job_id},
+        {"$set": {"sent": counters["sent"], "failed": counters["failed"], "status": "done",
+                  "finished_at": datetime.now(timezone.utc).isoformat()}})
+
+
+@admin.post("/broadcast")
+async def broadcast(data: BulkEmailInput, admin_user=Depends(require_admin)):
+    subject = (data.subject or "").strip()
+    message = (data.message or "").strip()
+    if not subject or not message:
+        raise HTTPException(status_code=400, detail="Indica un asunto y un mensaje.")
+    q = {"role": {"$ne": "admin"}}
+    if data.audience == "active":
+        q["is_blocked"] = {"$ne": True}
+    elif data.audience == "blocked":
+        q["is_blocked"] = True
+    rows = await db.users.find(q, {"_id": 0, "email": 1, "name": 1}).to_list(100000)
+    recipients = [r for r in rows if r.get("email")]
+    if not recipients:
+        raise HTTPException(status_code=400, detail="No hay destinatarios para ese criterio.")
+    job_id = str(uuid.uuid4())
+    await db.email_broadcasts.insert_one({
+        "id": job_id, "subject": subject, "audience": data.audience,
+        "total": len(recipients), "sent": 0, "failed": 0, "status": "sending",
+        "created_by": admin_user.get("email"), "created_at": datetime.now(timezone.utc).isoformat(),
+    })
+    asyncio.create_task(_run_broadcast(job_id, recipients, subject, message))
+    return {"job_id": job_id, "total": len(recipients), "status": "sending"}
+
+
+@admin.get("/broadcast/{job_id}")
+async def broadcast_status(job_id: str, admin_user=Depends(require_admin)):
+    job = await db.email_broadcasts.find_one({"id": job_id}, {"_id": 0})
+    if not job:
+        raise HTTPException(status_code=404, detail="Envío no encontrado")
+    return job
 
