@@ -373,3 +373,9 @@ Sistema de facturación para España: crear facturas introduciendo datos (CIF/NI
 - Verificado por curl: sesiones subscription con `['sepa_debit','card']` para cliente de pago y gestoría; `billing_cycle_anchor` aceptado por Stripe; guard de plan gratuito 400.
 - Nota producción: requiere SEPA habilitado en Stripe y webhook en /api/stripe/webhook. SEPA es asíncrono (el cobro se confirma en días).
 
+## Iteración 35 (2026-06) — Landing: sección "2 clics" animada + "Integra tu gestoría"
+- ✅ **Sección "OpenFactura, tus facturas a solo dos clics"** (fondo oscuro premium, `Landing.js`): mockup animado en bucle `TwoClicksInvoice` con **cursor/puntero animado** que hace 2 clics visuales (etiquetas "clic 1"/"clic 2"), rellena cliente + conceptos, y muestra factura emitida con sello VeriFactu + flash. Componentes nuevos: `CursorPointer`, `TwoClicksInvoice`.
+- ✅ **Sección "Integra tu gestoría"** (marca blanca, fondo degradado azul claro): copy sobre incorporar clientes con tu logo/branding, "tus clientes ven tu marca", panel central y reventa con margen. Mockup `GestoriaMockup` (sidebar con logo "Tu Gestoría", lista de clientes) + badge flotante "Marca blanca". Ambas secciones se insertan tras `#funcionalidades` (orden pedido por el usuario).
+- ✅ Enlace de navegación "Gestorías" (`#gestorias`) añadido al header. Stack: framer-motion (AnimatePresence) + Tailwind, coherente con `Reveal`/`BrowserFrame` existentes.
+- Verificado: webpack compila sin errores, la landing renderiza y el nav muestra "Gestorías". Cambio puramente visual/frontend (sin backend).
+

@@ -1,5 +1,6 @@
+import { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
-import { motion } from "framer-motion";
+import { motion, AnimatePresence } from "framer-motion";
 import { Seo } from "@/components/Seo";
 import { Button } from "@/components/ui/button";
 import {
@@ -9,6 +10,7 @@ import {
   Sparkles, FileText, Landmark, ShieldCheck, ScanLine, Bot, Check, ArrowRight,
   Menu, TrendingUp, Zap, ReceiptText, Building2, Users, Briefcase, Star, MapPin,
   CreditCard, Clock, Store, ShoppingBag, MessageCircle, Wallet, Utensils, Mail, HelpCircle,
+  MousePointerClick, MousePointer2, Palette,
 } from "lucide-react";
 
 const FAQS = [
@@ -375,6 +377,196 @@ const PLANS = [
   { name: "Multiempresas", price: "49,99€", per: "/mes", desc: "Para asesorías y grupos", features: ["Hasta 20 empresas y autónomos", "Todo lo de Platino en cada empresa", "Certificado y contabilidad por empresa"], cta: "Probar 14 días gratis", highlight: false, badge: "Nuevo" },
 ];
 
+function CursorPointer({ clicking }) {
+  return (
+    <div className="relative">
+      <MousePointer2 className="w-6 h-6 text-slate-900 drop-shadow-lg" fill="white" strokeWidth={1.5} />
+      <AnimatePresence>
+        {clicking && (
+          <motion.span
+            className="absolute -top-2 -left-2 w-9 h-9 rounded-full"
+            style={{ background: ACCENT }}
+            initial={{ scale: 0, opacity: 0.55 }}
+            animate={{ scale: 2.1, opacity: 0 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.55, ease: "easeOut" }}
+          />
+        )}
+      </AnimatePresence>
+    </div>
+  );
+}
+
+function TwoClicksInvoice() {
+  const [step, setStep] = useState(0);
+  useEffect(() => {
+    const id = setInterval(() => setStep((s) => (s + 1) % 4), 1800);
+    return () => clearInterval(id);
+  }, []);
+
+  const positions = [
+    { top: "30%", left: "54%" },
+    { top: "30%", left: "54%" },
+    { top: "85%", left: "58%" },
+    { top: "85%", left: "58%" },
+  ];
+  const clicking = step === 1 || step === 3;
+  const filled = step >= 1;
+  const generated = step >= 3;
+
+  return (
+    <BrowserFrame>
+      <div className="relative p-5 sm:p-6 bg-white min-h-[372px]" data-testid="two-clicks-mockup">
+        <AnimatePresence>
+          {generated && (
+            <motion.div
+              key="flash"
+              className="absolute inset-0 z-10 pointer-events-none"
+              style={{ background: ACCENT }}
+              initial={{ opacity: 0.22 }}
+              animate={{ opacity: 0 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.6 }}
+            />
+          )}
+        </AnimatePresence>
+
+        <div className="flex items-center justify-between mb-5">
+          <div>
+            <div className="text-xs text-slate-400">Nueva factura</div>
+            <div className="font-outfit text-lg font-semibold text-slate-900">Crear en 2 clics</div>
+          </div>
+          <span className="inline-flex items-center gap-1.5 text-[11px] font-medium text-[#0052FF] bg-[#0052FF]/10 px-2.5 py-1 rounded-full">
+            <Zap className="w-3 h-3" strokeWidth={2} /> Al instante
+          </span>
+        </div>
+
+        <div className="mb-4">
+          <div className="text-[11px] text-slate-400 mb-1.5">Cliente</div>
+          <motion.div
+            className="rounded-lg border px-3 py-2.5 flex items-center justify-between text-sm"
+            animate={{ borderColor: step === 1 ? ACCENT : "#e2e8f0", backgroundColor: filled ? "#EFF4FF" : "#ffffff" }}
+            transition={{ duration: 0.3 }}
+          >
+            <span className={filled ? "text-slate-900 font-medium" : "text-slate-400"}>
+              {filled ? "Estudio Marín S.L." : "Selecciona un cliente…"}
+            </span>
+            <Users className="w-4 h-4 text-slate-400" strokeWidth={1.5} />
+          </motion.div>
+        </div>
+
+        <div className="space-y-2 mb-4 min-h-[64px]">
+          <AnimatePresence>
+            {filled &&
+              [["Diseño web", "1.100€"], ["Branding", "546€"]].map(([c, p], i) => (
+                <motion.div
+                  key={c}
+                  initial={{ opacity: 0, x: -14 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  exit={{ opacity: 0 }}
+                  transition={{ delay: i * 0.12 }}
+                  className="flex items-center justify-between text-sm border-b border-slate-50 pb-2"
+                >
+                  <span className="text-slate-600">{c}</span>
+                  <span className="tabular-nums text-slate-900">{p}</span>
+                </motion.div>
+              ))}
+          </AnimatePresence>
+        </div>
+
+        <div className="flex justify-between font-outfit font-semibold text-slate-900 mb-4">
+          <span>Total (IVA incl.)</span>
+          <motion.span className="tabular-nums" animate={{ opacity: filled ? 1 : 0.35 }}>
+            {filled ? "1.991,66€" : "0,00€"}
+          </motion.span>
+        </div>
+
+        <div className="relative">
+          {!generated ? (
+            <motion.button
+              className="w-full rounded-full text-white text-sm font-medium py-2.5 flex items-center justify-center gap-2"
+              style={{ background: ACCENT }}
+              animate={{ scale: step === 3 ? 0.96 : 1 }}
+            >
+              <FileText className="w-4 h-4" strokeWidth={2} /> Emitir factura
+            </motion.button>
+          ) : (
+            <motion.div
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="w-full rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 flex items-center gap-3"
+            >
+              <div className="w-9 h-9 rounded-full bg-emerald-500 text-white flex items-center justify-center shrink-0">
+                <Check className="w-5 h-5" strokeWidth={3} />
+              </div>
+              <div>
+                <div className="text-sm font-semibold text-slate-900">Factura F26012 emitida</div>
+                <div className="text-[11px] text-emerald-700 flex items-center gap-1">
+                  <ShieldCheck className="w-3 h-3" strokeWidth={2} /> Registrada en VeriFactu
+                </div>
+              </div>
+            </motion.div>
+          )}
+        </div>
+
+        <motion.div
+          className="absolute z-20 pointer-events-none"
+          animate={positions[step]}
+          transition={{ type: "spring", stiffness: 120, damping: 18 }}
+        >
+          <CursorPointer clicking={clicking} />
+          <motion.span
+            className="absolute top-6 left-4 text-[10px] font-semibold text-white px-2 py-0.5 rounded-full whitespace-nowrap shadow-md"
+            style={{ background: ACCENT }}
+            animate={{ opacity: clicking ? 1 : 0, scale: clicking ? 1 : 0.8 }}
+          >
+            {step === 1 ? "clic 1" : step === 3 ? "clic 2" : ""}
+          </motion.span>
+        </motion.div>
+      </div>
+    </BrowserFrame>
+  );
+}
+
+function GestoriaMockup() {
+  return (
+    <BrowserFrame>
+      <div className="flex min-h-[320px] bg-white">
+        <div className="w-40 border-r border-slate-100 p-4 bg-slate-50/60 hidden sm:block">
+          <div className="flex items-center gap-2 mb-6">
+            <div className="w-7 h-7 rounded-lg flex items-center justify-center text-white font-bold text-xs" style={{ background: ACCENT }}>TG</div>
+            <div className="text-xs font-semibold text-slate-900">Tu Gestoría</div>
+          </div>
+          {["Clientes", "Facturas", "Impuestos", "Ajustes"].map((t, i) => (
+            <div key={t} className={`text-xs px-2.5 py-2 rounded-lg mb-1 ${i === 0 ? "bg-white text-slate-900 font-medium shadow-sm" : "text-slate-400"}`}>{t}</div>
+          ))}
+          <div className="mt-6 rounded-lg border border-dashed border-slate-200 p-2.5 text-center">
+            <Palette className="w-4 h-4 mx-auto text-slate-300 mb-1" strokeWidth={1.5} />
+            <div className="text-[9px] text-slate-400">Tu logo aquí</div>
+          </div>
+        </div>
+        <div className="flex-1 p-5">
+          <div className="flex items-center justify-between mb-4">
+            <div className="font-outfit font-semibold text-slate-900">Tus clientes</div>
+            <span className="inline-flex items-center gap-1 text-[11px] font-medium text-white px-2.5 py-1 rounded-full" style={{ background: ACCENT }}>+ Añadir</span>
+          </div>
+          <div className="space-y-2">
+            {[["Estudio Marín S.L.", "Al día"], ["Panadería Sol", "Al día"], ["Tech Nomads", "Pendiente"]].map(([n, s]) => (
+              <div key={n} className="flex items-center justify-between border border-slate-100 rounded-lg px-3 py-2.5">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-7 h-7 rounded-full bg-[#0052FF]/10 text-[#0052FF] flex items-center justify-center text-xs font-semibold">{n[0]}</div>
+                  <span className="text-sm text-slate-700">{n}</span>
+                </div>
+                <span className={`text-[11px] font-medium px-2 py-0.5 rounded-full ${s === "Al día" ? "bg-emerald-50 text-emerald-700" : "bg-amber-50 text-amber-700"}`}>{s}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    </BrowserFrame>
+  );
+}
+
 export default function Landing() {
   return (
     <div className="min-h-screen bg-white text-slate-900 font-outfit selection:bg-[#0052FF]/20">
@@ -400,6 +592,7 @@ export default function Landing() {
             <a href="#cobros" className="hover:text-slate-900 transition-colors">Cobros</a>
             <a href="#impuestos" className="hover:text-slate-900 transition-colors">Impuestos</a>
             <a href="#funcionalidades" className="hover:text-slate-900 transition-colors">Funcionalidades</a>
+            <a href="#gestorias" className="hover:text-slate-900 transition-colors">Gestorías</a>
             <a href="#precios" className="hover:text-slate-900 transition-colors">Precios</a>
           </nav>
           <div className="flex items-center gap-2 sm:gap-3">
@@ -515,6 +708,89 @@ export default function Landing() {
               </div>
             );
           })}
+        </div>
+      </section>
+
+      {/* Facturas en 2 clics */}
+      <section className="relative overflow-hidden bg-slate-950 text-white">
+        <div className="absolute -top-24 -left-24 w-96 h-96 rounded-full blur-3xl" style={{ background: "rgba(0,82,255,0.28)" }} />
+        <div className="absolute -bottom-24 -right-24 w-[28rem] h-[28rem] rounded-full blur-3xl" style={{ background: "rgba(0,82,255,0.16)" }} />
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-20 sm:py-28 grid lg:grid-cols-2 gap-12 lg:gap-16 items-center relative">
+          <Reveal>
+            <span className="inline-flex items-center gap-2 bg-white/10 text-white rounded-full px-4 py-1.5 text-sm font-medium mb-6">
+              <MousePointerClick className="w-4 h-4" strokeWidth={1.5} /> Rápido de verdad
+            </span>
+            <h2 className="text-3xl sm:text-4xl lg:text-5xl font-bold tracking-tight leading-[1.1]">
+              OpenFactura, <span style={{ color: "#7DA2FF" }}>tus facturas a solo dos clics</span>
+            </h2>
+            <p className="text-slate-300 mt-5 text-base sm:text-lg max-w-lg leading-relaxed">
+              Elige el cliente y emite. Nosotros calculamos el IVA, generamos el PDF con tu marca y lo registramos en VeriFactu automáticamente.
+            </p>
+            <ul className="mt-7 space-y-3">
+              {[
+                "Clic 1: selecciona el cliente y los conceptos",
+                "Clic 2: emite y se registra en VeriFactu",
+                "PDF profesional listo para enviar al instante",
+              ].map((b) => (
+                <li key={b} className="flex items-start gap-3 text-slate-200">
+                  <span className="w-5 h-5 rounded-full bg-[#0052FF] text-white flex items-center justify-center shrink-0 mt-0.5"><Check className="w-3 h-3" strokeWidth={3} /></span>
+                  {b}
+                </li>
+              ))}
+            </ul>
+            <Link to="/registro"><Button size="lg" className="mt-8 text-white rounded-full px-8 shadow-lg" style={{ background: ACCENT }} data-testid="two-clicks-cta">Crear mi primera factura <ArrowRight className="w-4 h-4 ml-2" strokeWidth={2} /></Button></Link>
+          </Reveal>
+          <Reveal delay={0.1}>
+            <div className="relative">
+              <div className="absolute -inset-6 bg-[#0052FF]/25 blur-3xl rounded-full -z-10" />
+              <TwoClicksInvoice />
+            </div>
+          </Reveal>
+        </div>
+      </section>
+
+      {/* Integra tu gestoría */}
+      <section id="gestorias" className="bg-gradient-to-b from-[#EEF4FF] to-white">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-20 sm:py-28 grid lg:grid-cols-2 gap-12 lg:gap-16 items-center">
+          <Reveal delay={0.1} className="lg:order-2">
+            <div className="relative">
+              <div className="absolute -inset-4 bg-white rounded-3xl shadow-[0_30px_60px_-20px_rgba(2,6,23,0.15)] -z-10" />
+              <GestoriaMockup />
+              <motion.div
+                className="hidden sm:flex absolute -top-5 -right-4 items-center gap-2 bg-white rounded-full border border-slate-200 shadow-xl px-3.5 py-2"
+                initial={{ opacity: 0, y: -12 }}
+                whileInView={{ opacity: 1, y: 0 }}
+                viewport={{ once: true }}
+                transition={{ delay: 0.4 }}
+              >
+                <span className="w-6 h-6 rounded-full flex items-center justify-center text-white" style={{ background: ACCENT }}><Palette className="w-3.5 h-3.5" strokeWidth={2} /></span>
+                <span className="text-xs font-semibold text-slate-900">Marca blanca</span>
+              </motion.div>
+            </div>
+          </Reveal>
+          <Reveal className="lg:order-1">
+            <div className="inline-flex items-center gap-2 text-sm font-semibold mb-4" style={{ color: ACCENT }}>
+              <Building2 className="w-4 h-4" strokeWidth={2} /> Para gestorías y asesorías
+            </div>
+            <h2 className="text-3xl sm:text-4xl font-bold tracking-tight text-slate-900">Integra tu gestoría</h2>
+            <p className="text-base sm:text-lg text-slate-500 mt-4 max-w-lg leading-relaxed">
+              Incorpora a todos tus clientes bajo <strong className="text-slate-700">tu propia marca</strong>. Tu logo, tus colores, tu identidad. Tus clientes verán tu marca en todo momento, no la nuestra.
+            </p>
+            <ul className="mt-6 space-y-3.5">
+              {[
+                ["Tu logo y tu branding", "Personaliza el panel y las facturas con tu identidad."],
+                ["Todos tus clientes en un sitio", "Crea, gestiona y factura por cada cliente desde un panel central."],
+                ["Marca blanca real", "Tus clientes ven tu marca, no OpenFactura."],
+                ["Reventa con margen", "Precios especiales para revender a toda tu cartera."],
+              ].map(([t, d]) => (
+                <li key={t} className="flex items-start gap-3">
+                  <span className="w-5 h-5 rounded-full bg-[#0052FF]/10 text-[#0052FF] flex items-center justify-center shrink-0 mt-0.5"><Check className="w-3 h-3" strokeWidth={3} /></span>
+                  <span><span className="font-semibold text-slate-900">{t}.</span> <span className="text-slate-500">{d}</span></span>
+                </li>
+              ))}
+            </ul>
+            <Link to="/registro"><Button className="mt-8 text-white rounded-full px-6" style={{ background: ACCENT }} data-testid="gestoria-cta">Empieza como gestoría <ArrowRight className="w-4 h-4 ml-2" strokeWidth={2} /></Button></Link>
+          </Reveal>
         </div>
       </section>
 
