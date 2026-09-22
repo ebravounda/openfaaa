@@ -2289,6 +2289,9 @@ from payments_routes import payments as payments_router
 app.include_router(payments_router)
 from pos_routes import pos as pos_router
 app.include_router(pos_router)
+from gestoria_routes import gestoria as gestoria_router, branding as branding_router
+app.include_router(gestoria_router)
+app.include_router(branding_router)
 app.include_router(api)
 
 

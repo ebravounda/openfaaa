@@ -105,6 +105,9 @@ def _public_user(user: dict) -> dict:
         "active_company_id": user.get("active_company_id", ""),
         "multi_company_enabled": bool(user.get("multi_company_enabled", False)),
         "pos_enabled": bool(user.get("pos_enabled", False)),
+        "gestoria_id": user.get("gestoria_id", ""),
+        "firm_name": user.get("firm_name", ""),
+        "max_clients": int(user.get("max_clients", 0) or 0),
     }
 
 

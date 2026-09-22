@@ -246,6 +246,103 @@ async def set_plan(user_id: str, data: PlanInput, admin_user=Depends(require_adm
     return {"status": "ok", "plan": data.plan}
 
 
+# ---------- Gestorías (revendedores) ----------
+RESELLER_RATE = 0.5
+
+
+class GestoriaCreateInput(BaseModel):
+    firm_name: str
+    email: str
+    password: str
+    max_clients: int = 0
+    iban: str = ""
+
+
+class GestoriaUpdateInput(BaseModel):
+    max_clients: int | None = None
+    iban: str | None = None
+    is_blocked: bool | None = None
+
+
+@admin.post("/gestorias")
+async def create_gestoria(data: GestoriaCreateInput, admin_user=Depends(require_admin)):
+    from auth import hash_password, validate_password_strength
+    email = data.email.strip().lower()
+    if not email or "@" not in email:
+        raise HTTPException(status_code=400, detail="Email no válido")
+    if await db.users.find_one({"email": email}):
+        raise HTTPException(status_code=400, detail="Este email ya está registrado")
+    validate_password_strength(data.password)
+    doc = {
+        "name": data.firm_name, "firm_name": data.firm_name, "email": email,
+        "password_hash": hash_password(data.password), "role": "gestoria",
+        "max_clients": int(data.max_clients or 0), "iban": (data.iban or "").strip(),
+        "is_blocked": False, "created_at": datetime.now(timezone.utc).isoformat(),
+    }
+    res = await db.users.insert_one(doc)
+    await _audit(admin_user["id"], "gestoria:create", str(res.inserted_id))
+    return {"status": "ok", "id": str(res.inserted_id)}
+
+
+@admin.get("/gestorias")
+async def list_gestorias(admin_user=Depends(require_admin)):
+    plans = await load_plans()
+    rows = await db.users.find({"role": "gestoria"}).sort("created_at", -1).to_list(1000)
+    out = []
+    for g in rows:
+        gid = str(g["_id"])
+        clients = await db.users.find({"gestoria_id": gid}, {"plan": 1}).to_list(100000)
+        breakdown = {}
+        total_value = 0.0
+        for c in clients:
+            p = c.get("plan", "basico")
+            breakdown[p] = breakdown.get(p, 0) + 1
+            total_value += (plans.get(p, {}).get("price", 0) or 0) * RESELLER_RATE
+        out.append({
+            "id": gid, "firm_name": g.get("firm_name", g.get("name", "")), "email": g["email"],
+            "max_clients": int(g.get("max_clients", 0) or 0), "iban": g.get("iban", ""),
+            "is_blocked": bool(g.get("is_blocked", False)), "has_logo": bool(g.get("logo")),
+            "clients_count": len(clients), "plan_breakdown": breakdown,
+            "monthly_value": round(total_value, 2), "created_at": g.get("created_at"),
+        })
+    return out
+
+
+@admin.patch("/gestorias/{gid}")
+async def update_gestoria(gid: str, data: GestoriaUpdateInput, admin_user=Depends(require_admin)):
+    upd = {}
+    if data.max_clients is not None:
+        upd["max_clients"] = int(data.max_clients or 0)
+    if data.iban is not None:
+        upd["iban"] = data.iban.strip()
+    if data.is_blocked is not None:
+        upd["is_blocked"] = bool(data.is_blocked)
+    if not upd:
+        raise HTTPException(status_code=400, detail="Nada que actualizar")
+    res = await db.users.update_one({"_id": ObjectId(gid), "role": "gestoria"}, {"$set": upd})
+    if res.matched_count == 0:
+        raise HTTPException(status_code=404, detail="Gestoría no encontrada")
+    await _audit(admin_user["id"], "gestoria:update", gid)
+    return {"status": "ok"}
+
+
+@admin.get("/gestorias/{gid}/clients")
+async def gestoria_clients(gid: str, admin_user=Depends(require_admin)):
+    plans = await load_plans()
+    rows = await db.users.find({"gestoria_id": gid}).sort("created_at", -1).to_list(100000)
+    out = []
+    for u in rows:
+        p = u.get("plan", "basico")
+        price = plans.get(p, {}).get("price", 0) or 0
+        out.append({
+            "id": str(u["_id"]), "name": u.get("name", ""), "email": u.get("email", ""),
+            "plan": p, "plan_name": plans.get(p, {}).get("name", p), "plan_price": price,
+            "reseller_value": round(price * RESELLER_RATE, 2),
+            "is_blocked": bool(u.get("is_blocked", False)),
+        })
+    return out
+
+
 @admin.post("/impersonate/{user_id}")
 async def impersonate(user_id: str, response: Response, admin_user=Depends(require_admin)):
     target = await db.users.find_one({"_id": ObjectId(user_id)})

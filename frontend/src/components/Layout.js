@@ -27,6 +27,7 @@ const CompanySwitcher = () => {
   );
 };
 import { Seo } from "@/components/Seo";
+import { BrandLogo } from "@/components/BrandLogo";
 import { AssistantWidget } from "@/components/AssistantWidget";
 import {
   LayoutDashboard,
@@ -151,7 +152,7 @@ export default function Layout({ children }) {
           <Menu className="w-6 h-6" strokeWidth={1.5} />
         </button>
         <div className="flex items-center gap-2">
-          <img src="/openfactura-logo.png" alt="OpenFactura by GoRoky" className="h-6 w-auto" />
+          <BrandLogo fallback="/openfactura-logo.png" alt="OpenFactura" className="h-6 w-auto max-w-[150px] object-contain" />
         </div>
       </header>
 
@@ -165,7 +166,7 @@ export default function Layout({ children }) {
         style={{ top: bannerH, height: `calc(100vh - ${bannerH}px)` }}
       >
         <div className="px-5 py-5 flex items-center gap-2.5">
-          <img src="/openfactura-logo.png" alt="OpenFactura by GoRoky" className="h-7 w-auto flex-1 object-contain object-left" />
+          <BrandLogo fallback="/openfactura-logo.png" alt="OpenFactura" className="h-7 w-auto flex-1 object-contain object-left" />
           <button onClick={() => setMobileOpen(false)} className="lg:hidden p-1.5 rounded-lg text-slate-400 hover:bg-slate-100" data-testid="mobile-menu-close" aria-label="Cerrar menú">
             <X className="w-5 h-5" strokeWidth={1.5} />
           </button>

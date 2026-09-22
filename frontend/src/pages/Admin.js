@@ -20,7 +20,7 @@ import {
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription,
 } from "@/components/ui/dialog";
-import { Users, ShieldOff, FileText, Search, UserCog, Ban, CheckCircle2, Loader2, Save, CreditCard, History, TrendingUp, Euro, Rocket, UserPlus, Mail, Store, Eye, Phone, MapPin, IdCard, Percent, Clock, UserMinus, UserCheck } from "lucide-react";
+import { Users, ShieldOff, FileText, Search, UserCog, Ban, CheckCircle2, Loader2, Save, CreditCard, History, TrendingUp, Euro, Rocket, UserPlus, Mail, Store, Eye, Phone, MapPin, IdCard, Percent, Clock, UserMinus, UserCheck, Building2, Plus } from "lucide-react";
 
 const PLAN_LABEL = { basico: "Básico", medio: "Medio", platino: "Platino" };
 const actionLabel = (a) => {
@@ -62,6 +62,41 @@ export default function Admin() {
   const [bulkAudience, setBulkAudience] = useState("all");
   const [bulkSending, setBulkSending] = useState(false);
   const [bulkJob, setBulkJob] = useState(null);
+  const [gestorias, setGestorias] = useState([]);
+  const [gForm, setGForm] = useState({ firm_name: "", email: "", password: "", max_clients: 0, iban: "" });
+  const [gSaving, setGSaving] = useState(false);
+
+  const loadGestorias = () => api.get("/admin/gestorias").then((r) => setGestorias(r.data)).catch(() => {});
+
+  const createGestoria = async () => {
+    if (!gForm.firm_name.trim() || !gForm.email.trim() || gForm.password.length < 8) {
+      toast.error("Completa nombre, email y una contraseña de al menos 8 caracteres.");
+      return;
+    }
+    setGSaving(true);
+    try {
+      await api.post("/admin/gestorias", { ...gForm, max_clients: Number(gForm.max_clients) || 0 });
+      toast.success("Gestoría creada");
+      setGForm({ firm_name: "", email: "", password: "", max_clients: 0, iban: "" });
+      loadGestorias();
+    } catch (e) {
+      toast.error(formatApiErrorDetail(e.response?.data?.detail) || "No se pudo crear la gestoría");
+    } finally { setGSaving(false); }
+  };
+
+  const editGestoriaMax = async (g) => {
+    const v = window.prompt(`Cupo máximo de clientes para ${g.firm_name} (0 = ilimitado):`, g.max_clients);
+    if (v === null) return;
+    try { await api.patch(`/admin/gestorias/${g.id}`, { max_clients: Number(v) || 0 }); toast.success("Cupo actualizado"); loadGestorias(); }
+    catch (e) { toast.error(formatApiErrorDetail(e.response?.data?.detail)); }
+  };
+
+  const editGestoriaIban = async (g) => {
+    const v = window.prompt(`IBAN de cobro para ${g.firm_name}:`, g.iban || "");
+    if (v === null) return;
+    try { await api.patch(`/admin/gestorias/${g.id}`, { iban: v.trim() }); toast.success("IBAN actualizado"); loadGestorias(); }
+    catch (e) { toast.error(formatApiErrorDetail(e.response?.data?.detail)); }
+  };
 
   const audienceCount = (aud) => {
     const clients = (users || []).filter((u) => u.role !== "admin");
@@ -114,6 +149,7 @@ export default function Admin() {
     api.get("/admin/plans").then((r) => setPlans(r.data)).catch(() => {});
     api.get("/admin/audit").then((r) => setAudit(r.data)).catch(() => {});
     api.get("/admin/revenue").then((r) => setRevenue(r.data)).catch(() => {});
+    api.get("/admin/gestorias").then((r) => setGestorias(r.data)).catch(() => {});
     api.get("/admin/integrations").then((r) => {
       setInteg(r.data);
       setIntegForm({
@@ -564,6 +600,64 @@ export default function Admin() {
           <Button onClick={saveInteg} disabled={savingInteg} className="bg-[#0052FF] hover:bg-[#0040CC] text-white" data-testid="save-integrations">
             {savingInteg ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Save className="w-4 h-4 mr-2" strokeWidth={1.5} />}Guardar integraciones
           </Button>
+        </div>
+      </div>
+
+      <div className="bg-white border border-slate-200 rounded-lg shadow-sm max-w-4xl overflow-hidden mt-8" data-testid="gestorias-section">
+        <div className="px-5 py-4 border-b border-slate-100 flex items-center gap-2">
+          <Building2 className="w-4 h-4 text-[#0052FF]" strokeWidth={1.5} />
+          <div className="font-medium text-slate-900">Gestorías (revendedores)</div>
+        </div>
+        <div className="p-5 space-y-5">
+          <div className="grid grid-cols-1 sm:grid-cols-5 gap-3 items-end">
+            <div className="space-y-1 sm:col-span-2"><Label className="text-xs">Nombre / Razón social</Label><Input value={gForm.firm_name} onChange={(e) => setGForm({ ...gForm, firm_name: e.target.value })} placeholder="Gestoría Pérez S.L." data-testid="gestoria-firm" /></div>
+            <div className="space-y-1 sm:col-span-2"><Label className="text-xs">Email de acceso</Label><Input type="email" value={gForm.email} onChange={(e) => setGForm({ ...gForm, email: e.target.value })} placeholder="admin@gestoria.es" data-testid="gestoria-email" /></div>
+            <div className="space-y-1"><Label className="text-xs">Contraseña</Label><Input type="text" value={gForm.password} onChange={(e) => setGForm({ ...gForm, password: e.target.value })} placeholder="mín. 8" data-testid="gestoria-password" /></div>
+            <div className="space-y-1"><Label className="text-xs">Cupo clientes (0 = ilimitado)</Label><Input type="number" value={gForm.max_clients} onChange={(e) => setGForm({ ...gForm, max_clients: e.target.value })} data-testid="gestoria-max" /></div>
+            <div className="space-y-1 sm:col-span-3"><Label className="text-xs">IBAN (cobro SEPA)</Label><Input value={gForm.iban} onChange={(e) => setGForm({ ...gForm, iban: e.target.value })} placeholder="ES.. (opcional)" data-testid="gestoria-iban" /></div>
+            <div className="sm:col-span-1">
+              <Button onClick={createGestoria} disabled={gSaving} className="w-full bg-[#0052FF] hover:bg-[#0040CC] text-white" data-testid="gestoria-create">
+                {gSaving ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Plus className="w-4 h-4 mr-2" strokeWidth={2} />}Crear
+              </Button>
+            </div>
+          </div>
+
+          {gestorias.length === 0 ? (
+            <div className="text-sm text-slate-400">Aún no hay gestorías. Crea la primera arriba.</div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead className="text-slate-500 text-xs uppercase tracking-wide border-b border-slate-100">
+                  <tr>
+                    <th className="text-left py-2">Gestoría</th>
+                    <th className="text-right py-2">Clientes</th>
+                    <th className="text-left py-2 pl-4">Planes</th>
+                    <th className="text-right py-2">Facturación mensual (50%)</th>
+                    <th className="text-right py-2">Acciones</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {gestorias.map((g) => (
+                    <tr key={g.id} className="border-b border-slate-50" data-testid={`gestoria-row-${g.email}`}>
+                      <td className="py-3">
+                        <div className="font-medium text-slate-900">{g.firm_name}</div>
+                        <div className="text-xs text-slate-400">{g.email}{g.iban ? ` · ${g.iban}` : ""}</div>
+                      </td>
+                      <td className="py-3 text-right tabular-nums">{g.clients_count}{g.max_clients ? <span className="text-slate-400"> / {g.max_clients}</span> : ""}</td>
+                      <td className="py-3 pl-4 text-xs text-slate-500">
+                        {Object.keys(g.plan_breakdown || {}).length === 0 ? "—" : Object.entries(g.plan_breakdown).map(([p, n]) => `${PLAN_LABEL[p] || p}: ${n}`).join(" · ")}
+                      </td>
+                      <td className="py-3 text-right font-medium tabular-nums">{(g.monthly_value || 0).toLocaleString("es-ES", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €</td>
+                      <td className="py-3 text-right whitespace-nowrap">
+                        <Button size="sm" variant="ghost" onClick={() => editGestoriaMax(g)} className="h-8 text-slate-600" data-testid={`gestoria-editmax-${g.email}`}>Cupo</Button>
+                        <Button size="sm" variant="ghost" onClick={() => editGestoriaIban(g)} className="h-8 text-slate-600" data-testid={`gestoria-editiban-${g.email}`}>IBAN</Button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
         </div>
       </div>
 

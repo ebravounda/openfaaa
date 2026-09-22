@@ -1,8 +1,8 @@
-import { useState } from "react";
-import { useNavigate, Link } from "react-router-dom";
+import { useState, useEffect } from "react";
+import { useNavigate, Link, useSearchParams } from "react-router-dom";
 import { useAuth } from "@/context/AuthContext";
 import { Seo } from "@/components/Seo";
-import { formatApiErrorDetail } from "@/lib/api";
+import api, { formatApiErrorDetail } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -25,6 +25,12 @@ export default function Login() {
   const [showPw, setShowPw] = useState(false);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [params] = useSearchParams();
+  const gid = params.get("g");
+  const [brand, setBrand] = useState(null);
+  useEffect(() => {
+    if (gid) api.get(`/branding/public/${gid}`).then((r) => setBrand(r.data)).catch(() => {});
+  }, [gid]);
 
   const submit = async (e) => {
     e.preventDefault();
@@ -100,9 +106,18 @@ export default function Login() {
       <div className="flex items-center justify-center p-6 sm:p-10 bg-gradient-to-b from-white to-slate-50/60">
         <form onSubmit={submit} className="w-full max-w-md space-y-7 of-fade-up" data-testid="login-form">
           <div className="flex items-center gap-2.5">
-            <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-[#0052FF] to-[#4C86FF] flex items-center justify-center text-white font-display font-bold shadow-[0_8px_20px_-4px_rgba(0,82,255,0.5)]">O</div>
-            <span className="font-display text-xl font-semibold tracking-tight text-slate-900">openfactura</span>
+            {brand?.logo ? (
+              <img src={brand.logo} alt={brand.firm_name || "Gestoría"} className="h-9 w-auto max-w-[200px] object-contain" data-testid="brand-logo" />
+            ) : (
+              <>
+                <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-[#0052FF] to-[#4C86FF] flex items-center justify-center text-white font-display font-bold shadow-[0_8px_20px_-4px_rgba(0,82,255,0.5)]">O</div>
+                <span className="font-display text-xl font-semibold tracking-tight text-slate-900">openfactura</span>
+              </>
+            )}
           </div>
+          {brand?.firm_name && (
+            <p className="text-xs text-slate-400 -mt-3" data-testid="brand-firm">Acceso de clientes de <span className="font-medium text-slate-600">{brand.firm_name}</span></p>
+          )}
 
           <div>
             <h2 className="font-display text-[2rem] font-bold tracking-tight text-slate-900">Bienvenido de nuevo</h2>

@@ -2,6 +2,7 @@ import "@/App.css";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { Toaster } from "sonner";
 import { AuthProvider, useAuth } from "@/context/AuthContext";
+import { Navigate } from "react-router-dom";
 import ProtectedRoute from "@/components/ProtectedRoute";
 import Login from "@/pages/Login";
 import ForgotPassword from "@/pages/ForgotPassword";
@@ -21,6 +22,7 @@ import PaymentMethods from "@/pages/PaymentMethods";
 import Bancos from "@/pages/Bancos";
 import Pos from "@/pages/Pos";
 import Admin from "@/pages/Admin";
+import Gestoria from "@/pages/Gestoria";
 import Pricing from "@/pages/Pricing";
 import PreciosRoute from "@/pages/PreciosRoute";
 import Blog from "@/pages/Blog";
@@ -36,6 +38,7 @@ import Welcome from "@/pages/Welcome";
 function Home() {
   const { user, checking } = useAuth();
   if (checking) return null;
+  if (user && user.role === "gestoria" && !user.is_impersonating) return <Navigate to="/gestoria" replace />;
   return user ? <Dashboard /> : <Landing />;
 }
 
@@ -74,6 +77,7 @@ function App() {
           <Route path="/payment/success" element={<ProtectedRoute><PaymentSuccess /></ProtectedRoute>} />
           <Route path="/payment/cancel" element={<ProtectedRoute><PaymentCancel /></ProtectedRoute>} />
           <Route path="/admin" element={<ProtectedRoute><Admin /></ProtectedRoute>} />
+          <Route path="/gestoria" element={<ProtectedRoute><Gestoria /></ProtectedRoute>} />
         </Routes>
       </BrowserRouter>
     </AuthProvider>
