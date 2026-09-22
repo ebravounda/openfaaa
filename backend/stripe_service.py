@@ -141,6 +141,11 @@ def create_subscription_session(price_id: str, origin_url: str, metadata: dict):
         metadata=metadata,
         subscription_data={"metadata": metadata},
     )
+    # 1) Tarjeta + domiciliación bancaria SEPA (si la cuenta lo permite)
+    try:
+        return stripe.checkout.Session.create(**kwargs, payment_method_types=["card", "sepa_debit"])
+    except stripe.error.InvalidRequestError:
+        pass
     try:
         return stripe.checkout.Session.create(**kwargs, managed_payments={"enabled": True})
     except stripe.error.InvalidRequestError:

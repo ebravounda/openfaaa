@@ -354,3 +354,9 @@ Sistema de facturación para España: crear facturas introduciendo datos (CIF/NI
 - ✅ Verificado por curl (aislamiento entre gestorías 404, cupo 403, valor 50%, entrar en cliente, branding) y capturas (panel gestoría + sección admin). Credenciales demo en test_credentials.md.
 - ⏳ **FASE 2 pendiente**: cobro real por **Stripe SEPA** a las gestorías (mandatos SEPA + cargo recurrente del importe mensual al 50%). El IBAN ya se captura y almacena.
 
+## Iteración 32 (2026-06) — FASE 2: Domiciliación SEPA (Stripe) para clientes y gestorías
+- ✅ **Clientes**: el checkout de suscripción (`stripe_service.create_subscription_session`) ahora ofrece `payment_method_types=["card","sepa_debit"]` (con fallback a managed_payments/tax/plain). El cliente elige domiciliación SEPA en la página de Stripe, introduce su IBAN y firma el mandato; Stripe cobra la suscripción mensual. Verificado: sesión con `['sepa_debit','card']`.
+- ✅ **Webhook** (`payments_routes.py`): manejo de estados asíncronos SEPA `checkout.session.async_payment_succeeded` (activa/paga) y `async_payment_failed` (marca fallido). SEPA confirma el cobro días después.
+- ✅ **Gestorías**: `POST /api/gestoria/billing/checkout` crea una suscripción mensual por el importe total al 50% (price_data EUR dinámico) con `sepa_debit`+card. Botón "Domiciliar pago (SEPA)" en el panel de gestoría. Verificado (amount 17,49 €, URL Stripe válida).
+- Nota: en producción requiere que SEPA esté habilitado en la cuenta Stripe y el webhook de Stripe apuntando a /api/stripe/webhook. El importe de la gestoría es fijo al domiciliar; si cambia el nº de clientes, re-domiciliar actualiza el importe (mejora futura: ajuste automático de la suscripción).
+

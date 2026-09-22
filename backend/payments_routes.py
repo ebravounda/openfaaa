@@ -165,7 +165,21 @@ async def stripe_webhook(request: Request):
         if res.modified_count:
             meta = obj.get("metadata") or {}
             await _upgrade_user(meta.get("user_id"), meta.get("plan"), obj)
-    elif t == "customer.subscription.updated":
+    elif t == "checkout.session.async_payment_succeeded":
+        # SEPA es asíncrono: el cobro se confirma días después
+        res = await db.payment_transactions.update_one(
+            {"session_id": obj["id"], "payment_status": {"$ne": "paid"}},
+            {"$set": {"status": "completed", "payment_status": "paid",
+                      "updated_at": datetime.now(timezone.utc)}},
+        )
+        if res.modified_count:
+            meta = obj.get("metadata") or {}
+            await _upgrade_user(meta.get("user_id"), meta.get("plan"), obj)
+    elif t == "checkout.session.async_payment_failed":
+        await db.payment_transactions.update_one(
+            {"session_id": obj["id"]},
+            {"$set": {"status": "failed", "payment_status": "failed",
+                      "updated_at": datetime.now(timezone.utc)}})
         plan = ss.plan_from_subscription(obj)
         if plan:
             await db.users.update_one(

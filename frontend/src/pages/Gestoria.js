@@ -74,8 +74,16 @@ export default function Gestoria() {
     }
   };
 
-  const changePlan = async (c, plan) => {
-    try { await api.post(`/gestoria/clients/${c.id}/plan`, { plan }); toast.success("Plan actualizado"); load(); }
+  const sepaCheckout = async () => {
+    try {
+      const { data } = await api.post("/gestoria/billing/checkout", { origin_url: window.location.origin });
+      window.location.href = data.checkout_url;
+    } catch (e) {
+      toast.error(formatApiErrorDetail(e.response?.data?.detail) || "No se pudo iniciar la domiciliación");
+    }
+  };
+
+  const changePlan = async (c, plan) => {    try { await api.post(`/gestoria/clients/${c.id}/plan`, { plan }); toast.success("Plan actualizado"); load(); }
     catch (e) { toast.error(formatApiErrorDetail(e.response?.data?.detail)); }
   };
 
@@ -186,7 +194,9 @@ export default function Gestoria() {
           <div className={`${CARD} p-5`} data-testid="summary-value">
             <div className="flex items-center justify-between"><span className="text-xs font-semibold uppercase tracking-wide text-slate-500">Coste mensual (50%)</span><Wallet className="w-5 h-5 text-emerald-600" strokeWidth={1.75} /></div>
             <div className="font-display text-3xl font-bold mt-2">{eur(summary?.monthly_value)}</div>
-            <div className="text-xs text-slate-400 mt-1">Lo que abonas por tus clientes</div>
+            <button onClick={sepaCheckout} className="mt-2 inline-flex items-center gap-1.5 text-xs font-medium text-[#0052FF] hover:underline" data-testid="gestoria-sepa-btn">
+              <Wallet className="w-3.5 h-3.5" strokeWidth={2} /> Domiciliar pago (SEPA)
+            </button>
           </div>
           <div className={`${CARD} p-5`} data-testid="summary-iban">
             <div className="flex items-center justify-between"><span className="text-xs font-semibold uppercase tracking-wide text-slate-500">IBAN de cobro</span><Euro className="w-5 h-5 text-slate-500" strokeWidth={1.75} /></div>

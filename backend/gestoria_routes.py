@@ -57,6 +57,10 @@ class ClientPlanInput(BaseModel):
     plan: str
 
 
+class BillingCheckoutInput(BaseModel):
+    origin_url: str
+
+
 # ---------------- Helpers ----------------
 def _invite_html(firm_name: str, name: str, link: str) -> str:
     saludo = f"Hola {name}," if name else "Hola,"
@@ -229,6 +233,42 @@ async def upload_logo(file: UploadFile = File(...), g=Depends(require_gestoria))
     b64 = "data:image/png;base64," + base64.b64encode(buf.getvalue()).decode()
     await db.users.update_one({"_id": ObjectId(g["id"])}, {"$set": {"logo": b64}})
     return {"status": "ok", "logo": b64}
+
+
+@gestoria.post("/billing/checkout")
+async def billing_checkout(req: BillingCheckoutInput, g=Depends(require_gestoria)):
+    import stripe
+    from integrations_config import get_stripe
+    cfg = await get_stripe()
+    stripe.api_key = cfg.get("secret_key") or ""
+    plans = await load_plans()
+    clients = await db.users.find({"gestoria_id": g["id"]}, {"plan": 1}).to_list(100000)
+    total = sum((plans.get(c.get("plan", "basico"), {}).get("price", 0) or 0) * RESELLER_RATE for c in clients)
+    if total <= 0:
+        raise HTTPException(status_code=400, detail="Aún no tienes importe que domiciliar (sin clientes de pago).")
+    amount_cents = int(round(total * 100))
+    line_items = [{"price_data": {
+        "currency": "eur",
+        "product_data": {"name": f"OpenFactura · Gestoría ({len(clients)} clientes)"},
+        "unit_amount": amount_cents,
+        "recurring": {"interval": "month"},
+    }, "quantity": 1}]
+    base = dict(
+        mode="subscription", line_items=line_items,
+        success_url=f"{req.origin_url}/gestoria?sepa=ok",
+        cancel_url=f"{req.origin_url}/gestoria?sepa=cancel",
+        metadata={"gestoria_id": g["id"], "type": "gestoria_sepa"},
+        subscription_data={"metadata": {"gestoria_id": g["id"], "type": "gestoria_sepa"}},
+    )
+    try:
+        try:
+            session = stripe.checkout.Session.create(**base, payment_method_types=["sepa_debit", "card"])
+        except stripe.error.InvalidRequestError:
+            session = stripe.checkout.Session.create(**base, payment_method_types=["card"])
+    except stripe.error.StripeError as e:
+        logger.error(f"gestoria sepa checkout failed: {e}")
+        raise HTTPException(status_code=502, detail="No pudimos iniciar la domiciliación. Inténtalo más tarde.")
+    return {"checkout_url": session.url, "amount": round(total, 2)}
 
 
 # ---------------- Branding (para clientes) ----------------
