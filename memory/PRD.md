@@ -335,3 +335,10 @@ Sistema de facturación para España: crear facturas introduciendo datos (CIF/NI
   - **¿Eres inversionista?** (`#inversores`): bloque oscuro (estilo glass, blobs) con botón "Contactar al equipo" → `mailto:soporte@goroky.com` (asunto/cuerpo prellenados) + enlace directo al email.
 - ✅ **OCR producción RESUELTO (Plesk)**: causa doble — (1) `emergentintegrations` no estaba instalado en el venv de prod, (2) `EMERGENT_LLM_KEY` tenía el placeholder `TU_CLAVE`. Fixes: instalado el módulo + `EMERGENT_LLM_KEY="sk-emergent-8D26a14423aF8B2046"` en `/etc/openfactura/openfactura.env` + `deploy.sh` ahora instala deps con `--extra-index-url https://d33sy5i8bnduwe.cloudfront.net/simple/`. Tras el fix la clave autentica correctamente (el error residual "unsupported image" era solo por la imagen de prueba 1x1; con facturas reales funciona).
 
+
+## Iteración 29 (2026-06) — Recuperación de contraseña (forgot/reset)
+- ✅ **Backend (`auth.py`)**: `POST /api/auth/forgot-password` (respuesta genérica anti-enumeración; token `secrets.token_urlsafe(32)`, guarda SHA-256 en `password_reset_tokens` con caducidad 1h + throttle 3/15min; envía email vía `send_email` con enlace `{origin}/restablecer-contrasena?token=`). `POST /api/auth/reset-password` (valida fuerza, token de un solo uso, caducidad, actualiza `password_hash`, marca usados). Email HTML profesional en español.
+- ✅ **Frontend**: enlace "¿Olvidaste tu contraseña?" en `Login.js`; nuevas páginas `ForgotPassword.js` (`/recuperar-contrasena`) y `ResetPassword.js` (`/restablecer-contrasena`) + rutas en `App.js`.
+- Verificado e2e por backend: register 200, forgot 200 genérico, reset débil 422, reset válido 200, reuse 400, login antiguo 401, login nuevo 200. UI verificada por captura.
+- Nota: el enlace usa el header Origin (en prod → https://openfactura.es). Requiere Resend configurado (ya lo está) para enviar el email.
+

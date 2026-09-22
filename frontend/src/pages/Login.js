@@ -120,7 +120,10 @@ export default function Login() {
             <Input id="email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="tu@empresa.es" required className={inputCls} data-testid="login-email" />
           </div>
           <div className="space-y-2">
-            <Label htmlFor="password">Contraseña</Label>
+            <div className="flex items-center justify-between">
+              <Label htmlFor="password">Contraseña</Label>
+              <Link to="/recuperar-contrasena" className="text-sm text-[#0052FF] font-medium hover:underline" data-testid="login-forgot-password-link">¿Olvidaste tu contraseña?</Link>
+            </div>
             <div className="relative">
               <Input id="password" type={showPw ? "text" : "password"} value={password} onChange={(e) => setPassword(e.target.value)} required className={`${inputCls} pr-11`} data-testid="login-password" />
               <button type="button" onClick={() => setShowPw((v) => !v)} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 transition-colors" tabIndex={-1} aria-label="Mostrar contraseña" data-testid="toggle-password">

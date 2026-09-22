@@ -2,6 +2,8 @@ import os
 import jwt
 import bcrypt
 import secrets
+import hashlib
+import logging
 from datetime import datetime, timezone, timedelta
 
 from fastapi import APIRouter, Request, Response, HTTPException, Depends
@@ -11,6 +13,7 @@ from bson import ObjectId
 from database import db
 from templates import TEMPLATE_MAP
 
+logger = logging.getLogger("auth")
 JWT_ALGORITHM = "HS256"
 router = APIRouter(prefix="/api/auth", tags=["auth"])
 
@@ -276,6 +279,103 @@ async def refresh(request: Request, response: Response):
         return {"status": "ok"}
     except jwt.InvalidTokenError:
         raise HTTPException(status_code=401, detail="Token inválido")
+
+
+class ForgotPasswordInput(BaseModel):
+    email: EmailStr
+
+
+class ResetPasswordInput(BaseModel):
+    token: str
+    password: str
+
+
+def _hash_token(token: str) -> str:
+    return hashlib.sha256(token.encode("utf-8")).hexdigest()
+
+
+def _reset_email_html(name: str, link: str) -> str:
+    saludo = f"Hola {name}," if name else "Hola,"
+    return f"""
+    <div style="font-family:Arial,Helvetica,sans-serif;max-width:520px;margin:0 auto;color:#0f172a">
+      <div style="text-align:center;padding:8px 0 20px">
+        <span style="font-size:22px;font-weight:700;color:#0052FF">openfactura</span>
+      </div>
+      <div style="background:#ffffff;border:1px solid #e2e8f0;border-radius:16px;padding:32px">
+        <h1 style="font-size:20px;margin:0 0 12px">Restablece tu contraseña</h1>
+        <p style="font-size:15px;line-height:1.6;color:#475569;margin:0 0 8px">{saludo}</p>
+        <p style="font-size:15px;line-height:1.6;color:#475569;margin:0 0 24px">
+          Hemos recibido una solicitud para restablecer la contraseña de tu cuenta en OpenFactura.
+          Pulsa el botón para crear una nueva contraseña. Este enlace caduca en 1 hora.
+        </p>
+        <div style="text-align:center;margin:0 0 24px">
+          <a href="{link}" style="display:inline-block;background:#0052FF;color:#ffffff;text-decoration:none;font-weight:600;padding:14px 28px;border-radius:12px;font-size:15px">Restablecer contraseña</a>
+        </div>
+        <p style="font-size:13px;line-height:1.6;color:#94a3b8;margin:0">
+          Si no has solicitado este cambio, puedes ignorar este email; tu contraseña seguirá siendo la misma.
+        </p>
+        <p style="font-size:12px;color:#cbd5e1;margin:16px 0 0;word-break:break-all">O copia este enlace: {link}</p>
+      </div>
+      <p style="text-align:center;font-size:12px;color:#94a3b8;margin:16px 0 0">© OpenFactura · Facturación para autónomos y empresas en España</p>
+    </div>
+    """
+
+
+@router.post("/forgot-password")
+async def forgot_password(data: ForgotPasswordInput, request: Request):
+    email = data.email.lower()
+    generic = {"status": "ok",
+               "message": "Si el email existe en nuestro sistema, te hemos enviado instrucciones para restablecer tu contraseña."}
+    user = await db.users.find_one({"email": email})
+    if not user:
+        return generic
+    now = datetime.now(timezone.utc)
+    recent = await db.password_reset_tokens.count_documents({
+        "user_id": str(user["_id"]),
+        "created_at": {"$gt": (now - timedelta(minutes=15)).isoformat()},
+    })
+    if recent >= 3:
+        return generic
+    token = secrets.token_urlsafe(32)
+    await db.password_reset_tokens.insert_one({
+        "token_hash": _hash_token(token),
+        "user_id": str(user["_id"]),
+        "email": email,
+        "used": False,
+        "expires_at": (now + timedelta(hours=1)).isoformat(),
+        "created_at": now.isoformat(),
+    })
+    origin = request.headers.get("origin") or os.environ.get("APP_BASE_URL", "https://openfactura.es")
+    reset_link = f"{origin.rstrip('/')}/restablecer-contrasena?token={token}"
+    try:
+        from email_service import send_email
+        await send_email(
+            to=email,
+            subject="Restablece tu contraseña · OpenFactura",
+            html=_reset_email_html(user.get("name", ""), reset_link),
+        )
+    except Exception as e:
+        logger.error(f"forgot-password email failed: {e}")
+    return generic
+
+
+@router.post("/reset-password")
+async def reset_password(data: ResetPasswordInput):
+    validate_password_strength(data.password)
+    rec = await db.password_reset_tokens.find_one({"token_hash": _hash_token(data.token), "used": False})
+    if not rec:
+        raise HTTPException(status_code=400, detail="El enlace no es válido o ya se ha utilizado.")
+    try:
+        expired = datetime.fromisoformat(rec["expires_at"]) < datetime.now(timezone.utc)
+    except Exception:
+        expired = True
+    if expired:
+        raise HTTPException(status_code=400, detail="El enlace ha caducado. Solicita uno nuevo.")
+    await db.users.update_one({"_id": ObjectId(rec["user_id"])},
+                              {"$set": {"password_hash": hash_password(data.password)}})
+    await db.password_reset_tokens.update_many({"user_id": rec["user_id"], "used": False},
+                                               {"$set": {"used": True, "used_at": datetime.now(timezone.utc).isoformat()}})
+    return {"status": "ok", "message": "Tu contraseña se ha actualizado. Ya puedes iniciar sesión."}
 
 
 async def seed_admin():
