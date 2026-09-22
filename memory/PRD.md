@@ -328,3 +328,10 @@ Sistema de facturación para España: crear facturas introduciendo datos (CIF/NI
   - Frontend: cards de balance, cards de estado, gráfico ComposedChart (barras ingresos/gastos + línea beneficio), ranking top clientes, selector de año, botón Exportar. Verificado por curl + captura.
 - ✅ **OCR escaneo**: confirmado que FUNCIONA en preview (extracción correcta). Añadido `asyncio.wait_for(..., 90s)` en `/api/expenses/scan` → si la IA se cuelga devuelve 504 limpio en vez de provocar 520 en el origin. El fallo del usuario es SOLO en producción (Plesk) → pendiente: verificar en prod que `emergentintegrations` está en el venv, que `EMERGENT_LLM_KEY` está en el env de producción, y subir `proxy_read_timeout` en Nginx/Plesk (posible causa del 520 de Cloudflare).
 - Pendiente: despliegue Plesk por el usuario (Save to Github + deploy.sh).
+
+## Iteración 28 (2026-06) — Landing: FAQ + sección Inversionistas + fix OCR producción
+- ✅ **Landing (`pages/Landing.js`)**: añadidas 2 secciones antes del footer:
+  - **Preguntas frecuentes** (`#faq`): acordeón (shadcn `accordion`) con 8 Q&A (qué es OpenFactura, personalización con logo, VeriFactu/AEAT, conexión bancaria, autónomos/SL, escaneo OCR, TPV, precio/permanencia).
+  - **¿Eres inversionista?** (`#inversores`): bloque oscuro (estilo glass, blobs) con botón "Contactar al equipo" → `mailto:soporte@goroky.com` (asunto/cuerpo prellenados) + enlace directo al email.
+- ✅ **OCR producción RESUELTO (Plesk)**: causa doble — (1) `emergentintegrations` no estaba instalado en el venv de prod, (2) `EMERGENT_LLM_KEY` tenía el placeholder `TU_CLAVE`. Fixes: instalado el módulo + `EMERGENT_LLM_KEY="sk-emergent-8D26a14423aF8B2046"` en `/etc/openfactura/openfactura.env` + `deploy.sh` ahora instala deps con `--extra-index-url https://d33sy5i8bnduwe.cloudfront.net/simple/`. Tras el fix la clave autentica correctamente (el error residual "unsupported image" era solo por la imagen de prueba 1x1; con facturas reales funciona).
+

@@ -3,10 +3,48 @@ import { motion } from "framer-motion";
 import { Seo } from "@/components/Seo";
 import { Button } from "@/components/ui/button";
 import {
+  Accordion, AccordionItem, AccordionTrigger, AccordionContent,
+} from "@/components/ui/accordion";
+import {
   Sparkles, FileText, Landmark, ShieldCheck, ScanLine, Bot, Check, ArrowRight,
   Menu, TrendingUp, Zap, ReceiptText, Building2, Users, Briefcase, Star, MapPin,
-  CreditCard, Clock, Store, ShoppingBag, MessageCircle, Wallet, Utensils,
+  CreditCard, Clock, Store, ShoppingBag, MessageCircle, Wallet, Utensils, Mail, HelpCircle,
 } from "lucide-react";
+
+const FAQS = [
+  {
+    q: "¿Qué es OpenFactura?",
+    a: "OpenFactura es un sistema de facturación online para autónomos y empresas en España. Te permite crear y enviar facturas legales en segundos, controlar tus gastos, calcular automáticamente el IVA y el IRPF, y llevar al día tus impuestos (modelos 303, 130, 111, 115) desde un único panel.",
+  },
+  {
+    q: "¿Puedo personalizar mis facturas con mi logo?",
+    a: "Sí. Puedes subir tu logo, elegir el color de marca, añadir tus datos fiscales, textos legales y el pie de página. Dispones de varias plantillas profesionales para que tus facturas reflejen la imagen de tu negocio.",
+  },
+  {
+    q: "¿Es compatible con VeriFactu y la Agencia Tributaria?",
+    a: "Totalmente. OpenFactura está homologado con VeriFactu (AEAT): cada factura se firma y registra conforme a la normativa antifraude, con su código QR y encadenamiento. Cumples con la ley sin complicaciones y con la tranquilidad de estar al día con Hacienda.",
+  },
+  {
+    q: "¿Puedo conectar mi cuenta bancaria?",
+    a: "Sí. Podrás conectar tu banco de forma segura para conciliar automáticamente los cobros con tus facturas y ver qué está pagado y qué está pendiente, sin introducir los movimientos a mano.",
+  },
+  {
+    q: "¿Sirve para autónomos y para empresas (SL)?",
+    a: "Para ambos. Si eres autónomo, calculamos tu IVA e IRPF (incluido el 7% de nuevos autónomos). Si eres una sociedad (SL), gestionamos el IVA de tus facturas emitidas. Todo se adapta automáticamente a tu tipo de actividad.",
+  },
+  {
+    q: "¿Puedo escanear tickets y facturas de gastos?",
+    a: "Sí. Con el escáner inteligente solo tienes que subir una foto o el PDF del ticket y la IA extrae el proveedor, el NIF, la fecha, la base, el IVA y el total automáticamente, listo para guardarlo como gasto.",
+  },
+  {
+    q: "¿Tiene TPV para tienda u hostelería?",
+    a: "Sí. Incluye un TPV (punto de venta) con modos Retail y Hostelería: gestión de productos, stock, mesas, caja y tickets de 80/58 mm, todo integrado con tu facturación.",
+  },
+  {
+    q: "¿Cuánto cuesta y hay permanencia?",
+    a: "Puedes empezar gratis durante 14 días sin tarjeta de crédito. Después eliges el plan que mejor se adapte a ti. Sin permanencia: puedes cancelar cuando quieras.",
+  },
+];
 
 const ACCENT = "#0052FF";
 
@@ -692,6 +730,58 @@ export default function Landing() {
               <Link to="/registro"><Button size="lg" className="bg-white text-[#0052FF] hover:bg-slate-100 rounded-full px-8 w-full sm:w-auto font-semibold" data-testid="cta-bottom">Empezar ahora gratis <ArrowRight className="w-4 h-4 ml-2" strokeWidth={2} /></Button></Link>
               <Link to="/login"><Button size="lg" variant="outline" className="border-white/40 text-white bg-transparent hover:bg-white/10 rounded-full px-8 w-full sm:w-auto">Ya tengo cuenta</Button></Link>
             </div>
+          </Reveal>
+        </div>
+      </section>
+
+      {/* FAQ */}
+      <section id="faq" className="bg-[#F8FAFC] border-t border-slate-100">
+        <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-20 sm:py-24">
+          <Reveal className="text-center">
+            <div className="inline-flex items-center gap-2 rounded-full bg-[#0052FF]/10 text-[#0052FF] px-4 py-1.5 text-sm font-medium mb-4">
+              <HelpCircle className="w-4 h-4" strokeWidth={2} /> Preguntas frecuentes
+            </div>
+            <h2 className="text-3xl sm:text-4xl font-bold tracking-tight text-slate-900">Todo lo que necesitas saber</h2>
+            <p className="text-slate-500 mt-4 text-lg">Resolvemos las dudas más habituales sobre OpenFactura.</p>
+          </Reveal>
+          <Reveal delay={0.1} className="mt-10">
+            <Accordion type="single" collapsible className="space-y-3" data-testid="faq-accordion">
+              {FAQS.map((f, i) => (
+                <AccordionItem key={i} value={`faq-${i}`} className="border border-slate-200 rounded-2xl bg-white px-5 data-[state=open]:shadow-md transition-shadow" data-testid={`faq-item-${i}`}>
+                  <AccordionTrigger className="text-left text-base font-semibold text-slate-900 hover:no-underline py-5">{f.q}</AccordionTrigger>
+                  <AccordionContent className="text-slate-600 text-[15px] leading-relaxed pb-5">{f.a}</AccordionContent>
+                </AccordionItem>
+              ))}
+            </Accordion>
+          </Reveal>
+        </div>
+      </section>
+
+      {/* Inversionistas */}
+      <section id="inversores" className="px-4 sm:px-6 lg:px-8 py-16">
+        <div className="max-w-6xl mx-auto rounded-3xl bg-slate-900 text-white overflow-hidden relative px-6 py-16 sm:py-20">
+          <div className="absolute -top-24 -right-24 w-96 h-96 bg-[#0052FF]/25 blur-3xl rounded-full pointer-events-none" />
+          <div className="absolute -bottom-24 -left-24 w-96 h-96 bg-indigo-500/20 blur-3xl rounded-full pointer-events-none" />
+          <Reveal className="relative text-center max-w-2xl mx-auto">
+            <div className="inline-flex items-center gap-2 rounded-full bg-white/10 border border-white/15 px-4 py-1.5 text-sm font-medium mb-5 backdrop-blur-sm">
+              <TrendingUp className="w-4 h-4 text-[#7FB0FF]" strokeWidth={2} /> Oportunidad de inversión
+            </div>
+            <h2 className="text-3xl sm:text-4xl lg:text-5xl font-extrabold tracking-tight">¿Eres inversionista?</h2>
+            <p className="text-white/75 mt-5 text-lg leading-relaxed">
+              Estamos construyendo el software de facturación de referencia para autónomos y pymes en España.
+              Si deseas contactar al equipo, escríbenos y nos pondremos en contacto contigo.
+            </p>
+            <div className="flex flex-col sm:flex-row gap-3 justify-center mt-8">
+              <a href="mailto:soporte@goroky.com?subject=Interés%20de%20inversión%20en%20OpenFactura&body=Hola%20equipo%20OpenFactura%2C%0A%0AEstoy%20interesado%2Fa%20en%20conocer%20la%20oportunidad%20de%20inversión.%20Estos%20son%20mis%20datos%20de%20contacto%3A%0A%0ANombre%3A%0AEmpresa%2FFondo%3A%0ATeléfono%3A%0A%0AGracias." data-testid="investor-contact-btn">
+                <Button size="lg" className="bg-white text-slate-900 hover:bg-slate-100 rounded-full px-8 w-full sm:w-auto font-semibold">
+                  <Mail className="w-4 h-4 mr-2" strokeWidth={2} /> Contactar al equipo
+                </Button>
+              </a>
+            </div>
+            <p className="text-white/50 text-sm mt-5">
+              O escríbenos directamente a{" "}
+              <a href="mailto:soporte@goroky.com" className="text-white underline decoration-white/30 hover:decoration-white transition" data-testid="investor-email-link">soporte@goroky.com</a>
+            </p>
           </Reveal>
         </div>
       </section>
