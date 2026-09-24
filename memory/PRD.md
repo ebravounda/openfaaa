@@ -394,3 +394,11 @@ Sistema de facturación para España: crear facturas introduciendo datos (CIF/NI
 - ✅ **Fix frontend** (`Expenses.js`): además del toast, ahora se muestra un **aviso ámbar VISIBLE dentro del diálogo** (`data-testid='duplicate-warning'`) cuando el escaneo de 1 archivo detecta un posible duplicado.
 - Verificado end-to-end real (imagen de factura): escanear→guardar→re-escanear la misma = `duplicate:true`. Casos de datos antiguos sin nº de factura también detectados por la clave importe+fecha.
 
+## Iteración 38 (2026-06) — Preview y descarga en PDF de las facturas subidas
+- ✅ **Nuevo endpoint** `GET /api/files-pdf/{path}` (server.py): sirve cualquier adjunto **como PDF**. Si ya es PDF, passthrough; si es imagen (png/jpg/…), la convierte a PDF con PyMuPDF (`convert_to_pdf`, con fallback a página A4 con la imagen incrustada). Devuelve `Content-Disposition: attachment; filename="<proveedor>.pdf"`. Reutiliza el control de propiedad de `db.files`.
+- ✅ **Preview en el lote** (`Expenses.js`): cada fila del diálogo de revisión muestra una **miniatura** (imagen real o icono PDF) clicable + botones **Ver** (abre en pestaña) y **Descargar PDF**.
+- ✅ **Preview individual mejorado**: el visor del diálogo de 1 archivo ahora **renderiza el PDF en un iframe** (antes solo mostraba un icono) y añade botones **Ver** / **Descargar PDF**.
+- ✅ **Tabla de gastos**: cada gasto con adjunto muestra acciones **Ver** y **Descargar PDF** (`expense-view-<i>`, `expense-download-<i>`).
+- ✅ Helpers frontend `fileUrl/openFile/downloadPdf` usando la URL absoluta `API` con cookies (mismo dominio). Import de `API` desde `@/lib/api`.
+- Verificado end-to-end con curl: imagen PNG → PDF válido (`%PDF`, descarga `factura.pdf`) y PDF → passthrough válido. Frontend compila sin errores; /gastos carga sin errores de consola.
+

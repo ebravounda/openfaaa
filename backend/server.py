@@ -2245,6 +2245,35 @@ async def download_file(path: str, user=Depends(get_current_user)):
     return Response(content=data, media_type=record.get("content_type", ctype))
 
 
+@api.get("/files-pdf/{path:path}")
+async def download_file_as_pdf(path: str, user=Depends(get_current_user)):
+    record = await db.files.find_one({"storage_path": path, "user_id": user["id"], "company_id": await active_cid(user), "is_deleted": False})
+    if not record:
+        raise HTTPException(status_code=404, detail="Archivo no encontrado")
+    data, ctype = await get_object(path)
+    ctype = (record.get("content_type") or ctype or "").lower()
+    is_pdf = "pdf" in ctype or path.lower().endswith(".pdf")
+    if is_pdf:
+        pdf_bytes = data
+    else:
+        import fitz
+        ext = path.rsplit(".", 1)[-1].lower() if "." in path else ""
+        try:
+            imgdoc = fitz.open(stream=data, filetype=ext if ext in ("png", "jpg", "jpeg", "gif", "webp") else None)
+            pdf_bytes = imgdoc.convert_to_pdf()
+            imgdoc.close()
+        except Exception:
+            imgdoc = fitz.open()
+            page = imgdoc.new_page(width=595, height=842)
+            page.insert_image(fitz.Rect(20, 20, 575, 822), stream=data, keep_proportion=True)
+            pdf_bytes = imgdoc.tobytes()
+            imgdoc.close()
+    base = (record.get("original_filename") or "factura")
+    base = base.rsplit(".", 1)[0] if "." in base else base
+    return Response(content=pdf_bytes, media_type="application/pdf",
+                    headers={"Content-Disposition": f'attachment; filename="{base}.pdf"'})
+
+
 async def _notify(user_id, company_id, ntype, title, body, email=None):
     await db.notifications.insert_one({
         "id": str(uuid.uuid4()), "user_id": user_id, "company_id": company_id,

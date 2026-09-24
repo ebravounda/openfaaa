@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
-import api, { eur, formatApiErrorDetail } from "@/lib/api";
+import api, { API, eur, formatApiErrorDetail } from "@/lib/api";
 import Layout from "@/components/Layout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -18,7 +18,7 @@ import {
 } from "@/components/ui/select";
 import {
   Plus, Trash2, Receipt, Loader2, ScanLine, FileText, Sparkles, Paperclip, Pencil, Search,
-  AlertTriangle, Files, X,
+  AlertTriangle, Files, X, Download, ExternalLink,
 } from "lucide-react";
 
 const IVA_OPTIONS = ["21", "10", "4", "0"];
@@ -158,6 +158,19 @@ export default function Expenses() {
   const updateBatchItem = (key, patch) => setBatchItems((arr) => arr.map((i) => (i.key === key ? { ...i, ...patch } : i)));
   const removeBatchItem = (key) => setBatchItems((arr) => arr.filter((i) => i.key !== key));
   const batchRowTotal = (i) => (Number(i.base_amount) || 0) * (1 + Number(i.iva_rate) / 100);
+
+  const fileUrl = (path) => `${API}/files/${path}`;
+  const openFile = (path) => { if (path) window.open(`${API}/files/${path}`, "_blank", "noopener"); };
+  const downloadPdf = (path, name = "factura") => {
+    if (!path) return;
+    const safe = (name || "factura").replace(/[^\w\-. ]+/g, "").trim() || "factura";
+    const a = document.createElement("a");
+    a.href = `${API}/files-pdf/${path}`;
+    a.download = `${safe}.pdf`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+  };
 
   const saveBatch = async () => {
     const toSave = batchItems.filter((i) => i.include && !i.error);
@@ -314,6 +327,12 @@ export default function Expenses() {
                   <TableCell className="text-right text-sm font-semibold tabular">{eur(exp.total)}</TableCell>
                   <TableCell className="text-right">
                     <div className="flex items-center justify-end gap-0.5">
+                      {exp.attachment_path && (
+                        <>
+                          <Button variant="ghost" size="icon" title="Ver factura" onClick={() => openFile(exp.attachment_path)} className="h-8 w-8 text-slate-500 hover:text-[#0052FF]" data-testid={`expense-view-${i}`}><ExternalLink className="w-4 h-4" strokeWidth={1.5} /></Button>
+                          <Button variant="ghost" size="icon" title="Descargar PDF" onClick={() => downloadPdf(exp.attachment_path, exp.vendor_name || "factura")} className="h-8 w-8 text-slate-500 hover:text-[#0052FF]" data-testid={`expense-download-${i}`}><Download className="w-4 h-4" strokeWidth={1.5} /></Button>
+                        </>
+                      )}
                       <Button variant="ghost" size="icon" title="Editar" onClick={() => openEdit(exp)} className="h-8 w-8 text-slate-500 hover:text-[#0052FF]" data-testid={`expense-edit-${i}`}><Pencil className="w-4 h-4" strokeWidth={1.5} /></Button>
                       <Button variant="ghost" size="icon" title="Eliminar" onClick={() => remove(exp)} className="h-8 w-8 text-slate-400 hover:text-red-600" data-testid={`expense-delete-${i}`}><Trash2 className="w-4 h-4" strokeWidth={1.5} /></Button>
                     </div>
@@ -345,13 +364,21 @@ export default function Expenses() {
 
           <div className={hasPreview ? "grid grid-cols-1 md:grid-cols-2 gap-5" : ""}>
             {hasPreview && (
-              <div className="bg-slate-50 border border-slate-200 rounded-lg overflow-hidden md:sticky md:top-0 h-[360px] flex items-center justify-center" data-testid="scan-preview">
-                {!previewUrl ? (
-                  <Loader2 className="w-6 h-6 animate-spin text-slate-300" />
-                ) : previewType.includes("pdf") ? (
-                  <div className="text-center text-slate-500 p-6"><FileText className="w-12 h-12 mx-auto text-slate-300" strokeWidth={1.25} /><p className="text-sm mt-2">Documento PDF adjunto</p></div>
-                ) : (
-                  <img src={previewUrl} alt="Documento" className="w-full h-full object-contain" />
+              <div className="md:sticky md:top-0 space-y-2">
+                <div className="bg-slate-50 border border-slate-200 rounded-lg overflow-hidden h-[360px] flex items-center justify-center" data-testid="scan-preview">
+                  {!previewUrl ? (
+                    <Loader2 className="w-6 h-6 animate-spin text-slate-300" />
+                  ) : previewType.includes("pdf") ? (
+                    <iframe src={previewUrl} title="Factura PDF" className="w-full h-full border-0" />
+                  ) : (
+                    <img src={previewUrl} alt="Documento" className="w-full h-full object-contain" />
+                  )}
+                </div>
+                {form.attachment_path && (
+                  <div className="flex gap-2">
+                    <Button type="button" variant="outline" size="sm" className="flex-1 border-slate-200" onClick={() => openFile(form.attachment_path)} data-testid="expense-view-file"><ExternalLink className="w-3.5 h-3.5 mr-1.5" strokeWidth={1.5} /> Ver</Button>
+                    <Button type="button" variant="outline" size="sm" className="flex-1 border-slate-200" onClick={() => downloadPdf(form.attachment_path, form.vendor_name || "factura")} data-testid="expense-download-pdf"><Download className="w-3.5 h-3.5 mr-1.5" strokeWidth={1.5} /> Descargar PDF</Button>
+                  </div>
                 )}
               </div>
             )}
@@ -441,9 +468,18 @@ export default function Expenses() {
             {batchItems.map((it) => (
               <div key={it.key} className={`rounded-xl border p-4 ${it.error ? "border-red-200 bg-red-50/40" : it.duplicate ? "border-amber-200 bg-amber-50/40" : "border-slate-200"}`} data-testid={`batch-item-${it.key}`}>
                 <div className="flex items-center justify-between mb-3 gap-3">
-                  <div className="flex items-center gap-2 min-w-0">
+                  <div className="flex items-center gap-2.5 min-w-0">
                     {!it.error && (
                       <Checkbox checked={it.include} onCheckedChange={(v) => updateBatchItem(it.key, { include: !!v })} data-testid={`batch-include-${it.key}`} />
+                    )}
+                    {it.attachment_path && (
+                      <button type="button" onClick={() => openFile(it.attachment_path)} className="w-11 h-11 rounded-lg border border-slate-200 bg-white overflow-hidden flex items-center justify-center shrink-0 hover:ring-2 hover:ring-[#0052FF]/30 transition-all" title="Ver documento" data-testid={`batch-thumb-${it.key}`}>
+                        {/\.pdf$/i.test(it.filename || "") ? (
+                          <FileText className="w-5 h-5 text-slate-400" strokeWidth={1.5} />
+                        ) : (
+                          <img src={fileUrl(it.attachment_path)} alt="" className="w-full h-full object-cover" />
+                        )}
+                      </button>
                     )}
                     <span className="text-xs text-slate-500 truncate">{it.filename}{it.page ? ` · pág. ${it.page}` : ""}</span>
                     {it.duplicate && (
@@ -453,7 +489,15 @@ export default function Expenses() {
                       <span className="inline-flex items-center gap-1 text-[11px] font-medium text-red-700 bg-red-100 px-2 py-0.5 rounded-full whitespace-nowrap"><AlertTriangle className="w-3 h-3" /> {it.error}</span>
                     )}
                   </div>
-                  <Button variant="ghost" size="icon" className="h-7 w-7 text-slate-400 hover:text-red-600 shrink-0" onClick={() => removeBatchItem(it.key)} data-testid={`batch-remove-${it.key}`}><X className="w-4 h-4" /></Button>
+                  <div className="flex items-center gap-0.5 shrink-0">
+                    {it.attachment_path && (
+                      <>
+                        <Button variant="ghost" size="icon" className="h-7 w-7 text-slate-400 hover:text-[#0052FF]" title="Ver" onClick={() => openFile(it.attachment_path)} data-testid={`batch-view-${it.key}`}><ExternalLink className="w-4 h-4" /></Button>
+                        <Button variant="ghost" size="icon" className="h-7 w-7 text-slate-400 hover:text-[#0052FF]" title="Descargar PDF" onClick={() => downloadPdf(it.attachment_path, it.vendor_name || "factura")} data-testid={`batch-download-${it.key}`}><Download className="w-4 h-4" /></Button>
+                      </>
+                    )}
+                    <Button variant="ghost" size="icon" className="h-7 w-7 text-slate-400 hover:text-red-600" onClick={() => removeBatchItem(it.key)} data-testid={`batch-remove-${it.key}`}><X className="w-4 h-4" /></Button>
+                  </div>
                 </div>
                 {!it.error && (
                   <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
