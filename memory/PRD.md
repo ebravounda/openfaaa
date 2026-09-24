@@ -379,3 +379,12 @@ Sistema de facturación para España: crear facturas introduciendo datos (CIF/NI
 - ✅ Enlace de navegación "Gestorías" (`#gestorias`) añadido al header. Stack: framer-motion (AnimatePresence) + Tailwind, coherente con `Reveal`/`BrowserFrame` existentes.
 - Verificado: webpack compila sin errores, la landing renderiza y el nav muestra "Gestorías". Cambio puramente visual/frontend (sin backend).
 
+## Iteración 36 (2026-06) — Gastos: escaneo por lotes + detección de duplicados + categorización
+- ✅ **Escaneo múltiple (imágenes y PDF a la vez)**: nuevo `POST /api/expenses/scan-batch` (server.py) acepta `files: List[UploadFile]` (máx 15 archivos, 12MB c/u, 25 páginas totales). PDFs multipágina → un item por página (`_prep_pages_from_file`). OCR concurrente con `Semaphore(4)` + timeout 90s por item. Robusto: un archivo inválido devuelve item con `error` en vez de romper el lote (nunca 500).
+- ✅ **Detección de duplicados precisa** (`_expense_sig`): coincide por `NIF+nº factura` cuando existen, o por `NIF/nombre+fecha+total`. Marca `duplicate_type='existing'` (ya guardado en BD de la empresa) o `'batch'` (repetido dentro del mismo lote). El single scan (`/api/expenses/scan`) también devuelve ahora `duplicate`.
+- ✅ **OCR reforzado** (`ocr_service.py`): prompt más estricto/serio, nuevo campo `invoice_number`, verificación base+IVA≈total, no inventa datos.
+- ✅ **Guardado masivo**: `POST /api/expenses/bulk` (modelo `ExpenseBulkInput`) crea todos con `compute_expense` server-side (totales no manipulables por el cliente).
+- ✅ **Categorización**: ya existía (General, Suministros, Material, Servicios, Alquiler, Software, Transporte, Otros); ahora también editable por fila en el diálogo de revisión del lote y persiste vía bulk. Nuevo campo `invoice_number` (ExpenseInput).
+- ✅ **Frontend** (`Expenses.js`): input `multiple`; 1 archivo → diálogo individual (con nuevo campo "Nº factura"); 2+ archivos → **diálogo de revisión por lotes** (`batch-dialog`) con una fila editable por documento, duplicados desmarcados por defecto con etiqueta ámbar, total recalculado en vivo, "Guardar seleccionados" (`save-batch`).
+- Verificado por testing_agent: backend 7/7 pytest (duplicados existing+batch, PDF 2 páginas, archivo inválido sin 500, bulk con totales correctos) y frontend 100% (flujo lote + regresión de 1 archivo). Reporte: /app/test_reports/iteration_19.json.
+

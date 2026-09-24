@@ -1,0 +1,41 @@
+{
+  "summary": "Full validation of Expenses batch-scan feature (backend + frontend). Backend: 7/7 pytest passed. Seeded expense via POST /api/expenses/bulk (base=100, iva=21%, total=121.00 verified with GET). POST /api/expenses/scan-batch handles 3 real images + 1 invalid .txt: returns 4 items, invalid .txt yields error!=null with empty extracted while other items are processed normally (no 500). The image mimicking the seeded invoice comes back with duplicate=true, duplicate_type='existing'. Sending 2 identical fresh images returns 2 items where exactly the 2nd is duplicate_type='batch'. Multi-page PDF (2 pages -> 2 invoices) returns items with page=1 and page=2. POST /api/expenses/bulk with 2 items computes base/iva_amount/total correctly (200 @ 10% -> 220.00; 40 @ 21% -> 48.40) and both are found in GET /api/expenses. Empty items array -> 400. Frontend: /gastos loads; 'Escanear con IA' input has multiple + accept=image/*,application/pdf. Uploading 2 identical images opens data-testid='batch-dialog' with 2 rows; row 1 checked by default; row 2 shows amber 'Duplicada en el lote' badge and is UNCHECKED by default. Editing batch-category-<key> (Otros->Servicios) works; editing batch-base-<key> to 99 recalculates Total to 119,79 € (99*1.21). Clicking data-testid='save-batch' persists ONLY the checked row (expenses count 9->10), closes dialog, and shows toast '2 documento(s) analizados · 1 posible(s) duplicado(s)'. Single-file regression: uploading 1 image opens data-testid='expense-dialog' with data-testid='expense-invoice-number' populated by OCR (value='SINGLE-1').",
+  "backend_issues": { "critical": [], "minor": [] },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "expense-dialog & batch-dialog", "issues": ["Radix warning: 'Missing Description or aria-describedby={undefined} for DialogContent' — a11y improvement, add <DialogDescription>. Same as prior iterations."]},
+      {"screen": "expense-dialog Fecha field", "issues": ["Uses native browser <input type='date'> instead of shadcn Calendar. Cosmetic — consistent with legacy but noted per code-review guidelines."]}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iter19_expenses_batch.py",
+    "/app/test_reports/pytest/iter19.xml"
+  ],
+  "action_items": [
+    "(Optional a11y) Add <DialogDescription> to expense-dialog and batch-dialog to silence Radix a11y warning.",
+    "(Optional UX) Replace native date input with shadcn Calendar/Popover to match design system."
+  ],
+  "critical_code_review_comments": [
+    "server.py::_expense_sig correctly prefers invoice_number+NIF when available and falls back to NIF/name+date+total — sound for both existing and batch dup detection.",
+    "scan-batch caps at 15 files and 25 total pages, per-file 12MB cap, concurrent OCR with Semaphore(4) + 90s per-item timeout, invalid/unreadable files are turned into error items instead of raising — no 500 observed.",
+    "_prep_pages_from_file uses PyMuPDF with fixed dpi=110, jpg_quality=75 — reasonable; multi-page PDF pages are indexed 1-based in response.",
+    "expenses/bulk stores compute_expense-derived base/iva_amount/total server-side (client cannot poison totals). Good.",
+    "ExpenseInput/ExpenseBulkInput are Pydantic-validated. invoice_number is optional string; duplicate signature normalises whitespace/case.",
+    "Frontend Expenses.js onScanFile branches: 1 file -> /expenses/scan single dialog; >1 -> /expenses/scan-batch batch dialog with items pre-unchecked when duplicate/error. saveBatch loops POST /expenses filtering by include — could switch to /expenses/bulk to reduce N round-trips (minor perf).",
+    "batch dialog: total is recomputed client-side from base*iva; server recomputes on save (single source of truth). Fine.",
+    "Minor: two Radix Dialogs still lack DialogDescription (a11y warning)."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iter19_expenses_batch.py (new)",
+    "/app/test_reports/pytest/iter19.xml (new)"
+  ],
+  "success_rate": { "backend": "100%", "frontend": "100%" },
+  "test_credentials": "admin@fiscalhub.es / admin123",
+  "seed_data_creation": "Created several TEST_* expenses via /api/expenses/bulk and 1 additional expense from the UI batch save. They remain in admin's Mi Empresa account (safe to keep — all prefixed TEST or with UI-TEST-* invoice numbers).",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Batch scan + duplicate detection feature validated end-to-end against the live Emergent LLM (gpt-5.4). If retesting, note that OCR extraction is non-deterministic — the tests defensively pytest.skip if the LLM fails to return the seeded invoice_number, but on this run all extractions matched. Frontend .env REACT_APP_BACKEND_URL is not exported to the shell so the pytest reads it from /app/frontend/.env as a fallback.",
+  "rca of the issue": "N/A — no issues found."
+}
