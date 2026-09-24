@@ -46,6 +46,7 @@ export default function Expenses() {
   const [batchOpen, setBatchOpen] = useState(false);
   const [batchItems, setBatchItems] = useState([]);
   const [batchSaving, setBatchSaving] = useState(false);
+  const [scanDup, setScanDup] = useState(false);
 
   const load = () => {
     setLoading(true);
@@ -70,9 +71,10 @@ export default function Expenses() {
     } catch (e) {}
   };
 
-  const openManual = () => { clearPreview(); setEditingId(null); setForm(emptyForm()); setOpen(true); };
+  const openManual = () => { clearPreview(); setScanDup(false); setEditingId(null); setForm(emptyForm()); setOpen(true); };
   const openEdit = (exp) => {
     clearPreview();
+    setScanDup(false);
     setEditingId(exp.id);
     setForm({
       date: exp.date, vendor_name: exp.vendor_name || "", vendor_nif: exp.vendor_nif || "",
@@ -112,8 +114,9 @@ export default function Expenses() {
           save_provider: false,
         });
         loadPreview(data.attachment_path);
+        setScanDup(!!data.duplicate);
         setOpen(true);
-        if (data.duplicate) toast.warning("Posible duplicado: ya existe un gasto igual guardado. Revísalo antes de guardar.");
+        if (data.duplicate) toast("Posible factura duplicada", { description: "Ya tienes un gasto igual guardado. Revísalo antes de guardar." });
         else toast.success("Documento analizado. Revisa los datos y guarda.");
       } else {
         const fd = new FormData();
@@ -330,6 +333,15 @@ export default function Expenses() {
               {editingId ? "Editar gasto" : hasPreview ? "Revisar gasto escaneado" : "Nuevo gasto"}
             </DialogTitle>
           </DialogHeader>
+
+          {scanDup && !editingId && (
+            <div className="flex items-start gap-2.5 rounded-lg border border-amber-200 bg-amber-50 px-3.5 py-2.5 text-amber-800" data-testid="duplicate-warning">
+              <AlertTriangle className="w-4 h-4 mt-0.5 shrink-0" strokeWidth={2} />
+              <div className="text-sm">
+                <span className="font-semibold">Posible factura duplicada.</span> Ya tienes un gasto con este proveedor e importe (o nº de factura). Revisa antes de guardar para no registrarlo dos veces.
+              </div>
+            </div>
+          )}
 
           <div className={hasPreview ? "grid grid-cols-1 md:grid-cols-2 gap-5" : ""}>
             {hasPreview && (

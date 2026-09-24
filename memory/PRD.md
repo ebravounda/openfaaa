@@ -388,3 +388,9 @@ Sistema de facturación para España: crear facturas introduciendo datos (CIF/NI
 - ✅ **Frontend** (`Expenses.js`): input `multiple`; 1 archivo → diálogo individual (con nuevo campo "Nº factura"); 2+ archivos → **diálogo de revisión por lotes** (`batch-dialog`) con una fila editable por documento, duplicados desmarcados por defecto con etiqueta ámbar, total recalculado en vivo, "Guardar seleccionados" (`save-batch`).
 - Verificado por testing_agent: backend 7/7 pytest (duplicados existing+batch, PDF 2 páginas, archivo inválido sin 500, bulk con totales correctos) y frontend 100% (flujo lote + regresión de 1 archivo). Reporte: /app/test_reports/iteration_19.json.
 
+## Iteración 37 (2026-06) — Fix: la detección de duplicados no alertaba con 1 foto
+- 🐞 **Causa raíz**: la firma de duplicado usaba `NIF+nº factura` O BIEN `NIF/nombre+fecha+total`, pero no ambas. Si el gasto original se guardó sin `invoice_number` (o el OCR lo leyó distinto), las firmas no coincidían y no alertaba en el escaneo de un solo archivo.
+- ✅ **Fix backend**: `_expense_sig` → `_expense_sigs` (devuelve un CONJUNTO de firmas: clave por `NIF+nº factura` y clave por `NIF/nombre+fecha+total`). Dos gastos son duplicados si comparten CUALQUIER firma (intersección de conjuntos). Nuevo `_norm_inv` normaliza el nº de factura quitando no alfanuméricos (F-2026-015 == F 2026 015). Aplicado en `/expenses/scan` (single) y `/expenses/scan-batch` (existing + dentro del lote).
+- ✅ **Fix frontend** (`Expenses.js`): además del toast, ahora se muestra un **aviso ámbar VISIBLE dentro del diálogo** (`data-testid='duplicate-warning'`) cuando el escaneo de 1 archivo detecta un posible duplicado.
+- Verificado end-to-end real (imagen de factura): escanear→guardar→re-escanear la misma = `duplicate:true`. Casos de datos antiguos sin nº de factura también detectados por la clave importe+fecha.
+

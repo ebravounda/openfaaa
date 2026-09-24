@@ -304,16 +304,23 @@ def _norm_txt(s) -> str:
     return re.sub(r"\s+", "", str(s or "")).strip().lower()
 
 
-def _expense_sig(vendor_nif, vendor_name, date, total, invoice_number="") -> str:
+def _norm_inv(s) -> str:
+    return re.sub(r"[^a-z0-9]", "", str(s or "").strip().lower())
+
+
+def _expense_sigs(vendor_nif, vendor_name, date, total, invoice_number="") -> set:
     who = _norm_txt(vendor_nif) or _norm_txt(vendor_name)
-    inv = _norm_txt(invoice_number)
+    inv = _norm_inv(invoice_number)
     try:
         tot = round(float(total or 0), 2)
     except Exception:
         tot = 0.0
+    sigs = set()
     if who and inv:
-        return f"{who}|inv:{inv}"
-    return f"{who}|{str(date or '').strip()}|{tot}"
+        sigs.add(f"{who}|inv:{inv}")
+    if who and (date or tot):
+        sigs.add(f"{who}|{str(date or '').strip()}|{tot}")
+    return sigs
 
 
 def _empty_extracted() -> dict:
@@ -2097,11 +2104,12 @@ async def scan_expense(file: UploadFile = File(...), user=Depends(get_current_us
     dup_of = None
     try:
         _cid = await active_cid(user)
-        sig = _expense_sig(extracted.get("vendor_nif"), extracted.get("vendor_name"), extracted.get("date"), extracted.get("total"), extracted.get("invoice_number"))
-        async for d in db.expenses.find({"user_id": user["id"], "company_id": _cid}, {"_id": 0, "vendor_nif": 1, "vendor_name": 1, "date": 1, "total": 1, "invoice_number": 1, "id": 1}):
-            if _expense_sig(d.get("vendor_nif"), d.get("vendor_name"), d.get("date"), d.get("total"), d.get("invoice_number")) == sig:
-                dup_of = d.get("id")
-                break
+        new_sigs = _expense_sigs(extracted.get("vendor_nif"), extracted.get("vendor_name"), extracted.get("date"), extracted.get("total"), extracted.get("invoice_number"))
+        if new_sigs:
+            async for d in db.expenses.find({"user_id": user["id"], "company_id": _cid}, {"_id": 0, "vendor_nif": 1, "vendor_name": 1, "date": 1, "total": 1, "invoice_number": 1, "id": 1}):
+                if _expense_sigs(d.get("vendor_nif"), d.get("vendor_name"), d.get("date"), d.get("total"), d.get("invoice_number")) & new_sigs:
+                    dup_of = d.get("id")
+                    break
     except Exception:
         pass
     return {"attachment_path": stored_path, "extracted": extracted, "duplicate": bool(dup_of)}
@@ -2138,10 +2146,9 @@ async def scan_expense_batch(files: List[UploadFile] = File(...), user=Depends(g
         raise HTTPException(status_code=400, detail="Máximo 15 archivos por lote")
 
     cid = await active_cid(user)
-    existing_sigs = {}
+    existing_sig_set = set()
     async for d in db.expenses.find({"user_id": user["id"], "company_id": cid}, {"_id": 0, "vendor_nif": 1, "vendor_name": 1, "date": 1, "total": 1, "invoice_number": 1, "id": 1}):
-        sig = _expense_sig(d.get("vendor_nif"), d.get("vendor_name"), d.get("date"), d.get("total"), d.get("invoice_number"))
-        existing_sigs.setdefault(sig, d.get("id"))
+        existing_sig_set |= _expense_sigs(d.get("vendor_nif"), d.get("vendor_name"), d.get("date"), d.get("total"), d.get("invoice_number"))
 
     MAX_PAGES_TOTAL = 25
     error_items = []
@@ -2199,13 +2206,13 @@ async def scan_expense_batch(files: List[UploadFile] = File(...), user=Depends(g
         if err or ex is None:
             items.append({"id": str(uuid.uuid4()), "filename": it["filename"], "page": it.get("page", 1), "attachment_path": it["stored_path"], "extracted": _empty_extracted(), "duplicate": False, "duplicate_type": None, "error": err or "Error"})
             continue
-        sig = _expense_sig(ex.get("vendor_nif"), ex.get("vendor_name"), ex.get("date"), ex.get("total"), ex.get("invoice_number"))
+        sigs = _expense_sigs(ex.get("vendor_nif"), ex.get("vendor_name"), ex.get("date"), ex.get("total"), ex.get("invoice_number"))
         dup_type = None
-        if sig in existing_sigs:
+        if sigs and (sigs & existing_sig_set):
             dup_type = "existing"
-        elif sig in batch_seen:
+        elif sigs and (sigs & batch_seen):
             dup_type = "batch"
-        batch_seen.add(sig)
+        batch_seen |= sigs
         items.append({"id": str(uuid.uuid4()), "filename": it["filename"], "page": it.get("page", 1), "attachment_path": it["stored_path"], "extracted": ex, "duplicate": bool(dup_type), "duplicate_type": dup_type, "error": None})
 
     return {"items": items, "count": len(items)}
