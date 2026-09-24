@@ -18,6 +18,7 @@ import {
 } from "@/components/ui/select";
 import {
   Plus, Trash2, Receipt, Loader2, ScanLine, FileText, Sparkles, Paperclip, Pencil, Search,
+  AlertTriangle, Files, X,
 } from "lucide-react";
 
 const IVA_OPTIONS = ["21", "10", "4", "0"];
@@ -26,7 +27,7 @@ const CATEGORIES = ["General", "Suministros", "Material", "Servicios", "Alquiler
 const emptyForm = () => ({
   date: new Date().toISOString().slice(0, 10),
   vendor_name: "", vendor_nif: "", description: "", category: "General",
-  base_amount: "", iva_rate: "21", attachment_path: "", save_provider: false,
+  base_amount: "", iva_rate: "21", invoice_number: "", attachment_path: "", save_provider: false,
 });
 
 export default function Expenses() {
@@ -42,6 +43,9 @@ export default function Expenses() {
   const [previewUrl, setPreviewUrl] = useState("");
   const [previewType, setPreviewType] = useState("");
   const fileRef = useRef(null);
+  const [batchOpen, setBatchOpen] = useState(false);
+  const [batchItems, setBatchItems] = useState([]);
+  const [batchSaving, setBatchSaving] = useState(false);
 
   const load = () => {
     setLoading(true);
@@ -74,6 +78,7 @@ export default function Expenses() {
       date: exp.date, vendor_name: exp.vendor_name || "", vendor_nif: exp.vendor_nif || "",
       description: exp.description || "", category: CATEGORIES.includes(exp.category) ? exp.category : "General",
       base_amount: String(exp.base ?? exp.base_amount ?? ""), iva_rate: String(exp.iva_rate),
+      invoice_number: exp.invoice_number || "",
       attachment_path: exp.attachment_path || "", save_provider: false,
     });
     if (exp.attachment_path) loadPreview(exp.attachment_path);
@@ -81,35 +86,98 @@ export default function Expenses() {
   };
 
   const onScanFile = async (e) => {
-    const file = e.target.files?.[0];
+    const files = Array.from(e.target.files || []);
     if (fileRef.current) fileRef.current.value = "";
-    if (!file) return;
+    if (files.length === 0) return;
+    if (files.length > 15) { toast.error("Máximo 15 archivos por lote"); return; }
     setScanning(true);
     try {
-      const fd = new FormData();
-      fd.append("file", file);
-      const { data } = await api.post("/expenses/scan", fd, { headers: { "Content-Type": "multipart/form-data" } });
-      const ex = data.extracted || {};
-      clearPreview();
-      setEditingId(null);
-      setForm({
-        date: ex.date || new Date().toISOString().slice(0, 10),
-        vendor_name: ex.vendor_name || "",
-        vendor_nif: ex.vendor_nif || "",
-        description: ex.description || "",
-        category: CATEGORIES.includes(ex.category) ? ex.category : "General",
-        base_amount: ex.base_amount ? String(ex.base_amount) : "",
-        iva_rate: IVA_OPTIONS.includes(String(ex.iva_rate)) ? String(ex.iva_rate) : "21",
-        attachment_path: data.attachment_path || "",
-        save_provider: false,
-      });
-      loadPreview(data.attachment_path);
-      setOpen(true);
-      toast.success("Documento analizado. Revisa los datos y guarda.");
+      if (files.length === 1) {
+        const fd = new FormData();
+        fd.append("file", files[0]);
+        const { data } = await api.post("/expenses/scan", fd, { headers: { "Content-Type": "multipart/form-data" } });
+        const ex = data.extracted || {};
+        clearPreview();
+        setEditingId(null);
+        setForm({
+          date: ex.date || new Date().toISOString().slice(0, 10),
+          vendor_name: ex.vendor_name || "",
+          vendor_nif: ex.vendor_nif || "",
+          description: ex.description || "",
+          category: CATEGORIES.includes(ex.category) ? ex.category : "General",
+          base_amount: ex.base_amount ? String(ex.base_amount) : "",
+          iva_rate: IVA_OPTIONS.includes(String(ex.iva_rate)) ? String(ex.iva_rate) : "21",
+          invoice_number: ex.invoice_number || "",
+          attachment_path: data.attachment_path || "",
+          save_provider: false,
+        });
+        loadPreview(data.attachment_path);
+        setOpen(true);
+        if (data.duplicate) toast.warning("Posible duplicado: ya existe un gasto igual guardado. Revísalo antes de guardar.");
+        else toast.success("Documento analizado. Revisa los datos y guarda.");
+      } else {
+        const fd = new FormData();
+        files.forEach((f) => fd.append("files", f));
+        const { data } = await api.post("/expenses/scan-batch", fd, { headers: { "Content-Type": "multipart/form-data" } });
+        const items = (data.items || []).map((it) => {
+          const ex = it.extracted || {};
+          return {
+            key: it.id,
+            include: !it.duplicate && !it.error,
+            duplicate: !!it.duplicate,
+            duplicate_type: it.duplicate_type,
+            error: it.error || null,
+            filename: it.filename,
+            page: it.page,
+            attachment_path: it.attachment_path || "",
+            date: ex.date || new Date().toISOString().slice(0, 10),
+            vendor_name: ex.vendor_name || "",
+            vendor_nif: ex.vendor_nif || "",
+            description: ex.description || "",
+            category: CATEGORIES.includes(ex.category) ? ex.category : "General",
+            base_amount: ex.base_amount ? String(ex.base_amount) : "",
+            iva_rate: IVA_OPTIONS.includes(String(ex.iva_rate)) ? String(ex.iva_rate) : "21",
+            invoice_number: ex.invoice_number || "",
+          };
+        });
+        setBatchItems(items);
+        setBatchOpen(true);
+        const dups = items.filter((i) => i.duplicate).length;
+        toast.success(`${items.length} documento(s) analizados${dups ? ` · ${dups} posible(s) duplicado(s)` : ""}`);
+      }
     } catch (err) {
       toast.error(formatApiErrorDetail(err.response?.data?.detail) || "No se pudo escanear");
     } finally {
       setScanning(false);
+    }
+  };
+
+  const updateBatchItem = (key, patch) => setBatchItems((arr) => arr.map((i) => (i.key === key ? { ...i, ...patch } : i)));
+  const removeBatchItem = (key) => setBatchItems((arr) => arr.filter((i) => i.key !== key));
+  const batchRowTotal = (i) => (Number(i.base_amount) || 0) * (1 + Number(i.iva_rate) / 100);
+
+  const saveBatch = async () => {
+    const toSave = batchItems.filter((i) => i.include && !i.error);
+    if (toSave.length === 0) { toast.error("Marca al menos un gasto válido para guardar"); return; }
+    const invalid = toSave.filter((i) => !i.vendor_name.trim() || !(Number(i.base_amount) > 0));
+    if (invalid.length) { toast.error("Revisa: hay gastos sin proveedor o sin base imponible"); return; }
+    setBatchSaving(true);
+    try {
+      const items = toSave.map((i) => ({
+        date: i.date, vendor_name: i.vendor_name, vendor_nif: i.vendor_nif,
+        description: i.description, category: i.category,
+        base_amount: Number(i.base_amount), iva_rate: Number(i.iva_rate),
+        invoice_number: i.invoice_number, attachment_path: i.attachment_path,
+      }));
+      const { data } = await api.post("/expenses/bulk", { items });
+      toast.success(`${data.created} gasto(s) guardados`);
+      setBatchOpen(false);
+      setBatchItems([]);
+      load();
+    } catch (e) {
+      toast.error(formatApiErrorDetail(e.response?.data?.detail) || "No se pudieron guardar");
+    } finally {
+      setBatchSaving(false);
     }
   };
 
@@ -144,7 +212,7 @@ export default function Expenses() {
     setSaving(true);
     const payload = {
       date: form.date, vendor_name: form.vendor_name, vendor_nif: form.vendor_nif,
-      description: form.description, category: form.category,
+      description: form.description, category: form.category, invoice_number: form.invoice_number,
       base_amount: base, iva_rate: Number(form.iva_rate), attachment_path: form.attachment_path,
     };
     try {
@@ -180,10 +248,10 @@ export default function Expenses() {
       <div className="flex items-center justify-between mb-6 gap-4 flex-wrap">
         <div>
           <h1 className="font-display text-[28px] font-semibold tracking-tight text-slate-900">Gastos</h1>
-          <p className="text-sm text-slate-500 mt-0.5">Escanea tickets y facturas de compra o añádelos a mano</p>
+          <p className="text-sm text-slate-500 mt-0.5">Escanea uno o varios tickets y facturas a la vez (imágenes o PDF) o añádelos a mano</p>
         </div>
         <div className="flex items-center gap-2">
-          <input ref={fileRef} type="file" accept="image/*,application/pdf" onChange={onScanFile} className="hidden" data-testid="scan-file-input" />
+          <input ref={fileRef} type="file" multiple accept="image/*,application/pdf" onChange={onScanFile} className="hidden" data-testid="scan-file-input" />
           <Button onClick={() => fileRef.current?.click()} disabled={scanning} className="bg-[#0052FF] hover:bg-[#0040CC] text-white rounded-xl shadow-[0_4px_14px_0_rgba(0,82,255,0.39)] transition-all hover:-translate-y-0.5 active:scale-95" data-testid="scan-button">
             {scanning ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <ScanLine className="w-4 h-4 mr-2" strokeWidth={1.5} />}
             {scanning ? "Analizando…" : "Escanear con IA"}
@@ -310,7 +378,10 @@ export default function Expenses() {
                   </div>
                 </div>
               </div>
-              <div className="space-y-2"><Label>Descripción</Label><Input value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} data-testid="expense-description" /></div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="space-y-2"><Label>Descripción</Label><Input value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} data-testid="expense-description" /></div>
+                <div className="space-y-2"><Label>Nº factura</Label><Input value={form.invoice_number} onChange={(e) => setForm({ ...form, invoice_number: e.target.value })} placeholder="Opcional" data-testid="expense-invoice-number" /></div>
+              </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="space-y-2"><Label>Base imponible (€)</Label><Input type="number" step="0.01" value={form.base_amount} onChange={(e) => setForm({ ...form, base_amount: e.target.value })} data-testid="expense-base" /></div>
                 <div className="space-y-2">
@@ -338,6 +409,74 @@ export default function Expenses() {
             <Button variant="outline" onClick={() => { setOpen(false); clearPreview(); }} className="border-slate-200">Cancelar</Button>
             <Button onClick={save} disabled={saving} className="bg-[#0052FF] hover:bg-[#0040CC] text-white rounded-xl shadow-[0_4px_14px_0_rgba(0,82,255,0.39)] transition-all hover:-translate-y-0.5 active:scale-95" data-testid="save-expense">
               {saving && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}{editingId ? "Guardar cambios" : "Guardar gasto"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={batchOpen} onOpenChange={(v) => { setBatchOpen(v); if (!v) setBatchItems([]); }}>
+        <DialogContent className="max-w-5xl max-h-[92vh] overflow-y-auto" data-testid="batch-dialog">
+          <DialogHeader>
+            <DialogTitle className="font-display flex items-center gap-2">
+              <Files className="w-4 h-4 text-[#0052FF]" strokeWidth={1.5} /> Revisar gastos escaneados
+            </DialogTitle>
+            <p className="text-sm text-slate-500">
+              {batchItems.length} documento(s) detectado(s). Revisa, categoriza y guarda. Los posibles duplicados aparecen desmarcados por defecto.
+            </p>
+          </DialogHeader>
+
+          <div className="space-y-3">
+            {batchItems.map((it) => (
+              <div key={it.key} className={`rounded-xl border p-4 ${it.error ? "border-red-200 bg-red-50/40" : it.duplicate ? "border-amber-200 bg-amber-50/40" : "border-slate-200"}`} data-testid={`batch-item-${it.key}`}>
+                <div className="flex items-center justify-between mb-3 gap-3">
+                  <div className="flex items-center gap-2 min-w-0">
+                    {!it.error && (
+                      <Checkbox checked={it.include} onCheckedChange={(v) => updateBatchItem(it.key, { include: !!v })} data-testid={`batch-include-${it.key}`} />
+                    )}
+                    <span className="text-xs text-slate-500 truncate">{it.filename}{it.page ? ` · pág. ${it.page}` : ""}</span>
+                    {it.duplicate && (
+                      <span className="inline-flex items-center gap-1 text-[11px] font-medium text-amber-700 bg-amber-100 px-2 py-0.5 rounded-full whitespace-nowrap"><AlertTriangle className="w-3 h-3" /> {it.duplicate_type === "existing" ? "Ya existe guardada" : "Duplicada en el lote"}</span>
+                    )}
+                    {it.error && (
+                      <span className="inline-flex items-center gap-1 text-[11px] font-medium text-red-700 bg-red-100 px-2 py-0.5 rounded-full whitespace-nowrap"><AlertTriangle className="w-3 h-3" /> {it.error}</span>
+                    )}
+                  </div>
+                  <Button variant="ghost" size="icon" className="h-7 w-7 text-slate-400 hover:text-red-600 shrink-0" onClick={() => removeBatchItem(it.key)} data-testid={`batch-remove-${it.key}`}><X className="w-4 h-4" /></Button>
+                </div>
+                {!it.error && (
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                    <div className="space-y-1"><Label className="text-[11px] text-slate-500">Fecha</Label><Input type="date" value={it.date} onChange={(e) => updateBatchItem(it.key, { date: e.target.value })} className="h-9" /></div>
+                    <div className="space-y-1 col-span-2"><Label className="text-[11px] text-slate-500">Proveedor</Label><Input value={it.vendor_name} onChange={(e) => updateBatchItem(it.key, { vendor_name: e.target.value })} className="h-9" data-testid={`batch-vendor-${it.key}`} /></div>
+                    <div className="space-y-1"><Label className="text-[11px] text-slate-500">NIF/CIF</Label><Input value={it.vendor_nif} onChange={(e) => updateBatchItem(it.key, { vendor_nif: e.target.value })} className="h-9" /></div>
+                    <div className="space-y-1">
+                      <Label className="text-[11px] text-slate-500">Categoría</Label>
+                      <Select value={it.category} onValueChange={(v) => updateBatchItem(it.key, { category: v })}>
+                        <SelectTrigger className="h-9" data-testid={`batch-category-${it.key}`}><SelectValue /></SelectTrigger>
+                        <SelectContent>{CATEGORIES.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}</SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-1">
+                      <Label className="text-[11px] text-slate-500">IVA</Label>
+                      <Select value={it.iva_rate} onValueChange={(v) => updateBatchItem(it.key, { iva_rate: v })}>
+                        <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
+                        <SelectContent>{IVA_OPTIONS.map((o) => <SelectItem key={o} value={o}>{o}%</SelectItem>)}</SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-1"><Label className="text-[11px] text-slate-500">Base (€)</Label><Input type="number" step="0.01" value={it.base_amount} onChange={(e) => updateBatchItem(it.key, { base_amount: e.target.value })} className="h-9" data-testid={`batch-base-${it.key}`} /></div>
+                    <div className="space-y-1"><Label className="text-[11px] text-slate-500">Total</Label><div className="h-9 flex items-center px-2 text-sm font-semibold tabular text-slate-900">{eur(batchRowTotal(it))}</div></div>
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+
+          <DialogFooter className="gap-2">
+            <div className="mr-auto text-sm text-slate-500 flex items-center" data-testid="batch-selected-count">
+              {batchItems.filter((i) => i.include && !i.error).length} seleccionado(s) para guardar
+            </div>
+            <Button variant="outline" onClick={() => { setBatchOpen(false); setBatchItems([]); }} className="border-slate-200">Cancelar</Button>
+            <Button onClick={saveBatch} disabled={batchSaving} className="bg-[#0052FF] hover:bg-[#0040CC] text-white rounded-xl shadow-[0_4px_14px_0_rgba(0,82,255,0.39)] transition-all hover:-translate-y-0.5 active:scale-95" data-testid="save-batch">
+              {batchSaving && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}Guardar seleccionados
             </Button>
           </DialogFooter>
         </DialogContent>

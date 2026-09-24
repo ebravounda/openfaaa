@@ -7,18 +7,23 @@ logger = logging.getLogger(__name__)
 EMERGENT_LLM_KEY = os.environ.get("EMERGENT_LLM_KEY")
 
 SYSTEM_MSG = (
-    "Eres un asistente experto en contabilidad y facturación española. "
-    "Recibes la imagen de un ticket o factura de compra/gasto. "
-    "Extrae los datos y responde EXCLUSIVAMENTE con un objeto JSON válido, sin texto adicional "
-    "ni bloques de código. Usa estas claves exactas:\n"
-    '{"vendor_name": string, "vendor_nif": string, "date": "YYYY-MM-DD", '
+    "Eres un experto contable español especializado en leer facturas y tickets de gasto con MÁXIMA precisión. "
+    "Recibes la imagen de UNA sola factura o ticket de compra. Analízala con seriedad y cuidado, revisando "
+    "importes, fechas, NIF y número de factura. Responde EXCLUSIVAMENTE con un objeto JSON válido, sin texto "
+    "adicional ni bloques de código. Usa estas claves exactas:\n"
+    '{"vendor_name": string, "vendor_nif": string, "invoice_number": string, "date": "YYYY-MM-DD", '
     '"description": string, "category": string, "base_amount": number, '
     '"iva_rate": number, "total": number}\n'
-    "Reglas: 'category' debe ser uno de: General, Suministros, Material, Servicios, Alquiler, "
-    "Software, Transporte, Otros. 'iva_rate' debe ser uno de: 21, 10, 4, 0. "
-    "'base_amount' es la base imponible (sin IVA) y 'total' el importe total con IVA, ambos como número decimal "
-    "con punto. Si un dato no aparece, usa cadena vacía para textos y 0 para números. "
-    "Si solo ves el total con IVA, calcula la base según el tipo de IVA detectado."
+    "Reglas estrictas:\n"
+    "- 'vendor_name': el emisor/proveedor de la factura (quien cobra), NO el cliente.\n"
+    "- 'vendor_nif': NIF/CIF del proveedor en formato español (p.ej. B12345678). Si no aparece, cadena vacía.\n"
+    "- 'invoice_number': el número o serie de la factura tal cual aparece; si no hay, cadena vacía.\n"
+    "- 'date': fecha de emisión en formato YYYY-MM-DD.\n"
+    "- 'category' debe ser uno de: General, Suministros, Material, Servicios, Alquiler, Software, Transporte, Otros.\n"
+    "- 'iva_rate' debe ser uno de: 21, 10, 4, 0.\n"
+    "- 'base_amount' es la base imponible (sin IVA) y 'total' el importe total con IVA, ambos como número decimal con punto.\n"
+    "- Verifica la coherencia: base_amount + IVA debe aproximarse al total. Si solo ves el total con IVA, calcula la base según el tipo detectado.\n"
+    "- Si un dato no aparece con claridad, usa cadena vacía para textos y 0 para números. NO inventes datos."
 )
 
 
@@ -54,7 +59,7 @@ async def extract_expense(image_base64: str) -> dict:
         data = _parse_json(text)
     except Exception as e:
         logger.error(f"OCR parse error: {e} | raw: {text[:500]}")
-        return {"vendor_name": "", "vendor_nif": "", "date": "", "description": "",
+        return {"vendor_name": "", "vendor_nif": "", "invoice_number": "", "date": "", "description": "",
                 "category": "General", "base_amount": 0, "iva_rate": 21, "total": 0}
 
     def num(v):
@@ -69,6 +74,7 @@ async def extract_expense(image_base64: str) -> dict:
     return {
         "vendor_name": str(data.get("vendor_name", "") or ""),
         "vendor_nif": str(data.get("vendor_nif", "") or ""),
+        "invoice_number": str(data.get("invoice_number", "") or ""),
         "date": str(data.get("date", "") or ""),
         "description": str(data.get("description", "") or ""),
         "category": str(data.get("category", "General") or "General"),

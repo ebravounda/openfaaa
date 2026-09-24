@@ -99,7 +99,12 @@ class ExpenseInput(BaseModel):
     category: str = "General"
     base_amount: float = 0.0
     iva_rate: float = 21
+    invoice_number: str = ""
     attachment_path: str = ""
+
+
+class ExpenseBulkInput(BaseModel):
+    items: List[ExpenseInput]
 
 
 class CompanyInput(BaseModel):
@@ -293,6 +298,27 @@ def compute_expense(exp: dict) -> dict:
     exp["iva_amount"] = iva_amount
     exp["total"] = round(base + iva_amount, 2)
     return exp
+
+
+def _norm_txt(s) -> str:
+    return re.sub(r"\s+", "", str(s or "")).strip().lower()
+
+
+def _expense_sig(vendor_nif, vendor_name, date, total, invoice_number="") -> str:
+    who = _norm_txt(vendor_nif) or _norm_txt(vendor_name)
+    inv = _norm_txt(invoice_number)
+    try:
+        tot = round(float(total or 0), 2)
+    except Exception:
+        tot = 0.0
+    if who and inv:
+        return f"{who}|inv:{inv}"
+    return f"{who}|{str(date or '').strip()}|{tot}"
+
+
+def _empty_extracted() -> dict:
+    return {"vendor_name": "", "vendor_nif": "", "invoice_number": "", "date": "",
+            "description": "", "category": "General", "base_amount": 0, "iva_rate": 21, "total": 0}
 
 
 def quarter_of(d: str) -> int:
@@ -2068,7 +2094,139 @@ async def scan_expense(file: UploadFile = File(...), user=Depends(get_current_us
         logger.error(f"OCR failed: {e}")
         raise HTTPException(status_code=502, detail="No se pudo analizar el documento con IA")
 
-    return {"attachment_path": stored_path, "extracted": extracted}
+    dup_of = None
+    try:
+        _cid = await active_cid(user)
+        sig = _expense_sig(extracted.get("vendor_nif"), extracted.get("vendor_name"), extracted.get("date"), extracted.get("total"), extracted.get("invoice_number"))
+        async for d in db.expenses.find({"user_id": user["id"], "company_id": _cid}, {"_id": 0, "vendor_nif": 1, "vendor_name": 1, "date": 1, "total": 1, "invoice_number": 1, "id": 1}):
+            if _expense_sig(d.get("vendor_nif"), d.get("vendor_name"), d.get("date"), d.get("total"), d.get("invoice_number")) == sig:
+                dup_of = d.get("id")
+                break
+    except Exception:
+        pass
+    return {"attachment_path": stored_path, "extracted": extracted, "duplicate": bool(dup_of)}
+
+
+async def _prep_pages_from_file(data: bytes, ext: str, ct: str, max_pages: int):
+    """Return list of (page_no, image_b64). Multi-page PDFs yield one entry per page."""
+    pages = []
+    is_pdf = ext == "pdf" or "pdf" in ct
+    if is_pdf:
+        import fitz
+        doc = fitz.open(stream=data, filetype="pdf")
+        try:
+            for pno in range(min(doc.page_count, max_pages)):
+                page = doc.load_page(pno)
+                pix = page.get_pixmap(dpi=110)
+                img_bytes = pix.tobytes("jpeg", jpg_quality=75)
+                pages.append((pno + 1, base64.b64encode(img_bytes).decode("utf-8")))
+        finally:
+            doc.close()
+    else:
+        pages.append((1, base64.b64encode(data).decode("utf-8")))
+    return pages
+
+
+@api.post("/expenses/scan-batch")
+async def scan_expense_batch(files: List[UploadFile] = File(...), user=Depends(get_current_user)):
+    plan = await plan_for_user(user)
+    if not plan["features"].get("ocr"):
+        raise _plan_denied(plan, "ocr")
+    if not files:
+        raise HTTPException(status_code=400, detail="No se han recibido archivos")
+    if len(files) > 15:
+        raise HTTPException(status_code=400, detail="Máximo 15 archivos por lote")
+
+    cid = await active_cid(user)
+    existing_sigs = {}
+    async for d in db.expenses.find({"user_id": user["id"], "company_id": cid}, {"_id": 0, "vendor_nif": 1, "vendor_name": 1, "date": 1, "total": 1, "invoice_number": 1, "id": 1}):
+        sig = _expense_sig(d.get("vendor_nif"), d.get("vendor_name"), d.get("date"), d.get("total"), d.get("invoice_number"))
+        existing_sigs.setdefault(sig, d.get("id"))
+
+    MAX_PAGES_TOTAL = 25
+    error_items = []
+    to_process = []
+    for f in files:
+        data = await f.read()
+        if not data:
+            continue
+        if len(data) > 12 * 1024 * 1024:
+            error_items.append({"id": str(uuid.uuid4()), "filename": f.filename, "page": 1, "attachment_path": "", "extracted": _empty_extracted(), "duplicate": False, "duplicate_type": None, "error": "El archivo supera 12 MB"})
+            continue
+        ct = (f.content_type or "").lower()
+        ext = (f.filename or "").split(".")[-1].lower() if "." in (f.filename or "") else "bin"
+        store_ct = MIME_TYPES.get(ext, ct or "application/octet-stream")
+        stored_path = ""
+        try:
+            path = f"{APP_NAME}/uploads/{user['id']}/{uuid.uuid4()}.{ext}"
+            result = await put_object(path, data, store_ct)
+            stored_path = result["path"]
+            await db.files.insert_one({
+                "id": str(uuid.uuid4()), "user_id": user["id"], "company_id": cid, "storage_path": stored_path,
+                "original_filename": f.filename, "content_type": store_ct,
+                "is_deleted": False, "created_at": datetime.now(timezone.utc).isoformat(),
+            })
+        except Exception as e:
+            logger.error(f"Storage upload failed (batch): {e}")
+        remaining = MAX_PAGES_TOTAL - len(to_process)
+        if remaining <= 0:
+            break
+        try:
+            pages = await _prep_pages_from_file(data, ext, ct, remaining)
+        except Exception as e:
+            logger.error(f"Image prep failed (batch): {e}")
+            error_items.append({"id": str(uuid.uuid4()), "filename": f.filename, "page": 1, "attachment_path": stored_path, "extracted": _empty_extracted(), "duplicate": False, "duplicate_type": None, "error": "No se pudo procesar el documento"})
+            continue
+        for (pno, b64) in pages:
+            to_process.append({"filename": f.filename, "stored_path": stored_path, "page": pno, "image_b64": b64})
+
+    sem = asyncio.Semaphore(4)
+
+    async def _run_one(it):
+        async with sem:
+            try:
+                ex = await asyncio.wait_for(extract_expense(it["image_b64"]), timeout=90)
+                return (it, ex, None)
+            except Exception as e:
+                logger.error(f"OCR batch item failed: {e}")
+                return (it, None, "No se pudo analizar con IA")
+
+    outcomes = await asyncio.gather(*[_run_one(p) for p in to_process]) if to_process else []
+
+    items = list(error_items)
+    batch_seen = set()
+    for (it, ex, err) in outcomes:
+        if err or ex is None:
+            items.append({"id": str(uuid.uuid4()), "filename": it["filename"], "page": it.get("page", 1), "attachment_path": it["stored_path"], "extracted": _empty_extracted(), "duplicate": False, "duplicate_type": None, "error": err or "Error"})
+            continue
+        sig = _expense_sig(ex.get("vendor_nif"), ex.get("vendor_name"), ex.get("date"), ex.get("total"), ex.get("invoice_number"))
+        dup_type = None
+        if sig in existing_sigs:
+            dup_type = "existing"
+        elif sig in batch_seen:
+            dup_type = "batch"
+        batch_seen.add(sig)
+        items.append({"id": str(uuid.uuid4()), "filename": it["filename"], "page": it.get("page", 1), "attachment_path": it["stored_path"], "extracted": ex, "duplicate": bool(dup_type), "duplicate_type": dup_type, "error": None})
+
+    return {"items": items, "count": len(items)}
+
+
+@api.post("/expenses/bulk")
+async def create_expenses_bulk(payload: ExpenseBulkInput, user=Depends(get_current_user)):
+    if not payload.items:
+        raise HTTPException(status_code=400, detail="No hay gastos que guardar")
+    cid = await active_cid(user)
+    now = datetime.now(timezone.utc).isoformat()
+    docs = []
+    for data in payload.items:
+        doc = data.model_dump()
+        doc.update({"id": str(uuid.uuid4()), "user_id": user["id"], "company_id": cid, "created_at": now})
+        compute_expense(doc)
+        docs.append(doc)
+    await db.expenses.insert_many(docs)
+    for d in docs:
+        d.pop("_id", None)
+    return {"created": len(docs), "items": docs}
 
 
 @api.get("/files/{path:path}")
