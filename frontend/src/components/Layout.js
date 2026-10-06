@@ -48,6 +48,9 @@ import {
   Wallet,
   Store,
   BarChart3,
+  Upload,
+  UserRound,
+  BadgeEuro,
   Menu,
   X,
 } from "lucide-react";
@@ -64,6 +67,7 @@ const baseNav = [
   { to: "/metodos-pago", label: "Métodos de pago", icon: CreditCard, testid: "nav-payment-methods" },
   { to: "/bancos", label: "Bancos", icon: Wallet, testid: "nav-banks" },
   { to: "/empresas", label: "Empresas", icon: Building2, testid: "nav-companies" },
+  { to: "/importar", label: "Importar", icon: Upload, testid: "nav-import" },
   { to: "/precios", label: "Planes", icon: Landmark, testid: "nav-pricing" },
   { to: "/configuracion", label: "Configuración", icon: Settings, testid: "nav-settings" },
 ];
@@ -82,8 +86,13 @@ export default function Layout({ children }) {
   const isAdmin = user?.role === "admin" && !user?.is_impersonating;
   const [posPlan, setPosPlan] = useState(false);
   const hasPos = isAdmin || !!user?.pos_enabled || posPlan;
+  const hasPayroll = isAdmin || !!user?.payroll_enabled;
   const nav = [...baseNav];
   if (hasPos) nav.splice(4, 0, { to: "/pos", label: "TPV", icon: Store, testid: "nav-pos" });
+  if (hasPayroll) {
+    nav.push({ to: "/trabajadores", label: "Trabajadores", icon: UserRound, testid: "nav-employees" });
+    nav.push({ to: "/nominas", label: "Nóminas", icon: BadgeEuro, testid: "nav-payroll" });
+  }
   if (isAdmin) nav.push({ to: "/admin", label: "Administración", icon: Shield, testid: "nav-admin" });
 
   const [usageWarn, setUsageWarn] = useState(null);

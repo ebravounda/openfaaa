@@ -2037,6 +2037,370 @@ async def create_contact(data: ContactInput, user=Depends(get_current_user)):
     return doc
 
 
+# ==================== Importador universal (Holded, NCS, etc.) ====================
+IMPORT_FIELDS = {
+    "contacts": [
+        {"key": "name", "label": "Nombre", "required": True, "aliases": ["name", "nombre", "cliente", "proveedor", "razon social", "razón social", "empresa", "razonsocial", "contacto", "contact", "nombre fiscal"]},
+        {"key": "nif", "label": "NIF/CIF", "aliases": ["nif", "cif", "dni", "nif/cif", "nif / cif", "n.i.f.", "vat", "vatnumber", "tax id", "identificacion", "identificación"]},
+        {"key": "email", "label": "Email", "aliases": ["email", "correo", "e-mail", "mail", "correo electronico", "correo electrónico"]},
+        {"key": "phone", "label": "Teléfono", "aliases": ["phone", "telefono", "teléfono", "tel", "movil", "móvil", "tlf", "mobile"]},
+        {"key": "address", "label": "Dirección", "aliases": ["address", "direccion", "dirección", "domicilio", "billing address"]},
+    ],
+    "expenses": [
+        {"key": "date", "label": "Fecha", "required": True, "aliases": ["date", "fecha", "fecha factura", "fecha emision", "fecha emisión", "issue date", "invoice date"]},
+        {"key": "vendor_name", "label": "Proveedor", "required": True, "aliases": ["vendor", "proveedor", "nombre", "razon social", "razón social", "contacto", "supplier", "emisor", "acreedor"]},
+        {"key": "vendor_nif", "label": "NIF proveedor", "aliases": ["nif", "cif", "nif proveedor", "n.i.f.", "vat", "tax id"]},
+        {"key": "invoice_number", "label": "Nº factura", "aliases": ["numero", "número", "num", "nº", "n factura", "num factura", "número factura", "numero factura", "invoice number", "doc", "documento", "factura"]},
+        {"key": "description", "label": "Descripción", "aliases": ["descripcion", "descripción", "concepto", "concept", "detalle", "description"]},
+        {"key": "category", "label": "Categoría", "aliases": ["categoria", "categoría", "category", "tipo", "cuenta"]},
+        {"key": "base_amount", "label": "Base imponible", "aliases": ["base", "base imponible", "subtotal", "neto", "importe", "net", "base amount"]},
+        {"key": "iva_rate", "label": "% IVA", "aliases": ["iva", "% iva", "iva %", "tipo iva", "vat", "vat %", "tax rate"]},
+        {"key": "total", "label": "Total", "aliases": ["total", "importe total", "total factura", "amount", "gross", "total amount"]},
+    ],
+    "invoices": [
+        {"key": "number", "label": "Nº factura", "aliases": ["numero", "número", "num", "nº", "num factura", "numero factura", "número factura", "invoice number", "doc", "documento", "factura", "serie/numero"]},
+        {"key": "issue_date", "label": "Fecha", "required": True, "aliases": ["date", "fecha", "fecha factura", "fecha emision", "fecha emisión", "issue date", "invoice date"]},
+        {"key": "client_name", "label": "Cliente", "required": True, "aliases": ["cliente", "client", "nombre", "razon social", "razón social", "contacto", "customer", "destinatario"]},
+        {"key": "client_nif", "label": "NIF cliente", "aliases": ["nif", "cif", "nif cliente", "n.i.f.", "vat", "tax id"]},
+        {"key": "concept", "label": "Concepto", "aliases": ["concepto", "descripcion", "descripción", "concept", "detalle", "description"]},
+        {"key": "base_amount", "label": "Base imponible", "aliases": ["base", "base imponible", "subtotal", "neto", "net", "importe", "base amount"]},
+        {"key": "iva_rate", "label": "% IVA", "aliases": ["iva", "% iva", "iva %", "tipo iva", "vat", "vat %", "tax rate"]},
+        {"key": "total", "label": "Total", "aliases": ["total", "importe total", "total factura", "amount", "gross", "total amount"]},
+        {"key": "status", "label": "Estado", "aliases": ["estado", "status", "cobrada", "pagada", "paid"]},
+    ],
+}
+
+
+def _num_es(s) -> float:
+    s = str(s or "").strip()
+    if not s:
+        return 0.0
+    s = s.replace("€", "").replace("%", "").replace(" ", "").replace("\u00a0", "")
+    if "," in s and "." in s:
+        s = s.replace(".", "").replace(",", ".")
+    elif "," in s:
+        s = s.replace(",", ".")
+    try:
+        return round(float(s), 2)
+    except Exception:
+        return 0.0
+
+
+def _date_es(s) -> str:
+    s = str(s or "").strip().split(" ")[0]
+    if not s:
+        return ""
+    if re.match(r"^\d{4}-\d{2}-\d{2}$", s):
+        return s
+    m = re.match(r"^(\d{1,2})[/\-.](\d{1,2})[/\-.](\d{2,4})$", s)
+    if m:
+        d, mo, y = m.groups()
+        if len(y) == 2:
+            y = "20" + y
+        return f"{y}-{int(mo):02d}-{int(d):02d}"
+    return s
+
+
+def _parse_table(raw: bytes, filename: str):
+    import io as _io, csv as _csv
+    fname = (filename or "").lower()
+    rows = []
+    if fname.endswith(".csv") or fname.endswith(".txt"):
+        text = raw.decode("utf-8-sig", errors="ignore")
+        sample = text[:4000]
+        delim = ";" if sample.count(";") >= sample.count(",") else ","
+        rows = [r for r in _csv.reader(_io.StringIO(text), delimiter=delim)]
+    elif fname.endswith(".xlsx") or fname.endswith(".xlsm"):
+        import openpyxl
+        wb = openpyxl.load_workbook(_io.BytesIO(raw), read_only=True, data_only=True)
+        ws = wb.active
+        for r in ws.iter_rows(values_only=True):
+            rows.append(["" if c is None else str(c) for c in r])
+    else:
+        raise HTTPException(status_code=400, detail="Formato no soportado. Sube un archivo .xlsx o .csv")
+    rows = [[(str(c) or "").strip() for c in r] for r in rows if any((str(c) or "").strip() for c in r)]
+    return rows
+
+
+@api.post("/import/preview")
+async def import_preview(file: UploadFile = File(...), entity: str = Query("contacts"), user=Depends(get_current_user)):
+    if entity not in IMPORT_FIELDS:
+        raise HTTPException(status_code=400, detail="Entidad no válida")
+    raw = await file.read()
+    rows = _parse_table(raw, file.filename or "")
+    if len(rows) < 1:
+        raise HTTPException(status_code=400, detail="El archivo está vacío.")
+    headers = rows[0]
+    data_rows = rows[1:1001]
+    hl = [h.lower().strip() for h in headers]
+    suggested = {}
+    for f in IMPORT_FIELDS[entity]:
+        for idx, h in enumerate(hl):
+            if h in f["aliases"] and f["key"] not in suggested:
+                suggested[f["key"]] = idx
+                break
+    fields = [{"key": f["key"], "label": f["label"], "required": f.get("required", False)} for f in IMPORT_FIELDS[entity]]
+    return {"headers": headers, "sample": data_rows[:6], "rows": data_rows, "fields": fields, "suggested": suggested, "total": len(data_rows)}
+
+
+class ImportCommit(BaseModel):
+    entity: str
+    kind: str = "client"
+    mapping: dict
+    rows: list
+
+
+@api.post("/import/commit")
+async def import_commit(payload: ImportCommit, user=Depends(get_current_user)):
+    entity = payload.entity
+    if entity not in IMPORT_FIELDS:
+        raise HTTPException(status_code=400, detail="Entidad no válida")
+    required = [f["key"] for f in IMPORT_FIELDS[entity] if f.get("required")]
+    m = {k: int(v) for k, v in (payload.mapping or {}).items() if v is not None and str(v) != ""}
+    for rk in required:
+        if rk not in m:
+            label = next((f["label"] for f in IMPORT_FIELDS[entity] if f["key"] == rk), rk)
+            raise HTTPException(status_code=400, detail=f"Debes asignar una columna al campo obligatorio '{label}'.")
+    cid = await active_cid(user)
+    now = datetime.now(timezone.utc).isoformat()
+
+    def g(row, key):
+        i = m.get(key)
+        return (row[i].strip() if (i is not None and i < len(row) and row[i] is not None) else "")
+
+    created = skipped = 0
+    errors = []
+
+    if entity == "contacts":
+        existing = await db.contacts.find({"user_id": user["id"], "company_id": cid}, {"_id": 0, "nif": 1, "name": 1}).to_list(10000)
+        seen_nif = {(c.get("nif") or "").upper() for c in existing if c.get("nif")}
+        seen_name = {(c.get("name") or "").lower() for c in existing if c.get("name")}
+        batch = []
+        for row in payload.rows:
+            name = g(row, "name")
+            if not name:
+                continue
+            nif = g(row, "nif"); nk = nif.upper(); nmk = name.lower()
+            if (nk and nk in seen_nif) or (not nk and nmk in seen_name):
+                skipped += 1
+                continue
+            if nk:
+                seen_nif.add(nk)
+            seen_name.add(nmk)
+            batch.append({"id": str(uuid.uuid4()), "user_id": user["id"], "company_id": cid, "name": name, "nif": nif,
+                          "email": g(row, "email"), "phone": g(row, "phone"), "address": g(row, "address"),
+                          "kind": payload.kind if payload.kind in ("client", "provider") else "client", "created_at": now})
+        if batch:
+            await db.contacts.insert_many(batch)
+            created = len(batch)
+
+    elif entity == "expenses":
+        seen = set()
+        async for d in db.expenses.find({"user_id": user["id"], "company_id": cid}, {"_id": 0, "vendor_nif": 1, "vendor_name": 1, "date": 1, "total": 1, "invoice_number": 1}):
+            seen |= _expense_sigs(d.get("vendor_nif"), d.get("vendor_name"), d.get("date"), d.get("total"), d.get("invoice_number"))
+        batch = []
+        for row in payload.rows:
+            vn = g(row, "vendor_name")
+            if not vn:
+                continue
+            iva = _num_es(g(row, "iva_rate")) or 21
+            base = _num_es(g(row, "base_amount"))
+            tot = _num_es(g(row, "total"))
+            if not base and tot:
+                base = round(tot / (1 + iva / 100), 2)
+            doc = {"id": str(uuid.uuid4()), "user_id": user["id"], "company_id": cid,
+                   "date": _date_es(g(row, "date")), "vendor_name": vn, "vendor_nif": g(row, "vendor_nif"),
+                   "invoice_number": g(row, "invoice_number"), "description": g(row, "description"),
+                   "category": g(row, "category") or "General", "base_amount": base, "iva_rate": iva,
+                   "attachment_path": "", "created_at": now}
+            compute_expense(doc)
+            sg = _expense_sigs(doc.get("vendor_nif"), doc["vendor_name"], doc["date"], doc["total"], doc["invoice_number"])
+            if sg & seen:
+                skipped += 1
+                continue
+            seen |= sg
+            batch.append(doc)
+        if batch:
+            await db.expenses.insert_many(batch)
+            created = len(batch)
+
+    elif entity == "invoices":
+        existing_nums = {d.get("number") for d in await db.invoices.find({"user_id": user["id"], "company_id": cid}, {"_id": 0, "number": 1}).to_list(50000)}
+        batch = []; auto = 0
+        for row in payload.rows:
+            cname = g(row, "client_name")
+            if not cname:
+                continue
+            iva = _num_es(g(row, "iva_rate")) or 21
+            base = _num_es(g(row, "base_amount")); tot = _num_es(g(row, "total"))
+            if not base and tot:
+                base = round(tot / (1 + iva / 100), 2)
+            issue = _date_es(g(row, "issue_date"))
+            num = g(row, "number")
+            if not num:
+                auto += 1
+                num = f"IMP-{(issue[:4] or '0000')}-{auto:04d}"
+            if num in existing_nums:
+                skipped += 1
+                continue
+            existing_nums.add(num)
+            st = (g(row, "status") or "").lower()
+            status = "paid" if any(k in st for k in ["pag", "cobr", "paid"]) else ("pending" if "pend" in st else "paid")
+            doc = {"id": str(uuid.uuid4()), "user_id": user["id"], "company_id": cid, "number": num,
+                   "issue_date": issue, "client": {"name": cname, "nif": g(row, "client_nif"), "address": "", "email": "", "phone": ""},
+                   "line_items": [{"description": g(row, "concept") or "Factura importada", "detail": "", "quantity": 1, "unit_price": base, "discount": 0, "iva_rate": iva, "iva_type": "general"}],
+                   "iva_rate": iva, "irpf_rate": 0, "recargo_equivalencia": False, "global_discount": 0,
+                   "status": status, "notes": "Importado", "series": "IMP", "invoice_type": "normal",
+                   "rectifies": "", "rectifies_number": "", "rectify_type": "I", "due_date": "", "period": "",
+                   "payment_method": "", "iban": "", "concept_label": "", "verifactu": None, "imported": True, "created_at": now}
+            compute_invoice(doc)
+            batch.append(doc)
+        if batch:
+            await db.invoices.insert_many(batch)
+            created = len(batch)
+
+    return {"created": created, "skipped": skipped, "errors": errors}
+
+
+# ==================== Trabajadores y Nóminas ====================
+class EmployeeInput(BaseModel):
+    name: str
+    dni: str = ""
+    naf: str = ""
+    email: str = ""
+    phone: str = ""
+    position: str = ""
+    contract_type: str = ""
+    start_date: str = ""
+    end_date: str = ""
+    monthly_gross: float = 0.0
+    irpf_rate: float = 0.0
+    ss_rate: float = 6.47
+    iban: str = ""
+    ss_group: str = ""
+    notes: str = ""
+    active: bool = True
+
+
+class PayslipInput(BaseModel):
+    employee_id: str
+    period: str
+    base_salary: float = 0.0
+    complements: float = 0.0
+    ss_rate: float = 6.47
+    irpf_rate: float = 0.0
+    company_ss_rate: float = 30.0
+    other_deductions: float = 0.0
+    notes: str = ""
+
+
+def compute_payslip(p: dict, employee: dict) -> dict:
+    base = float(p.get("base_salary") or 0)
+    comp = float(p.get("complements") or 0)
+    gross = round(base + comp, 2)
+    ss = round(gross * float(p.get("ss_rate") or 0) / 100, 2)
+    irpf = round(gross * float(p.get("irpf_rate") or 0) / 100, 2)
+    other = round(float(p.get("other_deductions") or 0), 2)
+    deductions = round(ss + irpf + other, 2)
+    net = round(gross - deductions, 2)
+    company_ss = round(gross * float(p.get("company_ss_rate") or 0) / 100, 2)
+    company_cost = round(gross + company_ss, 2)
+    p.update({"gross": gross, "ss_amount": ss, "irpf_amount": irpf, "other_deductions": other,
+              "deductions": deductions, "net": net, "company_ss": company_ss, "company_cost": company_cost})
+    return p
+
+
+async def _require_payroll(user):
+    if user.get("role") == "admin":
+        return
+    if user.get("payroll_enabled"):
+        return
+    raise HTTPException(status_code=403, detail="El módulo de Nóminas no está activado para tu cuenta. Contacta con el administrador.")
+
+
+@api.post("/employees")
+async def create_employee(data: EmployeeInput, user=Depends(get_current_user)):
+    await _require_payroll(user)
+    doc = data.model_dump()
+    doc.update({"id": str(uuid.uuid4()), "user_id": user["id"], "company_id": await active_cid(user), "created_at": datetime.now(timezone.utc).isoformat()})
+    await db.employees.insert_one(doc)
+    doc.pop("_id", None)
+    return doc
+
+
+@api.get("/employees")
+async def list_employees(user=Depends(get_current_user)):
+    await _require_payroll(user)
+    return await db.employees.find({"user_id": user["id"], "company_id": await active_cid(user)}, {"_id": 0}).sort("name", 1).to_list(2000)
+
+
+@api.patch("/employees/{emp_id}")
+async def update_employee(emp_id: str, data: EmployeeInput, user=Depends(get_current_user)):
+    await _require_payroll(user)
+    cid = await active_cid(user)
+    r = await db.employees.update_one({"id": emp_id, "user_id": user["id"], "company_id": cid}, {"$set": data.model_dump()})
+    if not r.matched_count:
+        raise HTTPException(status_code=404, detail="Trabajador no encontrado")
+    return await db.employees.find_one({"id": emp_id}, {"_id": 0})
+
+
+@api.delete("/employees/{emp_id}")
+async def delete_employee(emp_id: str, user=Depends(get_current_user)):
+    await _require_payroll(user)
+    await db.employees.delete_one({"id": emp_id, "user_id": user["id"], "company_id": await active_cid(user)})
+    return {"status": "ok"}
+
+
+@api.post("/payroll")
+async def create_payslip(data: PayslipInput, user=Depends(get_current_user)):
+    await _require_payroll(user)
+    cid = await active_cid(user)
+    emp = await db.employees.find_one({"id": data.employee_id, "user_id": user["id"], "company_id": cid}, {"_id": 0})
+    if not emp:
+        raise HTTPException(status_code=404, detail="Trabajador no encontrado")
+    doc = data.model_dump()
+    if not doc.get("base_salary"):
+        doc["base_salary"] = float(emp.get("monthly_gross") or 0)
+    if not doc.get("irpf_rate"):
+        doc["irpf_rate"] = float(emp.get("irpf_rate") or 0)
+    if not doc.get("ss_rate"):
+        doc["ss_rate"] = float(emp.get("ss_rate") or 6.47)
+    compute_payslip(doc, emp)
+    doc.update({"id": str(uuid.uuid4()), "user_id": user["id"], "company_id": cid, "employee_name": emp.get("name", ""), "created_at": datetime.now(timezone.utc).isoformat()})
+    await db.payslips.insert_one(doc)
+    doc.pop("_id", None)
+    return doc
+
+
+@api.get("/payroll")
+async def list_payslips(user=Depends(get_current_user)):
+    await _require_payroll(user)
+    return await db.payslips.find({"user_id": user["id"], "company_id": await active_cid(user)}, {"_id": 0}).sort("period", -1).to_list(2000)
+
+
+@api.delete("/payroll/{payslip_id}")
+async def delete_payslip(payslip_id: str, user=Depends(get_current_user)):
+    await _require_payroll(user)
+    await db.payslips.delete_one({"id": payslip_id, "user_id": user["id"], "company_id": await active_cid(user)})
+    return {"status": "ok"}
+
+
+@api.get("/payroll/{payslip_id}/pdf")
+async def payslip_pdf(payslip_id: str, user=Depends(get_current_user)):
+    await _require_payroll(user)
+    cid = await active_cid(user)
+    ps = await db.payslips.find_one({"id": payslip_id, "user_id": user["id"], "company_id": cid}, {"_id": 0})
+    if not ps:
+        raise HTTPException(status_code=404, detail="Nómina no encontrada")
+    emp = await db.employees.find_one({"id": ps["employee_id"], "user_id": user["id"], "company_id": cid}, {"_id": 0}) or {}
+    company = await active_company(user)
+    from pdf_service import build_payslip_pdf
+    pdf = build_payslip_pdf(ps, emp, company)
+    safe = (emp.get("name") or "trabajador").replace(" ", "_")
+    return Response(content=pdf, media_type="application/pdf",
+                    headers={"Content-Disposition": f'attachment; filename="nomina_{safe}_{ps.get("period", "")}.pdf"'})
+
+
 @api.delete("/contacts/{contact_id}")
 async def delete_contact(contact_id: str, user=Depends(get_current_user)):
     res = await db.contacts.delete_one({"id": contact_id, "user_id": user["id"]})

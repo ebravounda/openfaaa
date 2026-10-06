@@ -567,3 +567,81 @@ def build_goroky_invoice_pdf(invoice: dict, company: dict, qr_png: bytes = None,
     buf.seek(0)
     return buf.read()
 
+
+
+def _eur_es(v):
+    try:
+        return f"{float(v):,.2f} €".replace(",", "X").replace(".", ",").replace("X", ".")
+    except Exception:
+        return "0,00 €"
+
+
+def build_payslip_pdf(payslip: dict, employee: dict, company: dict) -> bytes:
+    buf = BytesIO()
+    doc = SimpleDocTemplate(buf, pagesize=A4, leftMargin=18 * mm, rightMargin=18 * mm, topMargin=16 * mm, bottomMargin=16 * mm)
+    styles = getSampleStyleSheet()
+    H = ParagraphStyle("H", parent=styles["Normal"], fontSize=15, leading=18, textColor=DARK, spaceAfter=2)
+    small = ParagraphStyle("s", parent=styles["Normal"], fontSize=8, leading=11, textColor=MUTED)
+    sect = ParagraphStyle("sec", parent=styles["Normal"], fontSize=10, textColor=DARK, spaceBefore=6, spaceAfter=3)
+    el = []
+    logo = _logo_flowable(company)
+    if logo:
+        el.append(logo)
+        el.append(Spacer(1, 6))
+    el.append(Paragraph("Recibo individual de salarios (Nómina)", H))
+    el.append(Paragraph(f"Periodo de liquidación: {payslip.get('period', '')}", small))
+    el.append(Spacer(1, 8))
+    emp_info = [
+        [Paragraph("<b>Empresa</b>", small), Paragraph("<b>Trabajador/a</b>", small)],
+        [Paragraph(f"{company.get('name', '')}<br/>NIF: {company.get('nif', '')}<br/>{company.get('address', '')}", small),
+         Paragraph(f"{employee.get('name', '')}<br/>DNI/NIE: {employee.get('dni', '')}<br/>NAF: {employee.get('naf', '')}<br/>{employee.get('position', '')} · {employee.get('contract_type', '')}", small)],
+    ]
+    t = Table(emp_info, colWidths=[87 * mm, 87 * mm])
+    t.setStyle(TableStyle([("BOX", (0, 0), (-1, -1), 0.5, BORDER), ("INNERGRID", (0, 0), (-1, -1), 0.5, BORDER),
+                           ("VALIGN", (0, 0), (-1, -1), "TOP"), ("BACKGROUND", (0, 0), (-1, 0), LIGHT),
+                           ("TOPPADDING", (0, 0), (-1, -1), 6), ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
+                           ("LEFTPADDING", (0, 0), (-1, -1), 8), ("RIGHTPADDING", (0, 0), (-1, -1), 8)]))
+    el.append(t)
+    el.append(Spacer(1, 10))
+
+    el.append(Paragraph("Devengos", sect))
+    dev = [["Concepto", "Importe"],
+           ["Salario base", _eur_es(payslip.get("base_salary", 0))],
+           ["Complementos / otros devengos", _eur_es(payslip.get("complements", 0))],
+           ["TOTAL DEVENGADO (Bruto)", _eur_es(payslip.get("gross", 0))]]
+    td = Table(dev, colWidths=[124 * mm, 50 * mm])
+    td.setStyle(TableStyle([("BACKGROUND", (0, 0), (-1, 0), LIGHT), ("FONTSIZE", (0, 0), (-1, -1), 9),
+                            ("LINEBELOW", (0, 0), (-1, -2), 0.4, BORDER), ("ALIGN", (1, 0), (1, -1), "RIGHT"),
+                            ("FONTNAME", (0, -1), (-1, -1), "Helvetica-Bold"), ("TOPPADDING", (0, 0), (-1, -1), 5),
+                            ("BOTTOMPADDING", (0, 0), (-1, -1), 5), ("LEFTPADDING", (0, 0), (-1, -1), 8), ("RIGHTPADDING", (0, 0), (-1, -1), 8)]))
+    el.append(td)
+    el.append(Spacer(1, 8))
+
+    el.append(Paragraph("Deducciones", sect))
+    ded = [["Deducción", "Importe"],
+           [f"Seguridad Social ({payslip.get('ss_rate', 0)}%)", _eur_es(payslip.get("ss_amount", 0))],
+           [f"Retención IRPF ({payslip.get('irpf_rate', 0)}%)", _eur_es(payslip.get("irpf_amount", 0))],
+           ["Otras deducciones", _eur_es(payslip.get("other_deductions", 0))],
+           ["TOTAL DEDUCCIONES", _eur_es(payslip.get("deductions", 0))]]
+    tde = Table(ded, colWidths=[124 * mm, 50 * mm])
+    tde.setStyle(TableStyle([("BACKGROUND", (0, 0), (-1, 0), LIGHT), ("FONTSIZE", (0, 0), (-1, -1), 9),
+                             ("LINEBELOW", (0, 0), (-1, -2), 0.4, BORDER), ("ALIGN", (1, 0), (1, -1), "RIGHT"),
+                             ("FONTNAME", (0, -1), (-1, -1), "Helvetica-Bold"), ("TOPPADDING", (0, 0), (-1, -1), 5),
+                             ("BOTTOMPADDING", (0, 0), (-1, -1), 5), ("LEFTPADDING", (0, 0), (-1, -1), 8), ("RIGHTPADDING", (0, 0), (-1, -1), 8)]))
+    el.append(tde)
+    el.append(Spacer(1, 10))
+
+    liq = [["LÍQUIDO TOTAL A PERCIBIR", _eur_es(payslip.get("net", 0))]]
+    tl = Table(liq, colWidths=[124 * mm, 50 * mm])
+    tl.setStyle(TableStyle([("BACKGROUND", (0, 0), (-1, -1), colors.HexColor("#0052FF")), ("TEXTCOLOR", (0, 0), (-1, -1), colors.white),
+                            ("FONTNAME", (0, 0), (-1, -1), "Helvetica-Bold"), ("FONTSIZE", (0, 0), (-1, -1), 11),
+                            ("ALIGN", (1, 0), (1, -1), "RIGHT"), ("TOPPADDING", (0, 0), (-1, -1), 8), ("BOTTOMPADDING", (0, 0), (-1, -1), 8),
+                            ("LEFTPADDING", (0, 0), (-1, -1), 8), ("RIGHTPADDING", (0, 0), (-1, -1), 8)]))
+    el.append(tl)
+    el.append(Spacer(1, 10))
+    el.append(Paragraph(f"Coste total empresa (bruto + S.S. empresa {payslip.get('company_ss_rate', 0)}%): <b>{_eur_es(payslip.get('company_cost', 0))}</b> &nbsp;·&nbsp; S.S. a cargo de la empresa: {_eur_es(payslip.get('company_ss', 0))}", small))
+    if payslip.get("notes"):
+        el.append(Spacer(1, 6))
+        el.append(Paragraph(payslip.get("notes", ""), small))
+    doc.build(el)
+    return buf.getvalue()

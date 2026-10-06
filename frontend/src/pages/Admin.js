@@ -237,6 +237,17 @@ export default function Admin() {
     } finally { setBusyId(null); }
   };
 
+  const togglePayroll = async (u) => {
+    setBusyId(u.id);
+    try {
+      const { data } = await api.post(`/admin/users/${u.id}/payroll-toggle`);
+      setUsers((list) => list.map((x) => (x.id === u.id ? { ...x, is_payroll_enabled: data.is_payroll_enabled } : x)));
+      toast.success(data.is_payroll_enabled ? `Nóminas activadas para ${u.email}` : `Nóminas desactivadas para ${u.email}`);
+    } catch (e) {
+      toast.error(formatApiErrorDetail(e.response?.data?.detail));
+    } finally { setBusyId(null); }
+  };
+
   const impersonate = async (u) => {
     setBusyId(u.id);
     try {
@@ -415,6 +426,9 @@ export default function Admin() {
                           <Button variant="ghost" size="sm" onClick={() => togglePos(u)} disabled={busyId === u.id} title={u.is_pos_enabled ? "Desactivar TPV" : "Activar TPV"} data-testid={`pos-${u.email}`} className={`h-8 ${u.is_pos_enabled ? "text-[#0052FF]" : "text-slate-500"}`}>
                             <Store className="w-4 h-4 mr-1" strokeWidth={1.5} />
                             {u.is_pos_enabled ? "TPV ✓" : "TPV"}
+                          </Button>
+                          <Button variant="ghost" size="sm" onClick={() => togglePayroll(u)} disabled={busyId === u.id} title={u.is_payroll_enabled ? "Desactivar Nóminas" : "Activar Nóminas"} data-testid={`payroll-${u.email}`} className={`h-8 ${u.is_payroll_enabled ? "text-[#0052FF]" : "text-slate-500"}`}>
+                            {u.is_payroll_enabled ? "Nóminas ✓" : "Nóminas"}
                           </Button>
                           <Button variant="ghost" size="sm" onClick={() => toggleBlock(u)} disabled={busyId === u.id} title={u.is_blocked ? "Desbloquear" : "Bloquear"} data-testid={`block-${u.email}`} className={`h-8 ${u.is_blocked ? "text-emerald-600" : "text-red-600"}`}>
                             {u.is_blocked ? <CheckCircle2 className="w-4 h-4 mr-1" strokeWidth={1.5} /> : <Ban className="w-4 h-4 mr-1" strokeWidth={1.5} />}
