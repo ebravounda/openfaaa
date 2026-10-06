@@ -2450,6 +2450,15 @@ POWENS_WEBHOOK_SECRET = os.environ.get("POWENS_WEBHOOK_SECRET", "")
 PUBLIC_BASE_URL = os.environ.get("PUBLIC_BASE_URL", os.environ.get("FRONTEND_URL", ""))
 
 
+def _public_base(request) -> str:
+    """Dominio público real desde el que se llama (funciona en preview y en producción sin tocar .env)."""
+    proto = (request.headers.get("x-forwarded-proto") or "").split(",")[0].strip()
+    host = (request.headers.get("x-forwarded-host") or request.headers.get("host") or "").split(",")[0].strip()
+    if host:
+        return f"{proto or 'https'}://{host}"
+    return PUBLIC_BASE_URL
+
+
 def _powens_base():
     return f"https://{POWENS_DOMAIN}.biapi.pro/2.0"
 
@@ -2485,7 +2494,7 @@ async def _powens_client(user):
 
 
 @api.post("/powens/connect-url")
-async def powens_connect_url(user=Depends(get_current_user)):
+async def powens_connect_url(request: Request, user=Depends(get_current_user)):
     await _require_bank(user)
     if not POWENS_DOMAIN or POWENS_DOMAIN.startswith("REEMPLAZAR"):
         raise HTTPException(status_code=400, detail="Powens no está configurado: falta POWENS_DOMAIN en el servidor.")
@@ -2495,16 +2504,17 @@ async def powens_connect_url(user=Depends(get_current_user)):
     await db.powens_states.insert_one({"state": state, "user_id": user["id"], "company_id": row["company_id"], "created_at": datetime.now(timezone.utc).isoformat()})
     from urllib.parse import urlencode
     q = urlencode({"domain": f"{POWENS_DOMAIN}.biapi.pro", "client_id": POWENS_CLIENT_ID,
-                   "redirect_uri": f"{PUBLIC_BASE_URL}/api/powens/callback", "code": code["code"], "state": state})
+                   "redirect_uri": f"{_public_base(request)}/api/powens/callback", "code": code["code"], "state": state})
     return {"url": f"https://webview.powens.com/es/connect?{q}"}
 
 
 @api.get("/powens/callback")
 async def powens_callback(request: Request):
     from fastapi.responses import RedirectResponse
+    base = _public_base(request)
     q = request.query_params
     if q.get("error"):
-        return RedirectResponse(f"{PUBLIC_BASE_URL}/conciliacion?status=cancelled")
+        return RedirectResponse(f"{base}/conciliacion?status=cancelled")
     state = q.get("state"); connection_id = q.get("connection_id") or q.get("connection_ids")
     ctx = await db.powens_states.find_one_and_delete({"state": state}) if state else None
     if ctx and connection_id:
@@ -2515,7 +2525,7 @@ async def powens_callback(request: Request):
             await _powens_sync(row)
         except Exception as e:
             logger.error(f"Powens sync on callback failed: {e}")
-    return RedirectResponse(f"{PUBLIC_BASE_URL}/conciliacion?status=connected")
+    return RedirectResponse(f"{base}/conciliacion?status=connected")
 
 
 async def _powens_sync(row):
@@ -2564,7 +2574,7 @@ async def powens_webhook(request: Request):
     date = request.headers.get("BI-Signature-Date", "")
     supplied = request.headers.get("BI-Signature", "")
     if POWENS_WEBHOOK_SECRET:
-        listening = f"{PUBLIC_BASE_URL}/api/powens/webhook"
+        listening = f"{_public_base(request)}/api/powens/webhook"
         msg = b"POST." + listening.encode() + b"." + date.encode() + b"." + raw
         expected = base64.b64encode(hmac.new(POWENS_WEBHOOK_SECRET.encode(), msg, hashlib.sha256).digest()).decode()
         if not hmac.compare_digest(expected, supplied):
