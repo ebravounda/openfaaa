@@ -19,7 +19,6 @@ import Analiticas from "@/pages/Analiticas";
 import Connection from "@/pages/Connection";
 import Settings from "@/pages/Settings";
 import PaymentMethods from "@/pages/PaymentMethods";
-import Bancos from "@/pages/Bancos";
 import Pos from "@/pages/Pos";
 import Importar from "@/pages/Importar";
 import Trabajadores from "@/pages/Trabajadores";
@@ -70,8 +69,7 @@ function App() {
           <Route path="/conexion" element={<ProtectedRoute><Connection /></ProtectedRoute>} />
           <Route path="/configuracion" element={<ProtectedRoute><Settings /></ProtectedRoute>} />
           <Route path="/metodos-pago" element={<ProtectedRoute><PaymentMethods /></ProtectedRoute>} />
-          <Route path="/bancos" element={<ProtectedRoute><Bancos /></ProtectedRoute>} />
-          <Route path="/bancos/callback" element={<ProtectedRoute><Bancos /></ProtectedRoute>} />
+          <Route path="/bancos/*" element={<Navigate to="/conciliacion" replace />} />
           <Route path="/pos" element={<ProtectedRoute><Pos /></ProtectedRoute>} />
           <Route path="/importar" element={<ProtectedRoute><Importar /></ProtectedRoute>} />
           <Route path="/trabajadores" element={<ProtectedRoute><Trabajadores /></ProtectedRoute>} />
