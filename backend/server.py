@@ -2545,6 +2545,7 @@ async def _powens_sync(row):
             {"$set": doc, "$setOnInsert": {"id": str(uuid.uuid4()), "matched": False, "matched_type": None, "matched_id": None, "created_at": datetime.now(timezone.utc).isoformat()}},
             upsert=True)
         count += 1
+    await db.powens_clients.update_one({"id": row["id"]}, {"$set": {"last_sync_at": datetime.now(timezone.utc).isoformat(), "last_sync_count": count}})
     return count
 
 
@@ -2578,6 +2579,7 @@ async def powens_webhook(request: Request):
         msg = b"POST." + listening.encode() + b"." + date.encode() + b"." + raw
         expected = base64.b64encode(hmac.new(POWENS_WEBHOOK_SECRET.encode(), msg, hashlib.sha256).digest()).decode()
         if not hmac.compare_digest(expected, supplied):
+            await db.powens_webhook_log.insert_one({"received_at": datetime.now(timezone.utc).isoformat(), "event": request.headers.get("BI-Event", ""), "result": "Firma inválida"})
             raise HTTPException(status_code=401, detail="Firma inválida")
     try:
         body = json.loads(raw)
@@ -2585,15 +2587,29 @@ async def powens_webhook(request: Request):
         raise HTTPException(status_code=400, detail="Payload inválido")
     event_id = body.get("id_webhook_data") or uuid.uuid4().hex
     ins = await db.powens_webhook_events.update_one({"event_id": event_id}, {"$setOnInsert": {"event_id": event_id, "received_at": datetime.now(timezone.utc).isoformat()}}, upsert=True)
+    uid = body.get("id_user") or (body.get("user") or {}).get("id")
+    log = {"received_at": datetime.now(timezone.utc).isoformat(), "event": request.headers.get("BI-Event", "") or body.get("type", ""), "powens_user_id": uid, "result": "Duplicado (ignorado)"}
     if ins.upserted_id:
-        uid = body.get("id_user") or body.get("user", {}).get("id")
         row = await db.powens_clients.find_one({"powens_user_id": uid}) if uid else None
+        log["result"] = "Usuario no encontrado"
         if row:
             try:
-                await _powens_sync(row)
+                n = await _powens_sync(row)
+                log["result"] = f"OK · {n} movimiento(s) sincronizados"
             except Exception as e:
                 logger.error(f"Powens webhook sync failed: {e}")
+                log["result"] = f"Error al sincronizar: {str(e)[:150]}"
+    await db.powens_webhook_log.insert_one(log)
     return {"ok": True}
+
+
+@api.get("/admin/powens/webhook-log")
+async def powens_webhook_log(user=Depends(get_current_user)):
+    if user.get("role") != "admin":
+        raise HTTPException(status_code=403, detail="Solo administradores")
+    events = await db.powens_webhook_log.find({}, {"_id": 0}).sort("received_at", -1).limit(10).to_list(10)
+    last = await db.powens_clients.find_one({"last_sync_at": {"$exists": True}}, {"_id": 0, "last_sync_at": 1, "last_sync_count": 1}, sort=[("last_sync_at", -1)])
+    return {"events": events, "last_webhook_at": events[0]["received_at"] if events else None, "last_sync_at": (last or {}).get("last_sync_at"), "last_sync_count": (last or {}).get("last_sync_count")}
 
 
 @api.get("/bank/transactions")

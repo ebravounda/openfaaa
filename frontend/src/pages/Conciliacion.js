@@ -3,12 +3,16 @@ import { useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
 import api, { eur, formatApiErrorDetail } from "@/lib/api";
 import Layout from "@/components/Layout";
+import { useAuth } from "@/context/AuthContext";
+import { PowensWebhookPanel } from "@/components/PowensWebhookPanel";
 import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Landmark, Loader2, RefreshCw, Link2, Unlink, ArrowDownLeft, ArrowUpRight, CheckCircle2 } from "lucide-react";
 
 export default function Conciliacion() {
   const [params] = useSearchParams();
+  const { user } = useAuth();
+  const isAdmin = user?.role === "admin" && !user?.is_impersonating;
   const [status, setStatus] = useState(null);
   const [txs, setTxs] = useState([]);
   const [suggestions, setSuggestions] = useState([]);
@@ -80,6 +84,8 @@ export default function Conciliacion() {
         {status && !status.configured && (
           <div className="bg-amber-50 border border-amber-200 text-amber-800 rounded-xl p-4 text-sm">⚠️ Powens aún no está configurado en el servidor (falta el dominio sandbox). La conexión real no funcionará hasta completarlo.</div>
         )}
+
+        {isAdmin && <PowensWebhookPanel />}
 
         {loading ? (
           <div className="flex justify-center py-16"><Loader2 className="w-6 h-6 animate-spin text-slate-300" /></div>
