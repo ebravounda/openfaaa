@@ -87,8 +87,10 @@ export default function Layout({ children }) {
   const [posPlan, setPosPlan] = useState(false);
   const hasPos = isAdmin || !!user?.pos_enabled || posPlan;
   const hasPayroll = isAdmin || !!user?.payroll_enabled;
+  const hasBank = isAdmin || !!user?.bank_enabled;
   const nav = [...baseNav];
   if (hasPos) nav.splice(4, 0, { to: "/pos", label: "TPV", icon: Store, testid: "nav-pos" });
+  if (hasBank) nav.push({ to: "/conciliacion", label: "Conciliación", icon: Landmark, testid: "nav-bank" });
   if (hasPayroll) {
     nav.push({ to: "/trabajadores", label: "Trabajadores", icon: UserRound, testid: "nav-employees" });
     nav.push({ to: "/nominas", label: "Nóminas", icon: BadgeEuro, testid: "nav-payroll" });

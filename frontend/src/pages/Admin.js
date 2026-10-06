@@ -248,6 +248,17 @@ export default function Admin() {
     } finally { setBusyId(null); }
   };
 
+  const toggleBank = async (u) => {
+    setBusyId(u.id);
+    try {
+      const { data } = await api.post(`/admin/users/${u.id}/bank-toggle`);
+      setUsers((list) => list.map((x) => (x.id === u.id ? { ...x, is_bank_enabled: data.is_bank_enabled } : x)));
+      toast.success(data.is_bank_enabled ? `Conciliación activada para ${u.email}` : `Conciliación desactivada para ${u.email}`);
+    } catch (e) {
+      toast.error(formatApiErrorDetail(e.response?.data?.detail));
+    } finally { setBusyId(null); }
+  };
+
   const impersonate = async (u) => {
     setBusyId(u.id);
     try {
@@ -429,6 +440,9 @@ export default function Admin() {
                           </Button>
                           <Button variant="ghost" size="sm" onClick={() => togglePayroll(u)} disabled={busyId === u.id} title={u.is_payroll_enabled ? "Desactivar Nóminas" : "Activar Nóminas"} data-testid={`payroll-${u.email}`} className={`h-8 ${u.is_payroll_enabled ? "text-[#0052FF]" : "text-slate-500"}`}>
                             {u.is_payroll_enabled ? "Nóminas ✓" : "Nóminas"}
+                          </Button>
+                          <Button variant="ghost" size="sm" onClick={() => toggleBank(u)} disabled={busyId === u.id} title={u.is_bank_enabled ? "Desactivar Conciliación" : "Activar Conciliación"} data-testid={`bank-${u.email}`} className={`h-8 ${u.is_bank_enabled ? "text-[#0052FF]" : "text-slate-500"}`}>
+                            {u.is_bank_enabled ? "Banco ✓" : "Banco"}
                           </Button>
                           <Button variant="ghost" size="sm" onClick={() => toggleBlock(u)} disabled={busyId === u.id} title={u.is_blocked ? "Desbloquear" : "Bloquear"} data-testid={`block-${u.email}`} className={`h-8 ${u.is_blocked ? "text-emerald-600" : "text-red-600"}`}>
                             {u.is_blocked ? <CheckCircle2 className="w-4 h-4 mr-1" strokeWidth={1.5} /> : <Ban className="w-4 h-4 mr-1" strokeWidth={1.5} />}

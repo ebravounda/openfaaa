@@ -29,6 +29,7 @@ from pdf_service import build_invoice_pdf
 from email_service import send_email, build_invoice_email_html, build_payment_email_html
 import enablebanking_service as eb
 import hashlib
+import json
 import storage_service
 from storage_service import put_object, get_object, MIME_TYPES, APP_NAME
 from ocr_service import extract_expense
@@ -2437,6 +2438,229 @@ async def payslip_pdf(payslip_id: str, user=Depends(get_current_user)):
     safe = (emp.get("name") or "trabajador").replace(" ", "_")
     return Response(content=pdf, media_type="application/pdf",
                     headers={"Content-Disposition": f'attachment; filename="nomina_{safe}_{ps.get("period", "")}.pdf"'})
+
+
+# ==================== Conciliación bancaria (Powens) ====================
+import httpx as _httpx
+
+POWENS_DOMAIN = os.environ.get("POWENS_DOMAIN", "")
+POWENS_CLIENT_ID = os.environ.get("POWENS_CLIENT_ID", "")
+POWENS_CLIENT_SECRET = os.environ.get("POWENS_CLIENT_SECRET", "")
+POWENS_WEBHOOK_SECRET = os.environ.get("POWENS_WEBHOOK_SECRET", "")
+PUBLIC_BASE_URL = os.environ.get("PUBLIC_BASE_URL", os.environ.get("FRONTEND_URL", ""))
+
+
+def _powens_base():
+    return f"https://{POWENS_DOMAIN}.biapi.pro/2.0"
+
+
+async def _powens(method, path, token=None, **kwargs):
+    headers = kwargs.pop("headers", {})
+    if token:
+        headers["Authorization"] = f"Bearer {token}"
+    async with _httpx.AsyncClient(timeout=40) as c:
+        r = await c.request(method, _powens_base() + path, headers=headers, **kwargs)
+    if r.is_error:
+        raise HTTPException(status_code=502, detail=f"Powens {r.status_code}: {r.text[:300]}")
+    return r.json() if r.content else None
+
+
+async def _require_bank(user):
+    if user.get("role") == "admin" or user.get("bank_enabled"):
+        return
+    raise HTTPException(status_code=403, detail="El módulo de Conciliación bancaria no está activado para tu cuenta.")
+
+
+async def _powens_client(user):
+    cid = await active_cid(user)
+    row = await db.powens_clients.find_one({"user_id": user["id"], "company_id": cid})
+    if row:
+        return row
+    data = await _powens("POST", "/auth/init", json={"client_id": POWENS_CLIENT_ID, "client_secret": POWENS_CLIENT_SECRET})
+    row = {"id": str(uuid.uuid4()), "user_id": user["id"], "company_id": cid,
+           "powens_user_id": data.get("id_user"), "access_token": data.get("auth_token"),
+           "connections": [], "created_at": datetime.now(timezone.utc).isoformat()}
+    await db.powens_clients.insert_one(row)
+    return row
+
+
+@api.post("/powens/connect-url")
+async def powens_connect_url(user=Depends(get_current_user)):
+    await _require_bank(user)
+    if not POWENS_DOMAIN or POWENS_DOMAIN.startswith("REEMPLAZAR"):
+        raise HTTPException(status_code=400, detail="Powens no está configurado: falta POWENS_DOMAIN en el servidor.")
+    row = await _powens_client(user)
+    code = await _powens("GET", "/auth/token/code", token=row["access_token"], params={"type": "singleAccess"})
+    state = uuid.uuid4().hex
+    await db.powens_states.insert_one({"state": state, "user_id": user["id"], "company_id": row["company_id"], "created_at": datetime.now(timezone.utc).isoformat()})
+    from urllib.parse import urlencode
+    q = urlencode({"domain": f"{POWENS_DOMAIN}.biapi.pro", "client_id": POWENS_CLIENT_ID,
+                   "redirect_uri": f"{PUBLIC_BASE_URL}/api/powens/callback", "code": code["code"], "state": state})
+    return {"url": f"https://webview.powens.com/es/connect?{q}"}
+
+
+@api.get("/powens/callback")
+async def powens_callback(request: Request):
+    from fastapi.responses import RedirectResponse
+    q = request.query_params
+    if q.get("error"):
+        return RedirectResponse(f"{PUBLIC_BASE_URL}/conciliacion?status=cancelled")
+    state = q.get("state"); connection_id = q.get("connection_id") or q.get("connection_ids")
+    ctx = await db.powens_states.find_one_and_delete({"state": state}) if state else None
+    if ctx and connection_id:
+        first = str(connection_id).split(",")[0]
+        await db.powens_clients.update_one({"user_id": ctx["user_id"], "company_id": ctx["company_id"]}, {"$addToSet": {"connections": int(first)}})
+        row = await db.powens_clients.find_one({"user_id": ctx["user_id"], "company_id": ctx["company_id"]})
+        try:
+            await _powens_sync(row)
+        except Exception as e:
+            logger.error(f"Powens sync on callback failed: {e}")
+    return RedirectResponse(f"{PUBLIC_BASE_URL}/conciliacion?status=connected")
+
+
+async def _powens_sync(row):
+    """Descarga transacciones de Powens y las guarda (upsert) en bank_transactions."""
+    data = await _powens("GET", "/users/me/transactions", token=row["access_token"], params={"limit": 500})
+    txs = data.get("transactions", data) if isinstance(data, dict) else data
+    count = 0
+    for t in (txs or []):
+        pid = str(t.get("id"))
+        val = float(t.get("value") or 0)
+        doc = {"powens_id": pid, "user_id": row["user_id"], "company_id": row["company_id"],
+               "account_id": t.get("id_account"), "date": t.get("date") or t.get("application_date") or "",
+               "value": round(val, 2), "label": t.get("wording") or t.get("simplified_wording") or t.get("original_wording") or "",
+               "deleted": bool(t.get("deleted"))}
+        await db.bank_transactions.update_one(
+            {"powens_id": pid, "company_id": row["company_id"]},
+            {"$set": doc, "$setOnInsert": {"id": str(uuid.uuid4()), "matched": False, "matched_type": None, "matched_id": None, "created_at": datetime.now(timezone.utc).isoformat()}},
+            upsert=True)
+        count += 1
+    return count
+
+
+@api.post("/powens/sync")
+async def powens_sync_now(user=Depends(get_current_user)):
+    await _require_bank(user)
+    cid = await active_cid(user)
+    row = await db.powens_clients.find_one({"user_id": user["id"], "company_id": cid})
+    if not row:
+        raise HTTPException(status_code=404, detail="No hay ningún banco conectado todavía.")
+    n = await _powens_sync(row)
+    return {"synced": n}
+
+
+@api.get("/powens/status")
+async def powens_status(user=Depends(get_current_user)):
+    await _require_bank(user)
+    cid = await active_cid(user)
+    row = await db.powens_clients.find_one({"user_id": user["id"], "company_id": cid}, {"_id": 0, "connections": 1})
+    n = await db.bank_transactions.count_documents({"company_id": cid, "deleted": {"$ne": True}})
+    return {"connected": bool(row and row.get("connections")), "connections": (row or {}).get("connections", []), "transactions": n, "configured": bool(POWENS_DOMAIN and not POWENS_DOMAIN.startswith("REEMPLAZAR"))}
+
+
+@api.post("/powens/webhook")
+async def powens_webhook(request: Request):
+    raw = await request.body()
+    date = request.headers.get("BI-Signature-Date", "")
+    supplied = request.headers.get("BI-Signature", "")
+    if POWENS_WEBHOOK_SECRET:
+        listening = f"{PUBLIC_BASE_URL}/api/powens/webhook"
+        msg = b"POST." + listening.encode() + b"." + date.encode() + b"." + raw
+        expected = base64.b64encode(hmac.new(POWENS_WEBHOOK_SECRET.encode(), msg, hashlib.sha256).digest()).decode()
+        if not hmac.compare_digest(expected, supplied):
+            raise HTTPException(status_code=401, detail="Firma inválida")
+    try:
+        body = json.loads(raw)
+    except Exception:
+        raise HTTPException(status_code=400, detail="Payload inválido")
+    event_id = body.get("id_webhook_data") or uuid.uuid4().hex
+    ins = await db.powens_webhook_events.update_one({"event_id": event_id}, {"$setOnInsert": {"event_id": event_id, "received_at": datetime.now(timezone.utc).isoformat()}}, upsert=True)
+    if ins.upserted_id:
+        uid = body.get("id_user") or body.get("user", {}).get("id")
+        row = await db.powens_clients.find_one({"powens_user_id": uid}) if uid else None
+        if row:
+            try:
+                await _powens_sync(row)
+            except Exception as e:
+                logger.error(f"Powens webhook sync failed: {e}")
+    return {"ok": True}
+
+
+@api.get("/bank/transactions")
+async def bank_transactions(user=Depends(get_current_user)):
+    await _require_bank(user)
+    cid = await active_cid(user)
+    return await db.bank_transactions.find({"company_id": cid, "deleted": {"$ne": True}}, {"_id": 0}).sort("date", -1).to_list(1000)
+
+
+def _amounts_match(a, b, tol=0.01):
+    return abs(round(abs(a) - abs(b), 2)) <= tol
+
+
+@api.get("/bank/suggestions")
+async def bank_suggestions(user=Depends(get_current_user)):
+    await _require_bank(user)
+    cid = await active_cid(user)
+    txs = await db.bank_transactions.find({"company_id": cid, "matched": {"$ne": True}, "deleted": {"$ne": True}}, {"_id": 0}).to_list(1000)
+    invoices = await db.invoices.find({"company_id": cid, "status": {"$ne": "paid"}}, {"_id": 0, "id": 1, "number": 1, "total": 1, "client": 1, "issue_date": 1}).to_list(5000)
+    expenses = await db.expenses.find({"company_id": cid}, {"_id": 0, "id": 1, "vendor_name": 1, "total": 1, "date": 1, "invoice_number": 1}).to_list(5000)
+    out = []
+    for t in txs:
+        val = t["value"]
+        cands = []
+        if val > 0:
+            for inv in invoices:
+                if _amounts_match(val, float(inv.get("total") or 0)):
+                    cands.append({"type": "invoice", "target_id": inv["id"], "label": f"Factura {inv.get('number', '')} · {(inv.get('client') or {}).get('name', '')}", "amount": float(inv.get("total") or 0), "date": inv.get("issue_date", "")})
+        else:
+            for ex in expenses:
+                if _amounts_match(val, float(ex.get("total") or 0)):
+                    cands.append({"type": "expense", "target_id": ex["id"], "label": f"Gasto {ex.get('vendor_name', '')} {ex.get('invoice_number', '')}", "amount": float(ex.get("total") or 0), "date": ex.get("date", "")})
+        if cands:
+            out.append({"transaction": t, "candidates": cands[:5]})
+    return {"suggestions": out}
+
+
+class ReconcileInput(BaseModel):
+    transaction_id: str
+    type: str
+    target_id: str
+
+
+@api.post("/bank/reconcile")
+async def bank_reconcile(data: ReconcileInput, user=Depends(get_current_user)):
+    await _require_bank(user)
+    cid = await active_cid(user)
+    tx = await db.bank_transactions.find_one({"id": data.transaction_id, "company_id": cid})
+    if not tx:
+        raise HTTPException(status_code=404, detail="Movimiento no encontrado")
+    if data.type == "invoice":
+        r = await db.invoices.update_one({"id": data.target_id, "company_id": cid}, {"$set": {"status": "paid", "bank_tx_id": data.transaction_id}})
+        if not r.matched_count:
+            raise HTTPException(status_code=404, detail="Factura no encontrada")
+    elif data.type == "expense":
+        r = await db.expenses.update_one({"id": data.target_id, "company_id": cid}, {"$set": {"bank_tx_id": data.transaction_id, "reconciled": True}})
+        if not r.matched_count:
+            raise HTTPException(status_code=404, detail="Gasto no encontrado")
+    else:
+        raise HTTPException(status_code=400, detail="Tipo no válido")
+    await db.bank_transactions.update_one({"id": data.transaction_id, "company_id": cid}, {"$set": {"matched": True, "matched_type": data.type, "matched_id": data.target_id}})
+    return {"status": "ok"}
+
+
+@api.post("/bank/unmatch/{transaction_id}")
+async def bank_unmatch(transaction_id: str, user=Depends(get_current_user)):
+    await _require_bank(user)
+    cid = await active_cid(user)
+    tx = await db.bank_transactions.find_one({"id": transaction_id, "company_id": cid})
+    if not tx:
+        raise HTTPException(status_code=404, detail="Movimiento no encontrado")
+    if tx.get("matched_type") == "invoice" and tx.get("matched_id"):
+        await db.invoices.update_one({"id": tx["matched_id"], "company_id": cid}, {"$set": {"status": "pending"}, "$unset": {"bank_tx_id": ""}})
+    elif tx.get("matched_type") == "expense" and tx.get("matched_id"):
+        await db.expenses.update_one({"id": tx["matched_id"], "company_id": cid}, {"$set": {"reconciled": False}, "$unset": {"bank_tx_id": ""}})
+    await db.bank_transactions.update_one({"id": transaction_id, "company_id": cid}, {"$set": {"matched": False, "matched_type": None, "matched_id": None}})
+    return {"status": "ok"}
 
 
 @api.delete("/contacts/{contact_id}")

@@ -415,3 +415,11 @@ Sistema de facturación para España: crear facturas introduciendo datos (CIF/NI
 - ✅ **Frontend**: panel de resultado con creados/omitidos + lista de avisos por fila (`import-result`) y botón "Importar otro archivo".
 - Verificado end-to-end: lote mixto Holded+NCS crea ambos; filas inválidas reportadas (Fila 4 sin importe, Fila 5 sin proveedor).
 
+## Iteración 41 (2026-06) — Conciliación bancaria con Powens
+- ✅ **Integración Powens (agregador PSD2)** vía Webview. Flag `bank_enabled` por usuario (Admin lo activa, botón "Banco" en /admin, `POST /api/admin/users/{id}/bank-toggle`). `_require_bank` → 403 si no activo. Expuesto en `_public_user`/`_user_row` (`is_bank_enabled`).
+- ✅ Backend (server.py): `POST /api/powens/connect-url` (auth/init → user+token permanente por empresa en `powens_clients`, code singleAccess, URL Webview `/es/connect`), `GET /api/powens/callback` (guarda connection_id + sync), `POST /api/powens/sync`, `GET /api/powens/status`, `POST /api/powens/webhook` (verificación HMAC-SHA256 del cuerpo crudo, idempotente por id_webhook_data → `_powens_sync`). Transacciones upsert en `bank_transactions`.
+- ✅ **Motor de conciliación**: `GET /api/bank/suggestions` cruza ingresos (value>0) ↔ facturas no pagadas y cargos (value<0) ↔ gastos por importe (tol 0,01). `POST /api/bank/reconcile` marca factura `paid`/gasto `reconciled` y enlaza `bank_tx_id`; `POST /api/bank/unmatch/{id}` revierte. `GET /api/bank/transactions` lista movimientos.
+- ✅ Frontend `/conciliacion` (nav gated "Conciliación"): conectar banco, sincronizar, panel de sugerencias con confirmación y tabla de movimientos con estado conciliado/deshacer.
+- ⚠️ Pendiente para producción: completar `POWENS_DOMAIN` (dominio sandbox real) y `POWENS_WEBHOOK_SECRET` en backend/.env, y dar de alta en la consola Powens las URLs `redirect_uri` = `{PUBLIC_BASE_URL}/api/powens/callback` y webhook = `{PUBLIC_BASE_URL}/api/powens/webhook`. client_id/secret ya configurados.
+- Verificado por curl: gating 403, status, connect-url rechaza sin dominio, y motor de conciliación end-to-end (ingreso→factura cobrada, cargo→gasto, unmatch revierte a pending). Powens en vivo pendiente del dominio sandbox.
+

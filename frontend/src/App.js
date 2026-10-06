@@ -24,6 +24,7 @@ import Pos from "@/pages/Pos";
 import Importar from "@/pages/Importar";
 import Trabajadores from "@/pages/Trabajadores";
 import Nominas from "@/pages/Nominas";
+import Conciliacion from "@/pages/Conciliacion";
 import Admin from "@/pages/Admin";
 import Gestoria from "@/pages/Gestoria";
 import Pricing from "@/pages/Pricing";
@@ -75,6 +76,7 @@ function App() {
           <Route path="/importar" element={<ProtectedRoute><Importar /></ProtectedRoute>} />
           <Route path="/trabajadores" element={<ProtectedRoute><Trabajadores /></ProtectedRoute>} />
           <Route path="/nominas" element={<ProtectedRoute><Nominas /></ProtectedRoute>} />
+          <Route path="/conciliacion" element={<ProtectedRoute><Conciliacion /></ProtectedRoute>} />
           <Route path="/precios" element={<PreciosRoute />} />
           <Route path="/blog" element={<Blog />} />
           <Route path="/blog/:slug" element={<BlogPost />} />

@@ -70,6 +70,7 @@ async def _user_row(u: dict) -> dict:
         "is_blocked": bool(u.get("is_blocked", False)),
         "is_pos_enabled": bool(u.get("pos_enabled", False)),
         "is_payroll_enabled": bool(u.get("payroll_enabled", False)),
+        "is_bank_enabled": bool(u.get("bank_enabled", False)),
         "created_at": u.get("created_at"),
         "trial_ends_at": u.get("trial_ends_at", ""),
         "company_name": (company or {}).get("name", ""),
@@ -246,6 +247,17 @@ async def toggle_payroll(user_id: str, admin_user=Depends(require_admin)):
     await db.users.update_one({"_id": ObjectId(user_id)}, {"$set": {"payroll_enabled": new_val}})
     await _audit(admin_user["id"], f"payroll:{'on' if new_val else 'off'}", user_id)
     return {"status": "ok", "is_payroll_enabled": new_val}
+
+
+@admin.post("/users/{user_id}/bank-toggle")
+async def toggle_bank(user_id: str, admin_user=Depends(require_admin)):
+    target = await db.users.find_one({"_id": ObjectId(user_id)})
+    if not target:
+        raise HTTPException(status_code=404, detail="Usuario no encontrado")
+    new_val = not bool(target.get("bank_enabled", False))
+    await db.users.update_one({"_id": ObjectId(user_id)}, {"$set": {"bank_enabled": new_val}})
+    await _audit(admin_user["id"], f"bank:{'on' if new_val else 'off'}", user_id)
+    return {"status": "ok", "is_bank_enabled": new_val}
 
 
 @admin.post("/users/{user_id}/plan")
