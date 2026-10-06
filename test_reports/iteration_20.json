@@ -1,0 +1,28 @@
+{
+  "summary": "Frontend e2e testing for new OpenFactura modules: Importer, Trabajadores, Nóminas, Admin payroll toggle + gating. Backend was already validated by main agent via curl. All critical flows pass successfully.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Dialogs (employee-dialog, payslip-dialog)", "issues": ["React warning: Missing `Description` or `aria-describedby` for Radix DialogContent. Non-blocking a11y warning."]}
+    ]
+  },
+  "test_report_links": ["/app/test_reports/iteration_20.json"],
+  "action_items": [
+    "Optional: add DialogDescription (or aria-describedby) to employee-dialog and payslip-dialog to silence Radix a11y warnings."
+  ],
+  "critical_code_review_comments": [
+    "Nominas.js downloadPdf uses cookie-auth GET via <a href> — works because httpOnly cookies are sent; confirmed PDF download OK (183KB, %PDF header).",
+    "Importar.js correctly re-sends cached rows on commit (no re-upload), honoring the 1000-row cap on preview.",
+    "Layout.js gating via hasPayroll = isAdmin || user.payroll_enabled is correct and matches backend _require_payroll (403 verified)."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "100% (pre-verified by main agent + 403 gating verified here)", "frontend": "100%"},
+  "test_credentials": "admin@fiscalhub.es/admin123 (admin), clidemo2@example.com/CliDemo123 (non-admin without payroll)",
+  "seed_data_creation": "Created /tmp/test_import.csv with 3 rows (1 duplicate). Imported 2 TEST contacts remain in DB (TEST Cliente Uno/Dos). Previous test runs left a Juan Pérez employee + 2026-05 payslip (2200/472,34/1727,66/2860) in Admin's company — those were used for PDF regression.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "All 3 new modules work. Verified: (1) Admin nav shows Trabajadores+Nóminas; non-admin clidemo2 does NOT see them and gets 403 on /api/employees and /api/payroll with Spanish error message. (2) Trabajadores CRUD works (create/edit tested). (3) Payslip dialog opens; employee select auto-fills base=2000 and irpf=15 from employee record; live net calculator with complements=200 shows exactly 1727,66 € (matches backend formula). (4) Existing payslip row shows 2200/472,34/1727,66/2860 — matches spec. (5) PDF download returns 183KB application/pdf with %PDF header. (6) Importer: CSV with 3 rows, auto-mapping suggested name->nombre, email->email; commit shows '2 creados, 1 duplicados omitidos'; TEST Cliente Uno/Dos visible on /contactos. (7) Admin payroll-{email} toggle: 'Nóminas' <-> 'Nóminas ✓' works with toast and persists. TPV (pos-{email}) regression also passes. Minor: Radix DialogContent a11y warning (missing aria-describedby) — cosmetic only.",
+  "rca of the issue": "N/A — no issues"
+}
