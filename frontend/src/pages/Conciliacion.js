@@ -6,8 +6,25 @@ import Layout from "@/components/Layout";
 import { useAuth } from "@/context/AuthContext";
 import { PowensWebhookPanel } from "@/components/PowensWebhookPanel";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Landmark, Loader2, RefreshCw, Link2, Unlink, ArrowDownLeft, ArrowUpRight, CheckCircle2 } from "lucide-react";
+import { Landmark, Loader2, RefreshCw, Link2, Unlink, ArrowDownLeft, ArrowUpRight, CheckCircle2, Search } from "lucide-react";
+
+const FILTERS = [["all", "Todos"], ["pending", "Sin conciliar"], ["matched", "Conciliados"], ["in", "Ingresos"], ["out", "Cargos"]];
+const norm = (s) => String(s || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+
+const matchesTx = (t, q, f) => {
+  if (f === "pending" && t.matched) return false;
+  if (f === "matched" && !t.matched) return false;
+  if (f === "in" && t.value < 0) return false;
+  if (f === "out" && t.value >= 0) return false;
+  const term = norm(q).trim();
+  if (!term) return true;
+  const num = term.replace(/\s|€/g, "").replace(/\.(?=\d{3}(\D|$))/g, "").replace(",", ".");
+  const abs = Math.abs(Number(t.value) || 0).toFixed(2);
+  if (/^-?\d+(\.\d+)?$/.test(num) && abs.startsWith(String(Math.abs(Number(num))))) return true;
+  return norm(t.label).includes(term) || String(t.date || "").includes(term);
+};
 
 export default function Conciliacion() {
   const [params] = useSearchParams();
@@ -19,6 +36,9 @@ export default function Conciliacion() {
   const [loading, setLoading] = useState(true);
   const [connecting, setConnecting] = useState(false);
   const [syncing, setSyncing] = useState(false);
+  const [q, setQ] = useState("");
+  const [filter, setFilter] = useState("all");
+  const shown = txs.filter((t) => matchesTx(t, q, filter));
 
   const loadAll = useCallback(async () => {
     setLoading(true);
@@ -119,16 +139,33 @@ export default function Conciliacion() {
             )}
 
             <div className="bg-white border border-slate-200 rounded-xl overflow-x-auto">
-              <div className="px-5 pt-4 pb-2 text-sm font-semibold text-slate-900">Movimientos bancarios</div>
+              <div className="px-5 pt-4 pb-2 flex flex-wrap items-center justify-between gap-3">
+                <span className="text-sm font-semibold text-slate-900">Movimientos bancarios <span className="font-normal text-slate-400" data-testid="bank-tx-count">({shown.length}{shown.length !== txs.length ? ` de ${txs.length}` : ""})</span></span>
+                {txs.length > 0 && (
+                  <div className="flex flex-wrap items-center gap-2">
+                    <div className="relative">
+                      <Search className="w-4 h-4 text-slate-400 absolute left-2.5 top-1/2 -translate-y-1/2" />
+                      <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Buscar concepto, importe o fecha" className="pl-8 h-9 w-64" data-testid="bank-search" />
+                    </div>
+                    <div className="flex rounded-lg border border-slate-200 overflow-hidden">
+                      {FILTERS.map(([k, l]) => (
+                        <button key={k} onClick={() => setFilter(k)} className={`px-2.5 h-9 text-xs whitespace-nowrap transition-colors ${filter === k ? "bg-[#0052FF] text-white" : "bg-white text-slate-600 hover:bg-slate-50"}`} data-testid={`bank-filter-${k}`}>{l}</button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
               {txs.length === 0 ? (
                 <div className="text-center text-slate-400 py-14 text-sm">{status?.connected ? "No hay movimientos. Pulsa Sincronizar." : "Conecta tu banco para ver los movimientos."}</div>
+              ) : shown.length === 0 ? (
+                <div className="text-center text-slate-400 py-14 text-sm" data-testid="bank-no-results">Ningún movimiento coincide con la búsqueda.</div>
               ) : (
                 <Table>
                   <TableHeader>
                     <TableRow><TableHead>Fecha</TableHead><TableHead>Concepto</TableHead><TableHead className="text-right">Importe</TableHead><TableHead className="text-right">Estado</TableHead></TableRow>
                   </TableHeader>
                   <TableBody>
-                    {txs.map((t, i) => (
+                    {shown.map((t, i) => (
                       <TableRow key={t.id} data-testid={`bank-tx-${i}`} className="hover:bg-slate-50/60">
                         <TableCell className="text-sm text-slate-600 tabular">{t.date}</TableCell>
                         <TableCell className="text-sm text-slate-700">{t.label}</TableCell>
