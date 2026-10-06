@@ -25,6 +25,7 @@ export default function Importar() {
   const [saving, setSaving] = useState(false);
   const [data, setData] = useState(null); // {headers, sample, rows, fields, suggested}
   const [mapping, setMapping] = useState({});
+  const [result, setResult] = useState(null);
 
   const reset = () => { setData(null); setMapping({}); };
 
@@ -33,6 +34,7 @@ export default function Importar() {
     e.target.value = "";
     if (!file) return;
     setLoading(true);
+    setResult(null);
     try {
       const fd = new FormData();
       fd.append("file", file);
@@ -65,9 +67,10 @@ export default function Importar() {
       const cleanMap = {};
       Object.entries(mapping).forEach(([k, v]) => { if (v !== "" && v !== undefined && v !== null) cleanMap[k] = Number(v); });
       const { data: res } = await api.post("/import/commit", { entity, kind, mapping: cleanMap, rows: data.rows });
-      toast.success(`Importación completada: ${res.created} creados, ${res.skipped} duplicados omitidos.`);
-      if (res.errors?.length) res.errors.forEach((er) => toast.warning(er));
-      reset();
+      toast.success(`Importación completada: ${res.created} creados, ${res.skipped} omitidos.`);
+      setResult({ ...res, entity });
+      setData(null);
+      setMapping({});
     } catch (err) {
       toast.error(err.response?.data?.detail || "No se pudo importar");
     } finally { setSaving(false); }
@@ -122,6 +125,28 @@ export default function Importar() {
             <input type="file" accept=".csv,.txt,.xlsx,.xlsm" onChange={onFile} className="hidden" data-testid="import-file-input" />
           </label>
         </div>
+
+        {result && (
+          <div className="bg-white border border-slate-200 rounded-xl p-5" data-testid="import-result">
+            <div className="flex items-center gap-2 mb-3">
+              <CheckCircle2 className="w-5 h-5 text-emerald-600" strokeWidth={2} />
+              <h2 className="font-semibold text-slate-900">Importación completada</h2>
+            </div>
+            <div className="flex gap-6 text-sm mb-3">
+              <div><span className="text-slate-400">Creados: </span><span className="font-semibold text-emerald-700">{result.created}</span></div>
+              <div><span className="text-slate-400">Omitidos (duplicados/incompletos): </span><span className="font-semibold text-amber-700">{result.skipped}</span></div>
+            </div>
+            {result.errors?.length > 0 && (
+              <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 max-h-48 overflow-y-auto">
+                <div className="text-xs font-semibold text-amber-800 mb-1.5">Avisos por fila ({result.errors.length}):</div>
+                <ul className="text-xs text-amber-700 space-y-0.5 list-disc pl-4">
+                  {result.errors.map((er, i) => <li key={i}>{er}</li>)}
+                </ul>
+              </div>
+            )}
+            <Button variant="outline" className="border-slate-200 mt-4" onClick={() => setResult(null)} data-testid="import-again">Importar otro archivo</Button>
+          </div>
+        )}
 
         {data && (
           <div className="bg-white border border-slate-200 rounded-xl p-5 space-y-5" data-testid="import-mapping">

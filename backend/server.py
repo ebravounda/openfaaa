@@ -2072,16 +2072,27 @@ IMPORT_FIELDS = {
 
 
 def _num_es(s) -> float:
-    s = str(s or "").strip()
+    s = str(s or "").strip().replace("€", "").replace("%", "").replace(" ", "").replace("\u00a0", "")
     if not s:
         return 0.0
-    s = s.replace("€", "").replace("%", "").replace(" ", "").replace("\u00a0", "")
+    neg = s.startswith("-") or (s.startswith("(") and s.endswith(")"))
+    s = s.strip("()").lstrip("+-")
     if "," in s and "." in s:
-        s = s.replace(".", "").replace(",", ".")
+        # El separador decimal es el que aparece más a la derecha (Holded: 1,234.56 / NCS: 1.234,56)
+        if s.rfind(",") > s.rfind("."):
+            s = s.replace(".", "").replace(",", ".")
+        else:
+            s = s.replace(",", "")
     elif "," in s:
         s = s.replace(",", ".")
+    elif "." in s:
+        parts = s.split(".")
+        # Varios puntos => separador de miles (1.234.567). Un punto con 3 decimales en importe => miles (1.000)
+        if len(parts) > 2 or (len(parts) == 2 and len(parts[1]) == 3 and len(parts[0]) >= 1):
+            s = "".join(parts)
     try:
-        return round(float(s), 2)
+        v = round(float(s), 2)
+        return -v if neg else v
     except Exception:
         return 0.0
 
@@ -2176,9 +2187,12 @@ async def import_commit(payload: ImportCommit, user=Depends(get_current_user)):
         seen_nif = {(c.get("nif") or "").upper() for c in existing if c.get("nif")}
         seen_name = {(c.get("name") or "").lower() for c in existing if c.get("name")}
         batch = []
-        for row in payload.rows:
+        for ridx, row in enumerate(payload.rows):
             name = g(row, "name")
             if not name:
+                skipped += 1
+                if len(errors) < 25:
+                    errors.append(f"Fila {ridx + 2}: sin nombre, se omite.")
                 continue
             nif = g(row, "nif"); nk = nif.upper(); nmk = name.lower()
             if (nk and nk in seen_nif) or (not nk and nmk in seen_name):
@@ -2199,17 +2213,28 @@ async def import_commit(payload: ImportCommit, user=Depends(get_current_user)):
         async for d in db.expenses.find({"user_id": user["id"], "company_id": cid}, {"_id": 0, "vendor_nif": 1, "vendor_name": 1, "date": 1, "total": 1, "invoice_number": 1}):
             seen |= _expense_sigs(d.get("vendor_nif"), d.get("vendor_name"), d.get("date"), d.get("total"), d.get("invoice_number"))
         batch = []
-        for row in payload.rows:
+        for ridx, row in enumerate(payload.rows):
             vn = g(row, "vendor_name")
             if not vn:
+                skipped += 1
+                if len(errors) < 25:
+                    errors.append(f"Fila {ridx + 2}: sin proveedor, se omite.")
                 continue
             iva = _num_es(g(row, "iva_rate")) or 21
             base = _num_es(g(row, "base_amount"))
             tot = _num_es(g(row, "total"))
             if not base and tot:
                 base = round(tot / (1 + iva / 100), 2)
+            if base <= 0 and tot <= 0:
+                skipped += 1
+                if len(errors) < 25:
+                    errors.append(f"Fila {ridx + 2}: sin importe válido (base/total), se omite.")
+                continue
+            _d = _date_es(g(row, "date"))
+            if not _d and len(errors) < 25:
+                errors.append(f"Fila {ridx + 2}: fecha vacía o no reconocida.")
             doc = {"id": str(uuid.uuid4()), "user_id": user["id"], "company_id": cid,
-                   "date": _date_es(g(row, "date")), "vendor_name": vn, "vendor_nif": g(row, "vendor_nif"),
+                   "date": _d, "vendor_name": vn, "vendor_nif": g(row, "vendor_nif"),
                    "invoice_number": g(row, "invoice_number"), "description": g(row, "description"),
                    "category": g(row, "category") or "General", "base_amount": base, "iva_rate": iva,
                    "attachment_path": "", "created_at": now}
@@ -2227,15 +2252,28 @@ async def import_commit(payload: ImportCommit, user=Depends(get_current_user)):
     elif entity == "invoices":
         existing_nums = {d.get("number") for d in await db.invoices.find({"user_id": user["id"], "company_id": cid}, {"_id": 0, "number": 1}).to_list(50000)}
         batch = []; auto = 0
-        for row in payload.rows:
+        for ridx, row in enumerate(payload.rows):
             cname = g(row, "client_name")
             if not cname:
+                skipped += 1
+                if len(errors) < 25:
+                    errors.append(f"Fila {ridx + 2}: sin cliente, se omite.")
+                continue
+            issue = _date_es(g(row, "issue_date"))
+            if not issue:
+                skipped += 1
+                if len(errors) < 25:
+                    errors.append(f"Fila {ridx + 2}: fecha de factura vacía o no válida, se omite.")
                 continue
             iva = _num_es(g(row, "iva_rate")) or 21
             base = _num_es(g(row, "base_amount")); tot = _num_es(g(row, "total"))
             if not base and tot:
                 base = round(tot / (1 + iva / 100), 2)
-            issue = _date_es(g(row, "issue_date"))
+            if base <= 0 and tot <= 0:
+                skipped += 1
+                if len(errors) < 25:
+                    errors.append(f"Fila {ridx + 2}: sin importe válido (base/total), se omite.")
+                continue
             num = g(row, "number")
             if not num:
                 auto += 1

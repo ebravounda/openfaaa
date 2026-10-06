@@ -409,3 +409,9 @@ Sistema de facturación para España: crear facturas introduciendo datos (CIF/NI
 - ✅ **Nóminas** (`/nominas`, nav gated): `/api/payroll` crear/list/delete + `GET /api/payroll/{id}/pdf`. Cálculo MVP: bruto = base+complementos; deducciones = SS trabajador % + IRPF % + otras; **líquido a percibir**; coste empresa = bruto + SS empresa %. Calculadora en vivo en el diálogo. **PDF de nómina** (ReportLab `build_payslip_pdf`) descargable.
 - Verificado: backend por curl (empleado, nómina 2200/142,34/330/1727,66/2860, PDF %PDF 183KB; import contacts/expenses/invoices con dedupe) y frontend por testing_agent (iteration_20.json) 100%, incluido gating 403 para usuario sin flag. Nota menor: aviso a11y de Radix DialogContent (cosmético), consistente con el resto de diálogos de la app.
 
+## Iteración 40 (2026-06) — Importador: precisión de importes + errores por fila
+- ✅ **Parseo de importes robusto** (`_num_es`): formato inglés (Holded `1234.56`, `1,234.56`) y español (NCS `1.234,56`, `82,64`), miles (`1.000`→1000, `1.234.567,89`), `€`/`%`, negativos y paréntesis `(120,00)`→-120. Decimal = separador más a la derecha. Verificado 13/13.
+- ✅ **Errores por fila**: `/import/commit` devuelve `errors` con nº de fila y motivo (sin proveedor/cliente, fecha no válida, sin importe). Nada se omite en silencio.
+- ✅ **Frontend**: panel de resultado con creados/omitidos + lista de avisos por fila (`import-result`) y botón "Importar otro archivo".
+- Verificado end-to-end: lote mixto Holded+NCS crea ambos; filas inválidas reportadas (Fila 4 sin importe, Fila 5 sin proveedor).
+
