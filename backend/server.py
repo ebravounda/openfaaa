@@ -2442,7 +2442,7 @@ async def payslip_pdf(payslip_id: str, user=Depends(get_current_user)):
 # ==================== Conciliación bancaria (Powens) ====================
 import httpx as _httpx
 
-POWENS_DOMAIN = os.environ.get("POWENS_DOMAIN", "")
+POWENS_DOMAIN = os.environ.get("POWENS_DOMAIN", "").strip().replace("https://", "").replace("http://", "").split(".biapi.pro")[0].strip("/")
 POWENS_CLIENT_ID = os.environ.get("POWENS_CLIENT_ID", "")
 POWENS_CLIENT_SECRET = os.environ.get("POWENS_CLIENT_SECRET", "")
 POWENS_WEBHOOK_SECRET = os.environ.get("POWENS_WEBHOOK_SECRET", "")
