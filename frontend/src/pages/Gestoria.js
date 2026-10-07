@@ -13,7 +13,7 @@ import {
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter,
 } from "@/components/ui/dialog";
-import { Users, Euro, Wallet, LogOut, Plus, LogIn, Upload, Loader2, Building2, FileText } from "lucide-react";
+import { Users, Euro, Wallet, LogOut, Plus, LogIn, Upload, Loader2, Building2, FileText, Banknote } from "lucide-react";
 
 const PLAN_OPTS = [
   { id: "basico", name: "Básico" },
@@ -129,7 +129,10 @@ export default function Gestoria() {
             <h1 className="font-display text-2xl font-bold text-slate-900">Panel de gestoría</h1>
             <p className="text-sm text-slate-500 mt-0.5">Da de alta y gestiona las cuentas de tus clientes.</p>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
+            <Button variant="outline" className="rounded-xl border-[#0052FF]/30 text-[#0052FF]" onClick={() => navigate("/gestoria/remesas")} data-testid="gestoria-remesas">
+              <Banknote className="w-4 h-4 mr-2" strokeWidth={1.75} /> Remesas SEPA
+            </Button>
             <label className="inline-flex items-center gap-2 text-sm text-slate-600 border border-slate-200 rounded-xl px-3 py-2 cursor-pointer hover:bg-slate-50 transition" data-testid="gestoria-logo-upload-label">
               {uploading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" strokeWidth={1.75} />} Subir logo
               <input type="file" accept="image/*" className="hidden" onChange={uploadLogo} data-testid="gestoria-logo-input" />

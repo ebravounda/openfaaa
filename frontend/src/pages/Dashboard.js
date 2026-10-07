@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import api, { eur } from "@/lib/api";
 import Layout from "@/components/Layout";
+import { QuarterCard } from "@/components/QuarterCard";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
@@ -78,6 +79,7 @@ export default function Dashboard() {
         </div>
       ) : (
         <>
+          <QuarterCard />
           {data.next_deadline && (
             <div className={`${CARD} relative overflow-hidden p-6 mb-5 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 of-fade-up`} data-testid="next-deadline-card">
               <div className="absolute -left-8 -top-8 w-40 h-40 rounded-full bg-amber-100/40 blur-2xl pointer-events-none" />

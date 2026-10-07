@@ -89,6 +89,7 @@ class InvoiceInput(BaseModel):
     payment_method: str = ""
     iban: str = ""
     concept_label: str = ""
+    income_category: str = ""
 
 
 class ExpenseInput(BaseModel):
@@ -2528,7 +2529,7 @@ async def _powens(method, path, token=None, **kwargs):
 
 
 async def _require_bank(user):
-    if user.get("role") == "admin" or user.get("bank_enabled"):
+    if user.get("role") in ("admin", "gestoria") or user.get("bank_enabled"):
         return
     raise HTTPException(status_code=403, detail="El módulo de Conciliación bancaria no está activado para tu cuenta.")
 
@@ -2599,6 +2600,13 @@ async def _powens_sync(row):
             upsert=True)
         count += 1
     await db.powens_clients.update_one({"id": row["id"]}, {"$set": {"last_sync_at": datetime.now(timezone.utc).isoformat(), "last_sync_count": count}})
+    try:
+        owner = await db.users.find_one({"_id": ObjectId(row["user_id"])}, {"role": 1})
+        if (owner or {}).get("role") == "gestoria":
+            from remesas_routes import detect_remesa_payments
+            await detect_remesa_payments(row["user_id"], row["company_id"])
+    except Exception as e:
+        logger.error(f"Remesa detection failed: {e}")
     return count
 
 
@@ -3010,6 +3018,10 @@ app.include_router(auth_router)
 app.include_router(admin_router)
 from payments_routes import payments as payments_router
 app.include_router(payments_router)
+from accounting_routes import acc as accounting_router
+from remesas_routes import rem as remesas_router
+app.include_router(accounting_router)
+app.include_router(remesas_router)
 from pos_routes import pos as pos_router
 app.include_router(pos_router)
 from gestoria_routes import gestoria as gestoria_router, branding as branding_router

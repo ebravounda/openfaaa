@@ -22,7 +22,7 @@ import {
 } from "lucide-react";
 
 const IVA_OPTIONS = ["21", "10", "4", "0"];
-const CATEGORIES = ["General", "Suministros", "Material", "Servicios", "Alquiler", "Software", "Transporte", "Otros"];
+import { EXPENSE_CATEGORIES as CATEGORIES } from "@/lib/categories";
 
 const emptyForm = () => ({
   date: new Date().toISOString().slice(0, 10),

@@ -26,6 +26,8 @@ import Nominas from "@/pages/Nominas";
 import Conciliacion from "@/pages/Conciliacion";
 import Admin from "@/pages/Admin";
 import Gestoria from "@/pages/Gestoria";
+import Remesas from "@/pages/Remesas";
+import Contabilidad from "@/pages/Contabilidad";
 import Pricing from "@/pages/Pricing";
 import PreciosRoute from "@/pages/PreciosRoute";
 import Blog from "@/pages/Blog";
@@ -84,6 +86,8 @@ function App() {
           <Route path="/payment/cancel" element={<ProtectedRoute><PaymentCancel /></ProtectedRoute>} />
           <Route path="/admin" element={<ProtectedRoute><Admin /></ProtectedRoute>} />
           <Route path="/gestoria" element={<ProtectedRoute><Gestoria /></ProtectedRoute>} />
+          <Route path="/gestoria/remesas" element={<ProtectedRoute><Remesas /></ProtectedRoute>} />
+          <Route path="/contabilidad" element={<ProtectedRoute><Contabilidad /></ProtectedRoute>} />
         </Routes>
       </BrowserRouter>
     </AuthProvider>
