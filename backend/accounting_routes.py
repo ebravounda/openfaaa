@@ -79,7 +79,7 @@ async def build_entries(user, company, year: int) -> list:
     y = str(year)
     q = {"user_id": uid, "company_id": cid}
     out = []
-    async for inv in db.invoices.find({**q, "issue_date": {"$regex": f"^{y}"}, "status": {"$ne": "anulada"}}, {"_id": 0}):
+    async for inv in db.invoices.find({**q, "issue_date": {"$regex": f"^{y}"}, "status": {"$ne": "anulada"}, "offsets_annulled": {"$ne": True}}, {"_id": 0}):
         cl = (inv.get("client") or {}).get("name", "")
         inc = pgc.INCOME_CATEGORIES.get(inv.get("income_category") or "", "705")
         e = _entry(inv["issue_date"], f"Factura {inv.get('number')} · {cl}", "factura", inv["id"], [

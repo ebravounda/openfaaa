@@ -835,7 +835,7 @@ async def anular_invoice(invoice_id: str, user=Depends(get_current_user)):
             aeat_response = real["response"] or f"ERROR DE CONEXIÓN CON LA AEAT ({entorno}):\n{real['error']}"
             parsed = vf.parse_aeat_response(real["response"]) if real["ok"] else {}
             estado_aeat = (parsed.get("estado_registro") or parsed.get("estado_envio") or "").lower()
-            if real["ok"] and estado_aeat == "correcto":
+            if real["ok"] and estado_aeat in ("correcto", "aceptadoconerrores"):
                 submitted, estado_reg = True, "Anulada"
                 csv_code = parsed.get("csv") or ("VF-ANUL-" + secrets.token_hex(6).upper())
                 status_msg = f"Anulación aceptada por la AEAT ({entorno})"
@@ -904,12 +904,15 @@ async def cancel_with_rectificativa(invoice_id: str, data: CancelInput, user=Dep
         raise HTTPException(status_code=404, detail="Factura no encontrada")
     if data.reason not in RECTIFY_REASONS:
         raise HTTPException(status_code=400, detail="Selecciona un motivo válido.")
-    if inv.get("status") in ("anulada", "rectificada") or inv.get("rectified_by"):
-        raise HTTPException(status_code=400, detail=f"La factura {inv['number']} ya está anulada o rectificada.")
+    if inv.get("status") == "rectificada" or inv.get("rectified_by"):
+        raise HTTPException(status_code=400, detail=f"La factura {inv['number']} ya tiene rectificativa.")
+    was_annulled = inv.get("status") == "anulada"
     if inv.get("invoice_type") == "rectificativa":
         raise HTTPException(status_code=400, detail="Una rectificativa no se anula: emite una nueva factura con los datos correctos.")
     label, code, legal = RECTIFY_REASONS[data.reason]
     if code == "ANULACION":
+        if was_annulled:
+            raise HTTPException(status_code=400, detail="La factura ya está anulada. Elige el motivo de la rectificativa.")
         if inv.get("emailed_at") or inv.get("status") == "paid":
             raise HTTPException(status_code=400, detail="Esta factura ya se envió al cliente o está cobrada: la ley exige emitir una rectificativa. Elige otro motivo.")
         res = await anular_invoice(invoice_id, user)
@@ -935,9 +938,11 @@ async def cancel_with_rectificativa(invoice_id: str, data: CancelInput, user=Dep
                               "rectifies": inv["id"], "rectifies_number": inv["number"], "rectify_type": "I",
                               "rectify_code": code, "rectify_reason": f"{label}{detail}"})
     rect = await _make_invoice(user, company, rect_in)
+    if was_annulled:
+        await db.invoices.update_one({"id": rect["id"]}, {"$set": {"status": "compensada", "offsets_annulled": True}})
     await db.invoices.update_one({"id": invoice_id}, {"$set": {
         "rectified_by": rect["id"], "rectified_number": rect["number"], "rectify_reason": f"{label}{detail}",
-        "status": inv.get("status") if inv.get("status") == "paid" else "rectificada",
+        "status": inv.get("status") if inv.get("status") in ("paid", "anulada") else "rectificada",
         "rectified_at": datetime.now(timezone.utc).isoformat()}})
     out = {"mode": "rectificativa", "rectificativa": {"id": rect["id"], "number": rect["number"], "total": rect.get("total"), "code": code},
            "refund_pending": inv.get("status") == "paid", "verifactu": None, "email": None}
@@ -1216,19 +1221,20 @@ async def convert_quote(quote_id: str, user=Depends(get_current_user)):
     return inv
 
 
-async def _rehash_pending(inv, company):
-    """Recalcula huella/QR de un registro aún no aceptado si su ImporteTotal cambió (y de los pendientes encadenados)."""
+async def _rehash_pending(inv, company, new_ts=None):
+    """Recalcula huella/QR de un registro aún no aceptado si cambió su ImporteTotal o su fecha de generación (y de los pendientes encadenados)."""
     produccion = company.get("verifactu_mode") == "produccion"
     cur, prev = inv, inv["verifactu"].get("huella_anterior", "")
     while cur and not cur["verifactu"].get("submitted"):
         v = cur["verifactu"]
+        ts = new_ts if (cur is inv and new_ts) else v["timestamp"]
         fecha = vf.to_ddmmyyyy(cur["issue_date"])
         imp = vf.importe_total(cur)
-        new_h = vf.compute_fingerprint(company.get("nif", ""), cur["number"], fecha, v.get("tipo", "F1"), vf.cuota_total(cur), imp, prev, v["timestamp"])
+        new_h = vf.compute_fingerprint(company.get("nif", ""), cur["number"], fecha, v.get("tipo", "F1"), vf.cuota_total(cur), imp, prev, ts)
         if new_h == v["huella"]:
             break
         old_h = v["huella"]
-        upd = {"verifactu.huella": new_h, "verifactu.huella_anterior": prev,
+        upd = {"verifactu.huella": new_h, "verifactu.huella_anterior": prev, "verifactu.timestamp": ts,
                "verifactu.qr_url": vf.build_qr_url(company.get("nif", ""), cur["number"], fecha, imp, produccion=produccion)}
         await db.invoices.update_one({"id": cur["id"]}, {"$set": upd})
         if cur is inv:
@@ -1284,7 +1290,7 @@ async def verifactu_submit(invoice_id: str, user=Depends(get_current_user)):
     problems = vf.precheck(inv, company, spanish_tax.validate_nif)
     if problems:
         raise HTTPException(status_code=422, detail="No se ha enviado a la AEAT. Corrige esto antes: " + " · ".join(problems))
-    vfd = await _rehash_pending(inv, company)
+    vfd = await _rehash_pending(inv, company, new_ts=vf.now_ts())
 
     # Encadenamiento: número y fecha de la factura anterior
     prev_number = ""
@@ -1350,6 +1356,11 @@ async def verifactu_submit(invoice_id: str, user=Depends(get_current_user)):
             estado, estado_reg, submitted = "Correcto", "Aceptado", True
             csv_code = parsed.get("csv") or vfd.get("csv") or ("VF-" + secrets.token_hex(8).upper())
             status_msg = f"Aceptado por la AEAT ({entorno})"
+        elif real["ok"] and estado_aeat == "aceptadoconerrores":
+            estado, estado_reg, submitted = "Correcto", "AceptadoConErrores", True
+            csv_code = parsed.get("csv") or vfd.get("csv")
+            err = f"{parsed.get('codigo_error','')} {parsed.get('descripcion_error','')}".strip()
+            status_msg = f"Registrada en la AEAT con avisos ({entorno}): {err}"
         elif real["ok"]:
             estado, estado_reg, submitted = "Error", "Rechazado", False
             csv_code = None
@@ -3203,8 +3214,27 @@ app.add_middleware(
 )
 
 
+async def _fix_accepted_with_errors():
+    """Corrige registros que la AEAT aceptó con errores (tienen CSV) pero quedaron marcados como rechazados."""
+    async for inv in db.invoices.find({"verifactu.enabled": True, "verifactu.submitted": False}, {"_id": 0, "id": 1, "number": 1}):
+        log = await db.verifactu_log.find_one({"invoice_id": inv["id"], "response_xml": {"$regex": "AceptadoConErrores"}}, sort=[("created_at", -1)])
+        if not log:
+            continue
+        p = vf.parse_aeat_response(log["response_xml"])
+        err = f"{p.get('codigo_error', '')} {p.get('descripcion_error', '')}".strip()
+        await db.invoices.update_one({"id": inv["id"]}, {"$set": {
+            "verifactu.submitted": True, "verifactu.csv": p.get("csv") or log.get("csv"),
+            "verifactu.status": f"Registrada en la AEAT con avisos: {err}", "verifactu.submitted_at": log.get("created_at")}})
+        await db.verifactu_log.update_one({"_id": log["_id"]}, {"$set": {"estado": "Correcto", "estado_registro": "AceptadoConErrores", "csv": p.get("csv")}})
+        logger.info(f"VeriFactu {inv['number']}: marcada como registrada (AceptadoConErrores)")
+
+
 @app.on_event("startup")
 async def startup():
+    try:
+        await _fix_accepted_with_errors()
+    except Exception as e:
+        logger.error(f"VF AceptadoConErrores fix failed: {e}")
     secret = os.environ.get("JWT_SECRET", "")
     if len(secret) < 32:
         logger.warning("SECURITY: JWT_SECRET es demasiado corto (<32 chars). Usa un secreto aleatorio de 64 hex en producción.")

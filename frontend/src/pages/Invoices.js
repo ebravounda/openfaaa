@@ -583,6 +583,11 @@ export default function Invoices() {
                           <Button variant="ghost" size="icon" onClick={() => anular(inv)} data-testid={`invoice-anular-${inv.number}`} className="h-8 w-8 text-slate-400 hover:text-red-600"><Ban className="w-4 h-4" strokeWidth={1.5} /></Button>
                         </Tip>
                       )}
+                      {inv.status === "anulada" && inv.invoice_type !== "rectificativa" && !inv.rectified_by && (
+                        <Tip label="Emitir la rectificativa de esta factura anulada">
+                          <Button variant="ghost" size="sm" onClick={() => anular(inv)} data-testid={`invoice-rectify-annulled-${inv.number}`} className="h-8 text-xs text-purple-700 hover:text-purple-800">Emitir rectificativa</Button>
+                        </Tip>
+                      )}
                       <Tip label="Eliminar factura">
                         <Button variant="ghost" size="icon" onClick={() => remove(inv)} data-testid={`invoice-delete-${inv.number}`} className="h-8 w-8 text-slate-400 hover:text-red-600"><Trash2 className="w-4 h-4" strokeWidth={1.5} /></Button>
                       </Tip>

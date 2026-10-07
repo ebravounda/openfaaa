@@ -20,7 +20,9 @@ export const CancelInvoiceDialog = ({ invoice, onClose, onDone }) => {
   const [busy, setBusy] = useState(false);
   useEffect(() => { api.get("/rectify-reasons").then((r) => setReasons(r.data)); }, []);
   useEffect(() => { setReason("error_datos"); setDetail(""); }, [invoice]);
-  const sel = reasons.find((r) => r.key === reason);
+  const annulled = invoice?.status === "anulada";
+  const options = reasons.filter((r) => !(annulled && r.code === "ANULACION"));
+  const sel = options.find((r) => r.key === reason);
   const go = async () => {
     setBusy(true);
     try {
@@ -42,11 +44,11 @@ export const CancelInvoiceDialog = ({ invoice, onClose, onDone }) => {
     <Dialog open={!!invoice} onOpenChange={(o) => !o && onClose()}>
       <DialogContent className="max-w-xl" data-testid="cancel-invoice-dialog">
         <DialogHeader>
-          <DialogTitle>Anular factura {invoice?.number}</DialogTitle>
+          <DialogTitle>{annulled ? "Emitir rectificativa de" : "Anular factura"} {invoice?.number}</DialogTitle>
           <DialogDescription>Una factura emitida no se borra: el sistema emite la rectificativa por el total, la registra en VeriFactu y la envía al cliente.</DialogDescription>
         </DialogHeader>
         <div className="space-y-2 max-h-[45vh] overflow-y-auto pr-1">
-          {reasons.map((r) => (
+          {options.map((r) => (
             <label key={r.key} className={`flex gap-3 items-start border rounded-lg p-3 cursor-pointer transition-colors ${reason === r.key ? "border-[#0052FF] bg-blue-50/50" : "border-slate-200 hover:bg-slate-50"}`} data-testid={`cancel-reason-${r.key}`}>
               <input type="radio" name="reason" checked={reason === r.key} onChange={() => setReason(r.key)} className="mt-1" />
               <div className="text-sm">
