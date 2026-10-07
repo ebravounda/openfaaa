@@ -206,9 +206,17 @@ export default function Admin() {
   const setPlan = async (u, plan) => {
     setBusyId(u.id);
     try {
+      if (plan === "__gestoria" || plan === "__user") {
+        const role = plan === "__gestoria" ? "gestoria" : "user";
+        if (!window.confirm(role === "gestoria" ? `¿Convertir a ${u.email} en gestoría (revendedor)? Verá el panel de gestoría y podrá dar de alta clientes.` : `¿Volver a usuario normal a ${u.email}?`)) return;
+        await api.post(`/admin/users/${u.id}/role`, { role });
+        setUsers((list) => list.map((x) => (x.id === u.id ? { ...x, role } : x)));
+        toast.success(role === "gestoria" ? `${u.email} ahora es gestoría` : `${u.email} vuelve a ser usuario normal`);
+        return;
+      }
       await api.post(`/admin/users/${u.id}/plan`, { plan });
       setUsers((list) => list.map((x) => (x.id === u.id ? { ...x, plan } : x)));
-      toast.success(`Plan de ${u.email} → ${PLAN_LABEL[plan]}`);
+      toast.success(`Plan de ${u.email} → ${plans.find((p) => p.id === plan)?.name || PLAN_LABEL[plan] || plan}`);
     } catch (e) {
       toast.error(formatApiErrorDetail(e.response?.data?.detail));
     } finally { setBusyId(null); }
@@ -362,9 +370,9 @@ export default function Admin() {
         </div>
         {revenue?.by_plan && (
           <div className="px-5 pb-5 flex flex-wrap gap-2">
-            {["basico", "medio", "platino"].map((pid) => (
-              <Badge key={pid} className={`rounded-full ${PLAN_BADGE[pid]} hover:${PLAN_BADGE[pid]}`} data-testid={`revenue-plan-${pid}`}>
-                {PLAN_LABEL[pid]}: {revenue.by_plan[pid] ?? 0}
+            {plans.map((p) => p.id).filter((pid) => pid !== "admin" && pid !== "trial").map((pid) => (
+              <Badge key={pid} className={`rounded-full ${PLAN_BADGE[pid] || "bg-indigo-50 text-indigo-700"}`} data-testid={`revenue-plan-${pid}`}>
+                {plans.find((p) => p.id === pid)?.name || PLAN_LABEL[pid]}: {revenue.by_plan[pid] ?? 0}
               </Badge>
             ))}
           </div>
@@ -403,12 +411,14 @@ export default function Admin() {
                     {u.role === "admin" ? (
                       <span className="text-xs text-slate-400">—</span>
                     ) : (
-                      <Select value={u.plan} onValueChange={(v) => setPlan(u, v)} disabled={busyId === u.id}>
-                        <SelectTrigger className="w-32 h-8" data-testid={`plan-select-${u.email}`}><SelectValue /></SelectTrigger>
+                      <Select value={u.role === "gestoria" ? "__gestoria" : u.plan} onValueChange={(v) => setPlan(u, v)} disabled={busyId === u.id}>
+                        <SelectTrigger className="w-44 h-8" data-testid={`plan-select-${u.email}`}><SelectValue /></SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="basico">Básico</SelectItem>
-                          <SelectItem value="medio">Medio</SelectItem>
-                          <SelectItem value="platino">Platino</SelectItem>
+                          {(plans.length ? plans : [{ id: "basico", name: "Básico" }, { id: "medio", name: "Medio" }, { id: "platino", name: "Platino" }]).map((p) => (
+                            <SelectItem key={p.id} value={p.id} disabled={u.role === "gestoria"}>{p.name}</SelectItem>
+                          ))}
+                          <SelectItem value="__gestoria" data-testid={`plan-option-gestoria-${u.email}`}>Gestoría (revendedor)</SelectItem>
+                          {u.role === "gestoria" && <SelectItem value="__user">↩ Volver a usuario normal</SelectItem>}
                         </SelectContent>
                       </Select>
                     )}

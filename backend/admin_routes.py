@@ -271,6 +271,29 @@ async def set_plan(user_id: str, data: PlanInput, admin_user=Depends(require_adm
     return {"status": "ok", "plan": data.plan}
 
 
+class RoleInput(BaseModel):
+    role: str
+
+
+@admin.post("/users/{user_id}/role")
+async def set_role(user_id: str, data: RoleInput, admin_user=Depends(require_admin)):
+    if data.role not in ("user", "gestoria"):
+        raise HTTPException(status_code=400, detail="Rol no válido")
+    u = await db.users.find_one({"_id": ObjectId(user_id)})
+    if not u:
+        raise HTTPException(status_code=404, detail="Usuario no encontrado")
+    if u.get("role") == "admin":
+        raise HTTPException(status_code=400, detail="No se puede cambiar el rol de un administrador")
+    upd = {"role": data.role}
+    if data.role == "gestoria":
+        if u.get("gestoria_id"):
+            raise HTTPException(status_code=400, detail="Este usuario es cliente de una gestoría; desvincúlalo antes de convertirlo en gestoría.")
+        upd["firm_name"] = u.get("firm_name") or u.get("name") or u.get("email")
+    await db.users.update_one({"_id": u["_id"]}, {"$set": upd})
+    await _audit(admin_user["id"], f"role:{data.role}", user_id)
+    return {"status": "ok", "role": data.role}
+
+
 # ---------- Gestorías (revendedores) ----------
 RESELLER_RATE = 0.5
 
