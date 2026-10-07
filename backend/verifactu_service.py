@@ -25,6 +25,13 @@ def importe_total(invoice) -> float:
                  - float(invoice.get("suplidos_total", 0) or 0), 2)
 
 
+def tipo_factura(invoice) -> str:
+    if invoice.get("invoice_type") == "rectificativa":
+        c = (invoice.get("rectify_code") or "R1").upper()
+        return c if c in ("R1", "R2", "R3", "R4", "R5") else "R1"
+    return "F1"
+
+
 def cuota_total(invoice) -> float:
     """CuotaTotal VeriFactu = cuotas de IVA + cuotas de recargo de equivalencia."""
     return round(float(invoice.get("iva_amount", 0) or 0) + float(invoice.get("re_amount", 0) or 0), 2)
@@ -235,7 +242,7 @@ def build_registro_alta_xml(company: dict, invoice: dict, prev_number: str, prev
                             ts: str, huella: str, prev_fecha: str = "", rectified: dict = None) -> str:
     """RegistroAlta VeriFactu (namespace sum1, sin envelope)."""
     is_rect = invoice.get("invoice_type") == "rectificativa"
-    tipo = "R1" if is_rect else "F1"
+    tipo = tipo_factura(invoice)
     nif = company.get("nif", "")
     fecha = to_ddmmyyyy(invoice["issue_date"])
     cl = invoice.get("client", {})

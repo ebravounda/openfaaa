@@ -187,6 +187,10 @@ def build_invoice_pdf(invoice: dict, company: dict, qr_png: bytes = None, verifa
         header_right.append(Paragraph(f"Rectifica a: {invoice['rectifies_number']}",
                             ParagraphStyle("r", parent=styles["Normal"], fontSize=9,
                                            textColor=MUTED, alignment=2, leading=13)))
+        if invoice.get("rectify_reason"):
+            header_right.append(Paragraph(f"Tipo {invoice.get('rectify_code') or 'R1'} · Motivo: {invoice['rectify_reason']}",
+                                ParagraphStyle("rm", parent=styles["Normal"], fontSize=8,
+                                               textColor=MUTED, alignment=2, leading=11)))
     ht = Table([[header_left, header_right]], colWidths=[100 * mm, 74 * mm])
     ht.setStyle(TableStyle([("VALIGN", (0, 0), (-1, -1), "TOP")]))
     story.append(ht)
@@ -326,6 +330,9 @@ GRK_STATUS = {
     "paid": ("PAGADA", GRK_GREEN),
     "pending": ("PENDIENTE", GRK_AMBER),
     "overdue": ("VENCIDA", GRK_RED),
+    "rectificada": ("RECTIFICADA", GRK_RED),
+    "compensada": ("COMPENSADA", GRK_GREEN),
+    "anulada": ("ANULADA", GRK_RED),
 }
 
 

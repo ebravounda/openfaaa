@@ -22,6 +22,7 @@ import {
   Plus, Trash2, FileText, Mail, Download, CheckCircle2, Loader2, Pencil, Undo2, ShieldCheck, ShieldAlert, Search, Ban, Sparkles, HelpCircle, CreditCard, Wallet, Clock3, Receipt,
 } from "lucide-react";
 import RectificativaGuide, { RECTIFY_GUIDE_KEY } from "@/components/RectificativaGuide";
+import { CancelInvoiceDialog } from "@/components/CancelInvoiceDialog";
 import {
   Tooltip, TooltipContent, TooltipProvider, TooltipTrigger,
 } from "@/components/ui/tooltip";
@@ -92,6 +93,7 @@ export default function Invoices() {
   const [lookingUp, setLookingUp] = useState(false);
   const [payingId, setPayingId] = useState(null);
   const [guideOpen, setGuideOpen] = useState(false);
+  const [cancelInv, setCancelInv] = useState(null);
   const [pendingRectify, setPendingRectify] = useState(null);
   const [query, setQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
@@ -369,20 +371,7 @@ export default function Invoices() {
     }
   };
 
-  const anular = async (inv) => {
-    const cobrada = ["paid", "pagada", "cobrada"].includes(String(inv.status).toLowerCase());
-    const aviso = cobrada
-      ? `⚠️ La factura ${inv.number} consta como COBRADA/PAGADA.\n\nSegún la normativa española, una factura ya válida NO debe anularse: lo correcto es emitir una FACTURA RECTIFICATIVA (abono).\n\nLa anulación de VeriFactu es para registros emitidos por error. ¿Aún así quieres anularla?`
-      : `¿Anular la factura ${inv.number}?\n\nSi ya la enviaste al cliente o la cobraste, lo correcto legalmente es emitir una RECTIFICATIVA (abono) en lugar de anular.\n\nEsta acción registra la anulación en VeriFactu y no se puede deshacer.`;
-    if (!window.confirm(aviso)) return;
-    try {
-      const { data } = await api.post(`/invoices/${inv.id}/anular`);
-      toast.success(data.verifactu ? `Factura anulada · ${data.verifactu.status}` : "Factura anulada");
-      load();
-    } catch (e) {
-      toast.error(formatApiErrorDetail(e.response?.data?.detail));
-    }
-  };
+  const anular = (inv) => setCancelInv(inv);
 
   const [irpfHint, setIrpfHint] = useState(null);
   const [reviewing, setReviewing] = useState(false);
@@ -447,6 +436,7 @@ export default function Invoices() {
         ))}
       </div>
 
+      <CancelInvoiceDialog invoice={cancelInv} onClose={() => setCancelInv(null)} onDone={() => { setCancelInv(null); load(); }} />
       <RectificativaGuide
         open={guideOpen}
         onOpenChange={setGuideOpen}
@@ -500,7 +490,10 @@ export default function Invoices() {
                     <div className="flex items-center gap-2">
                       {inv.number}
                       {inv.invoice_type === "rectificativa" && (
-                        <Badge className="bg-purple-100 text-purple-700 hover:bg-purple-100 rounded-full text-[10px] px-2">Rectificativa</Badge>
+                        <Badge className="bg-purple-100 text-purple-700 hover:bg-purple-100 rounded-full text-[10px] px-2">Rectificativa {inv.rectify_code || ""}</Badge>
+                      )}
+                      {inv.rectified_number && (
+                        <Badge className="bg-purple-50 text-purple-600 hover:bg-purple-50 rounded-full text-[10px] px-2" title={inv.rectify_reason} data-testid={`invoice-rectified-by-${inv.number}`}>Rectificada por {inv.rectified_number}</Badge>
                       )}
                     </div>
                   </TableCell>
@@ -514,6 +507,10 @@ export default function Invoices() {
                       <div className="flex flex-col items-start gap-1">
                         {inv.status === "anulada" ? (
                           <Badge className="bg-red-100 text-red-700 hover:bg-red-100 rounded-full" data-testid={`invoice-pay-${inv.number}`}>Anulada</Badge>
+                        ) : inv.status === "rectificada" ? (
+                          <Badge className="bg-purple-100 text-purple-700 hover:bg-purple-100 rounded-full" data-testid={`invoice-pay-${inv.number}`}>Rectificada</Badge>
+                        ) : inv.status === "compensada" ? (
+                          <Badge className="bg-slate-100 text-slate-600 hover:bg-slate-100 rounded-full" data-testid={`invoice-pay-${inv.number}`}>Compensada</Badge>
                         ) : inv.payment?.status === "paid" ? (
                           <Badge className="bg-emerald-100 text-emerald-700 hover:bg-emerald-100 rounded-full gap-1" data-testid={`invoice-pay-${inv.number}`}><CreditCard className="w-3 h-3" strokeWidth={2} /> Pagado con tarjeta</Badge>
                         ) : inv.status === "paid" ? (
@@ -581,8 +578,8 @@ export default function Invoices() {
                           <Button variant="ghost" size="icon" onClick={() => markPaid(inv)} data-testid={`invoice-paid-${inv.number}`} className="h-8 w-8 text-slate-500 hover:text-emerald-600"><CheckCircle2 className={`w-4 h-4 ${inv.status === "paid" ? "text-emerald-600" : ""}`} strokeWidth={1.5} /></Button>
                         </Tip>
                       )}
-                      {inv.status !== "anulada" && (
-                        <Tip label="Anular factura (registra la anulación en VeriFactu)">
+                      {inv.status !== "anulada" && inv.invoice_type !== "rectificativa" && !inv.rectified_by && (
+                        <Tip label="Anular factura (emite la rectificativa automáticamente)">
                           <Button variant="ghost" size="icon" onClick={() => anular(inv)} data-testid={`invoice-anular-${inv.number}`} className="h-8 w-8 text-slate-400 hover:text-red-600"><Ban className="w-4 h-4" strokeWidth={1.5} /></Button>
                         </Tip>
                       )}

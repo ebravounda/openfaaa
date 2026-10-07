@@ -84,6 +84,8 @@ class InvoiceInput(BaseModel):
     rectifies: str = ""
     rectifies_number: str = ""
     rectify_type: str = "I"  # "I" (por diferencias) o "S" (por sustitución)
+    rectify_code: str = ""  # R1-R5 (art. 80 LIVA)
+    rectify_reason: str = ""
     due_date: str = ""
     period: str = ""
     payment_method: str = ""
@@ -703,7 +705,7 @@ async def _make_invoice(user, company, data: InvoiceInput) -> dict:
         prev = last["verifactu"]["huella"] if last else ""
         nif = company.get("nif", "")
         fecha = vf.to_ddmmyyyy(doc["issue_date"])
-        tipo = "R1" if doc.get("invoice_type") == "rectificativa" else "F1"
+        tipo = vf.tipo_factura(doc)
         ts = vf.now_ts()
         huella = vf.compute_fingerprint(nif, number, fecha, tipo, vf.cuota_total(doc), vf.importe_total(doc), prev, ts)
         doc["verifactu"] = {
@@ -870,6 +872,94 @@ async def anular_invoice(invoice_id: str, user=Depends(get_current_user)):
         {"$set": {"status": "anulada", "annulled": True, "annulled_at": now_iso,
                   "verifactu.anulacion": verifactu_result}})
     return {"status": "anulada", "verifactu": verifactu_result}
+
+
+RECTIFY_REASONS = {
+    "error_datos": ("Error en importes, tipos de IVA o datos de la factura", "R1", "art. 80.Uno y Dos LIVA y art. 15 RD 1619/2012"),
+    "devolucion": ("Devolución de mercancías o envases", "R1", "art. 80.Dos LIVA"),
+    "descuento": ("Descuento o bonificación concedido después de la venta", "R1", "art. 80.Dos LIVA"),
+    "operacion_cancelada": ("Operación cancelada, resuelta o no realizada", "R1", "art. 80.Dos LIVA"),
+    "concurso": ("Cliente declarado en concurso de acreedores", "R2", "art. 80.Tres LIVA"),
+    "incobrable": ("Crédito total o parcialmente incobrable", "R3", "art. 80.Cuatro LIVA"),
+    "otras": ("Otras causas", "R4", "art. 15 RD 1619/2012"),
+    "error_no_entregada": ("Generada por error y no entregada al cliente", "ANULACION", "Registro de anulación VeriFactu (RD 1007/2023)"),
+}
+
+
+@api.get("/rectify-reasons")
+async def rectify_reasons(user=Depends(get_current_user)):
+    return [{"key": k, "label": v[0], "code": v[1], "legal": v[2]} for k, v in RECTIFY_REASONS.items()]
+
+
+class CancelInput(BaseModel):
+    reason: str
+    detail: str = ""
+
+
+@api.post("/invoices/{invoice_id}/cancel")
+async def cancel_with_rectificativa(invoice_id: str, data: CancelInput, user=Depends(get_current_user)):
+    """Anula una factura según normativa: rectificativa total automática (R1-R5) o registro de anulación si nunca se entregó."""
+    inv = await db.invoices.find_one({"id": invoice_id, "user_id": user["id"]}, {"_id": 0})
+    if not inv:
+        raise HTTPException(status_code=404, detail="Factura no encontrada")
+    if data.reason not in RECTIFY_REASONS:
+        raise HTTPException(status_code=400, detail="Selecciona un motivo válido.")
+    if inv.get("status") in ("anulada", "rectificada") or inv.get("rectified_by"):
+        raise HTTPException(status_code=400, detail=f"La factura {inv['number']} ya está anulada o rectificada.")
+    if inv.get("invoice_type") == "rectificativa":
+        raise HTTPException(status_code=400, detail="Una rectificativa no se anula: emite una nueva factura con los datos correctos.")
+    label, code, legal = RECTIFY_REASONS[data.reason]
+    if code == "ANULACION":
+        if inv.get("emailed_at") or inv.get("status") == "paid":
+            raise HTTPException(status_code=400, detail="Esta factura ya se envió al cliente o está cobrada: la ley exige emitir una rectificativa. Elige otro motivo.")
+        res = await anular_invoice(invoice_id, user)
+        await db.invoices.update_one({"id": invoice_id}, {"$set": {"annul_reason": label, "annul_detail": data.detail}})
+        return {"mode": "anulacion", **res}
+    if inv.get("invoice_type") == "simplificada":
+        code = "R5"
+    company = await active_company(user)
+    today = datetime.now(timezone.utc).date().isoformat()
+    detail = f" ({data.detail.strip()})" if data.detail.strip() else ""
+    issued = inv.get("issue_date", "")[:10]
+    notes = (f"Factura rectificativa ({code}) de la factura {inv['number']} de fecha {'/'.join(reversed(issued.split('-')))}. "
+             f"Motivo: {label}{detail}. Rectificación por diferencias del importe total conforme al {legal}.")
+    lines = []
+    for li in inv.get("line_items", []):
+        x = {k: v for k, v in li.items() if k in LineItem.model_fields}
+        x["unit_price"] = -abs(float(li.get("unit_price", 0)))
+        x["quantity"] = abs(float(li.get("quantity", 1)))
+        lines.append(LineItem(**x))
+    base_fields = {k: v for k, v in inv.items() if k in InvoiceInput.model_fields and k not in ("line_items", "series", "notes", "status", "issue_date", "due_date", "verifactu")}
+    rect_in = InvoiceInput(**{**base_fields, "line_items": lines, "issue_date": today, "due_date": today, "notes": notes,
+                              "status": "pending" if inv.get("status") == "paid" else "compensada", "invoice_type": "rectificativa",
+                              "rectifies": inv["id"], "rectifies_number": inv["number"], "rectify_type": "I",
+                              "rectify_code": code, "rectify_reason": f"{label}{detail}"})
+    rect = await _make_invoice(user, company, rect_in)
+    await db.invoices.update_one({"id": invoice_id}, {"$set": {
+        "rectified_by": rect["id"], "rectified_number": rect["number"], "rectify_reason": f"{label}{detail}",
+        "status": inv.get("status") if inv.get("status") == "paid" else "rectificada",
+        "rectified_at": datetime.now(timezone.utc).isoformat()}})
+    out = {"mode": "rectificativa", "rectificativa": {"id": rect["id"], "number": rect["number"], "total": rect.get("total"), "code": code},
+           "refund_pending": inv.get("status") == "paid", "verifactu": None, "email": None}
+    if rect.get("verifactu"):
+        try:
+            vr = await verifactu_submit(rect["id"], user)
+            out["verifactu"] = (vr or {}).get("status") or "Enviada"
+        except HTTPException as e:
+            out["verifactu"] = f"No enviada: {e.detail}"
+        except Exception as e:
+            logger.error(f"auto submit rectificativa: {e}")
+            out["verifactu"] = "No enviada: error de conexión con la AEAT. Puedes reintentarlo desde la factura."
+    if (inv.get("client") or {}).get("email"):
+        try:
+            r = await send_invoice_email(rect["id"], user)
+            out["email"] = f"Enviada a {r['to']}"
+        except HTTPException as e:
+            out["email"] = f"No enviada: {e.detail}"
+        except Exception as e:
+            logger.error(f"email rectificativa: {e}")
+            out["email"] = "No enviada: error al enviar el email"
+    return out
 
 
 @api.get("/irpf/suggestion")
@@ -1215,12 +1305,12 @@ async def verifactu_submit(invoice_id: str, user=Depends(get_current_user)):
         if inv.get("rectifies"):
             orig = await db.invoices.find_one(
                 {"id": inv["rectifies"], "user_id": user["id"]},
-                {"_id": 0, "number": 1, "issue_date": 1, "base": 1, "iva_amount": 1, "recargo_amount": 1})
+                {"_id": 0, "number": 1, "issue_date": 1, "base": 1, "iva_amount": 1, "re_amount": 1})
             if orig:
                 rectified["number"] = orig.get("number") or rectified["number"]
                 rectified["base"] = orig.get("base")
                 rectified["cuota"] = orig.get("iva_amount")
-                rectified["recargo"] = orig.get("recargo_amount") or 0
+                rectified["recargo"] = orig.get("re_amount") or 0
                 if orig.get("issue_date"):
                     rectified["fecha"] = vf.to_ddmmyyyy(orig["issue_date"])
 
@@ -2689,7 +2779,7 @@ async def bank_suggestions(user=Depends(get_current_user)):
     await _require_bank(user)
     cid = await active_cid(user)
     txs = await db.bank_transactions.find({"company_id": cid, "matched": {"$ne": True}, "deleted": {"$ne": True}}, {"_id": 0}).to_list(1000)
-    invoices = await db.invoices.find({"company_id": cid, "status": {"$ne": "paid"}}, {"_id": 0, "id": 1, "number": 1, "total": 1, "client": 1, "issue_date": 1}).to_list(5000)
+    invoices = await db.invoices.find({"company_id": cid, "status": {"$nin": ["paid", "anulada", "rectificada", "compensada"]}}, {"_id": 0, "id": 1, "number": 1, "total": 1, "client": 1, "issue_date": 1}).to_list(5000)
     expenses = await db.expenses.find({"company_id": cid}, {"_id": 0, "id": 1, "vendor_name": 1, "total": 1, "date": 1, "invoice_number": 1}).to_list(5000)
     out = []
     for t in txs:
