@@ -1,0 +1,29 @@
+{
+  "summary": "Iter 23: Rectificativas automáticas al anular factura (OpenFactura/España). Backend: 7/7 pytest PASS en /app/backend/tests/test_iter23_rectify.py (GET /rectify-reasons con 8 motivos R1-R4+ANULACION, POST /invoices/{id}/cancel con error_datos crea R1 de -121,00 € y marca original 'rectificada'/'rectified_by'; cancelar factura pagada con error_no_entregada -> 400 con mensaje legal; cancelar pagada con devolucion -> rectificativa + refund_pending y original mantiene status 'paid'; pending no enviada + error_no_entregada -> anulación pura sin rectificativa; motivo inválido 400; no se puede re-anular ni anular una rectificativa; PDF de rectificativa 200 con notas 'Factura rectificativa (R1)' y rectifies_number). UI (/facturas con admin): crear factura TEST Cliente UI/B12345674/100€, botón invoice-anular-{n} abre cancel-invoice-dialog con los 8 radios cancel-reason-* (etiquetas, código y legal mostrados); al elegir concurso aparece aviso '3 meses...BOE', al elegir incobrable aviso '6 meses...reclamado'; confirmar error_datos emite toast 'Rectificativa R-2026-XXXX (R1) emitida por -121,00 € · VeriFactu: Aceptado por la AEAT (simulado)'; original muestra badge 'Rectificada por R-...' y pierde el botón anular; la rectificativa aparece como 'Rectificativa R1' + 'Compensada' + VeriFactu ✓. Flujo paid+error_no_entregada: toast error 'la ley exige emitir una rectificativa'; cambiar a devolucion emite rectificativa con mensaje 'queda pendiente devolver el importe', original queda 'Pagada' + 'Rectificada por'. Flujo pending+error_no_entregada: queda 'Anulada' sin rectificativa.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": [
+    "/app/backend/tests/test_iter23_rectify.py",
+    "/app/test_reports/pytest/iter23.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "cancel_with_rectificativa: genera InvoiceInput espejo con unit_price negativo y filtra campos del InvoiceInput válidos (correcto). Mantiene rectify_type='I' por defecto (por diferencias) — razonable para total refund.",
+    "ANULACION bloquea si inv.emailed_at o status=='paid'. OK, cumple normativa.",
+    "Si status original era 'paid' y se emite rectificativa, la original NO pasa a 'rectificada' sino que mantiene 'paid' (y marca rectified_by + rectify_reason). La nueva rect queda 'pending' en vez de 'compensada' — correcto porque el refund está pendiente. refund_pending=True en respuesta.",
+    "VeriFactu auto-submit tras rectificativa envuelto en try/except HTTPException/Exception con mensaje user-friendly ('error de conexión...reintentar'). Bien hecho.",
+    "Email auto-send si cliente tiene email: también envuelto con try/except — resiliente.",
+    "RECTIFY_REASONS tiene art. 80 LIVA + art. 15 RD 1619/2012 referenciados en 'legal' — correcto para cumplimiento normativo.",
+    "Minor: cancel endpoint acepta DELETE antiguo (/api/invoices/{id}) aún existe (línea 998). Documentar que para anular propiamente debe usarse POST /cancel; delete sigue permitiendo borrar sin rectificativa en el backend — intencional para borradores que nunca pasaron por VeriFactu.",
+    "Minor: en el toast UI, cuando VeriFactu no está activado para la rectificativa, data.verifactu es null y simplemente se omite — bien tratado con filter(Boolean).",
+    "Minor UX: CancelInvoiceDialog muestra textarea 'Explicación (aparecerá en la rectificativa)' que viaja al campo rectify_reason junto con el label — bueno para la nota del PDF."
+  ],
+  "updated_files": ["/app/backend/tests/test_iter23_rectify.py"],
+  "success_rate": {"backend": "100% (7/7)", "frontend": "100% (3 flujos UI probados)"},
+  "test_credentials": "admin@fiscalhub.es / admin123",
+  "seed_data_creation": "Se crearon durante el test: factura 2026-0016 + rect R-2026-0020 (error_datos), factura 2026-0017 pagada + rect R-2026-0021 (devolucion), factura 2026-0018 (anulación pura por error_no_entregada), más 2 facturas del pytest backend. LIMPIEZA COMPLETADA: borrados 5 invoices + 3 verifactu_log asociados; 0 TEST invoices restantes para admin.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "El endpoint POST /api/invoices/{id}/cancel requiere X-OF-Client:web (CSRF) + cookie de sesión. Para rectificativa, se envía automáticamente a VeriFactu si activo (modo simulado en admin). Si cliente tiene email, también se envía por Resend (no probado por diseño: cliente de prueba sin email).",
+  "rca of the issue": "N/A. Feature funcional end-to-end: backend expone 8 motivos con R1-R4+ANULACION, endpoint cancel genera rectificativa automática o anulación pura según normativa; UI pinta diálogo con 8 radios + hints legales para R2/R3/ANULACION, badges Rectificada/Rectificativa R1/Compensada, bloqueo correcto para pagadas con motivo ANULACION, y refund_pending visible en toast cuando aplica."
+}
