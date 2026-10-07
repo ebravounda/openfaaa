@@ -6,12 +6,26 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { useAuth } from "@/context/AuthContext";
+import Layout from "@/components/Layout";
 import { Deudores } from "@/components/remesas/Deudores";
 import { RemesaEditor } from "@/components/remesas/RemesaEditor";
 import { ArrowLeft, Plus, Upload, RefreshCw, Landmark, Loader2, Trash2 } from "lucide-react";
 
 const BADGE = { borrador: "bg-slate-100 text-slate-600", enviada: "bg-blue-50 text-[#0052FF]", parcial: "bg-amber-50 text-amber-700", cobrada: "bg-emerald-50 text-emerald-700" };
 const LABEL = { borrador: "Borrador", enviada: "Enviada", parcial: "Parcial", cobrada: "Cobrada" };
+
+const Shell = ({ isG, navigate, children }) => isG ? (
+  <div className="min-h-screen bg-slate-50" data-testid="remesas-page">
+    <header className="bg-white border-b border-slate-200 sticky top-0 z-30">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between gap-3">
+        <Button variant="ghost" onClick={() => navigate("/gestoria")} data-testid="remesas-back"><ArrowLeft className="w-4 h-4 sm:mr-2" /><span className="hidden sm:inline">Panel de gestoría</span></Button>
+        <Button variant="outline" onClick={() => navigate("/conciliacion")} data-testid="remesas-bank"><Landmark className="w-4 h-4 mr-2" /> Banco<span className="hidden sm:inline">&nbsp;y conciliación</span></Button>
+      </div>
+    </header>
+    <main className="max-w-7xl mx-auto px-4 sm:px-6 py-8 space-y-5">{children}</main>
+  </div>
+) : <Layout><div className="space-y-5" data-testid="remesas-page">{children}</div></Layout>;
 
 export default function Remesas() {
   const navigate = useNavigate();
@@ -51,15 +65,10 @@ export default function Remesas() {
     if (!window.confirm(`¿Eliminar la remesa ${r.name}?`)) return;
     try { await api.delete(`/gestoria/remesas/${r.id}`); if (sel === r.id) setSel(""); load(); } catch (e) { toast.error(formatApiErrorDetail(e.response?.data?.detail)); }
   };
+  const { user } = useAuth();
+  const isG = user?.role === "gestoria";
   return (
-    <div className="min-h-screen bg-slate-50" data-testid="remesas-page">
-      <header className="bg-white border-b border-slate-200 sticky top-0 z-30">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between gap-3">
-          <Button variant="ghost" onClick={() => navigate("/gestoria")} data-testid="remesas-back"><ArrowLeft className="w-4 h-4 sm:mr-2" /><span className="hidden sm:inline">Panel de gestoría</span></Button>
-          <Button variant="outline" onClick={() => navigate("/conciliacion")} data-testid="remesas-bank"><Landmark className="w-4 h-4 mr-2" /> Banco<span className="hidden sm:inline">&nbsp;y conciliación</span></Button>
-        </div>
-      </header>
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 py-8 space-y-5">
+    <Shell isG={isG} navigate={navigate}>
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
             <h1 className="font-display text-2xl font-bold text-slate-900">Remesas SEPA</h1>
@@ -94,7 +103,6 @@ export default function Remesas() {
             {sel ? <RemesaEditor id={sel} debtors={debtors} onChanged={load} /> : <div className="bg-white border border-dashed border-slate-200 rounded-xl p-16 text-center text-slate-400 text-sm">Selecciona o crea una remesa.</div>}
           </div>
         )}
-      </main>
       <Dialog open={!!nw} onOpenChange={(o) => !o && setNw(null)}>
         <DialogContent>
           <DialogHeader><DialogTitle>Nueva remesa</DialogTitle></DialogHeader>
@@ -106,6 +114,6 @@ export default function Remesas() {
           <Button onClick={create} className="bg-[#0052FF] hover:bg-[#0040CC] text-white" data-testid="new-remesa-create">Crear remesa</Button>
         </DialogContent>
       </Dialog>
-    </div>
+    </Shell>
   );
 }

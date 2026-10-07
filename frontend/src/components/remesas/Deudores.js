@@ -28,7 +28,7 @@ export const Deudores = ({ debtors, reload }) => {
       <div className="p-4 border-b border-slate-100 flex flex-wrap gap-2 justify-between items-center">
         <span className="text-sm text-slate-600">{debtors.length} deudores con mandato SEPA</span>
         <div className="flex gap-2">
-          <Button size="sm" variant="outline" onClick={fromClients} data-testid="debtors-from-clients"><Users className="w-4 h-4 mr-1.5" /> Importar mis clientes</Button>
+          <Button size="sm" variant="outline" onClick={fromClients} data-testid="debtors-from-clients"><Users className="w-4 h-4 mr-1.5" /> Importar mis clientes / contactos</Button>
           <Button size="sm" className="bg-[#0052FF] hover:bg-[#0040CC] text-white" onClick={() => setF({ ...EMPTY })} data-testid="debtor-new"><Plus className="w-4 h-4 mr-1" /> Nuevo deudor</Button>
         </div>
       </div>

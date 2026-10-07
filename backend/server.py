@@ -2702,9 +2702,8 @@ async def _powens_sync(row):
         count += 1
     await db.powens_clients.update_one({"id": row["id"]}, {"$set": {"last_sync_at": datetime.now(timezone.utc).isoformat(), "last_sync_count": count}})
     try:
-        owner = await db.users.find_one({"_id": ObjectId(row["user_id"])}, {"role": 1})
-        if (owner or {}).get("role") == "gestoria":
-            from remesas_routes import detect_remesa_payments
+        from remesas_routes import detect_remesa_payments
+        if await db.remesas.count_documents({"gestoria_id": row["user_id"]}, limit=1):
             await detect_remesa_payments(row["user_id"], row["company_id"])
     except Exception as e:
         logger.error(f"Remesa detection failed: {e}")

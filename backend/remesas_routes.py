@@ -11,7 +11,12 @@ from pydantic import BaseModel
 from bson import ObjectId
 
 from database import db
-from gestoria_routes import require_gestoria
+from auth import get_current_user
+
+
+async def require_gestoria(user=Depends(get_current_user)):
+    """Remesas disponibles para cualquier usuario (gestoría o empresa); cada uno ve solo las suyas."""
+    return user
 
 rem = APIRouter(prefix="/api/gestoria/remesas", tags=["remesas"])
 
@@ -182,6 +187,16 @@ async def delete_debtor(debtor_id: str, g=Depends(require_gestoria)):
 @rem.post("/deudores/desde-clientes")
 async def debtors_from_clients(g=Depends(require_gestoria)):
     n = 0
+    if g.get("role") != "gestoria":
+        cid = await __import__("server").active_cid(g)
+        async for c in db.contacts.find({"user_id": g["id"], "company_id": cid, "kind": {"$ne": "provider"}}, {"_id": 0}):
+            if await db.remesa_debtors.find_one({"gestoria_id": g["id"], "contact_id": c.get("id")}):
+                continue
+            await db.remesa_debtors.insert_one({**DebtorInput(name=c.get("name", ""), nif=(c.get("nif") or "").upper(), email=c.get("email", ""),
+                                                              address=c.get("address", "")).model_dump(),
+                                                "contact_id": c.get("id"), "id": str(uuid.uuid4()), "gestoria_id": g["id"], "created_at": _now()})
+            n += 1
+        return {"created": n}
     async for u in db.users.find({"gestoria_id": g["id"]}):
         uid = str(u["_id"])
         if await db.remesa_debtors.find_one({"gestoria_id": g["id"], "client_user_id": uid}):

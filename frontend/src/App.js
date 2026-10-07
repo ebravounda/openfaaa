@@ -87,6 +87,7 @@ function App() {
           <Route path="/admin" element={<ProtectedRoute><Admin /></ProtectedRoute>} />
           <Route path="/gestoria" element={<ProtectedRoute><Gestoria /></ProtectedRoute>} />
           <Route path="/gestoria/remesas" element={<ProtectedRoute><Remesas /></ProtectedRoute>} />
+          <Route path="/remesas" element={<ProtectedRoute><Remesas /></ProtectedRoute>} />
           <Route path="/contabilidad" element={<ProtectedRoute><Contabilidad /></ProtectedRoute>} />
         </Routes>
       </BrowserRouter>
