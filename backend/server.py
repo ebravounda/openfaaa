@@ -704,7 +704,7 @@ async def _make_invoice(user, company, data: InvoiceInput) -> dict:
         fecha = vf.to_ddmmyyyy(doc["issue_date"])
         tipo = "R1" if doc.get("invoice_type") == "rectificativa" else "F1"
         ts = vf.now_ts()
-        huella = vf.compute_fingerprint(nif, number, fecha, tipo, doc["iva_amount"], vf.importe_total(doc), prev, ts)
+        huella = vf.compute_fingerprint(nif, number, fecha, tipo, vf.cuota_total(doc), vf.importe_total(doc), prev, ts)
         doc["verifactu"] = {
             "enabled": True, "tipo": tipo, "huella": huella, "huella_anterior": prev,
             "timestamp": ts, "qr_url": vf.build_qr_url(nif, number, fecha, vf.importe_total(doc), produccion=(company.get("verifactu_mode") == "produccion")),
@@ -1133,7 +1133,7 @@ async def _rehash_pending(inv, company):
         v = cur["verifactu"]
         fecha = vf.to_ddmmyyyy(cur["issue_date"])
         imp = vf.importe_total(cur)
-        new_h = vf.compute_fingerprint(company.get("nif", ""), cur["number"], fecha, v.get("tipo", "F1"), cur.get("iva_amount", 0), imp, prev, v["timestamp"])
+        new_h = vf.compute_fingerprint(company.get("nif", ""), cur["number"], fecha, v.get("tipo", "F1"), vf.cuota_total(cur), imp, prev, v["timestamp"])
         if new_h == v["huella"]:
             break
         old_h = v["huella"]
@@ -1145,6 +1145,33 @@ async def _rehash_pending(inv, company):
         prev = new_h
         cur = await db.invoices.find_one({"company_id": company["id"], "verifactu.huella_anterior": old_h}, {"_id": 0})
     return inv["verifactu"]
+
+
+async def _vf_reject_notify(user, company, inv, code, desc, entorno):
+    """Email (dueño + gestoría) y aviso interno cuando la AEAT rechaza una factura."""
+    import html as _h
+    plain = vf.explain_error(code, desc)
+    title = f"La AEAT ha rechazado la factura {inv['number']}"
+    await db.notifications.insert_one({"id": str(uuid.uuid4()), "user_id": user["id"], "company_id": company["id"], "type": "verifactu",
+                                       "title": title, "body": plain, "read": False, "created_at": datetime.now(timezone.utc).isoformat()})
+    u = await db.users.find_one({"_id": ObjectId(user["id"])}, {"email": 1, "gestoria_id": 1})
+    to = [(u or {}).get("email")]
+    if (u or {}).get("gestoria_id"):
+        g = await db.users.find_one({"_id": ObjectId(u["gestoria_id"]), "role": "gestoria"}, {"email": 1})
+        to.append((g or {}).get("email"))
+    e = _h.escape
+    body = ("<div style='font-family:sans-serif;color:#0f172a;max-width:560px'>"
+            f"<h2 style='color:#b91c1c'>{e(title)}</h2>"
+            f"<p><b>Empresa:</b> {e(company.get('name', ''))} · <b>Entorno:</b> {e(entorno)}</p>"
+            f"<p><b>Qué pasa:</b> {e(plain)}</p>"
+            f"<p style='color:#64748b;font-size:13px'>Mensaje original de la AEAT: {e(str(code))} {e(desc or '')}</p>"
+            "<p><b>Qué hacer:</b> corrige la factura en OpenFactura y pulsa de nuevo «Enviar a VeriFactu». "
+            "Si ya la entregaste al cliente y el error es de importes, emite una factura rectificativa.</p></div>")
+    for addr in {a for a in to if a}:
+        try:
+            await send_email(to=addr, subject=f"OpenFactura · {title}", html=body)
+        except Exception as ex:
+            logger.error(f"VF reject email failed {addr}: {ex}")
 
 
 @api.post("/invoices/{invoice_id}/verifactu/submit")
@@ -1163,6 +1190,9 @@ async def verifactu_submit(invoice_id: str, user=Depends(get_current_user)):
                 "signed": vfd.get("signed", False), "already": True, "simulated": True}
     company = await active_company(user)
     nif = company.get("nif", "")
+    problems = vf.precheck(inv, company, spanish_tax.validate_nif)
+    if problems:
+        raise HTTPException(status_code=422, detail="No se ha enviado a la AEAT. Corrige esto antes: " + " · ".join(problems))
     vfd = await _rehash_pending(inv, company)
 
     # Encadenamiento: número y fecha de la factura anterior
@@ -1235,6 +1265,7 @@ async def verifactu_submit(invoice_id: str, user=Depends(get_current_user)):
             err = f"{parsed.get('codigo_error','')} {parsed.get('descripcion_error','')}".strip()
             status_msg = (f"Rechazado por la AEAT ({entorno}): {err}" if err
                           else f"Rechazado por la AEAT ({entorno})")
+            await _vf_reject_notify(user, company, inv, parsed.get("codigo_error", ""), parsed.get("descripcion_error", ""), entorno)
         else:
             estado, estado_reg, submitted = "Error", "Rechazado", False
             csv_code = None

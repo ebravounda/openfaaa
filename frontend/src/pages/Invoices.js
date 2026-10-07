@@ -365,7 +365,7 @@ export default function Invoices() {
       toast.success(data.status);
       load();
     } catch (e) {
-      toast.error(formatApiErrorDetail(e.response?.data?.detail));
+      toast.error(formatApiErrorDetail(e.response?.data?.detail), { duration: 12000 });
     }
   };
 

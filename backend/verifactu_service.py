@@ -25,6 +25,62 @@ def importe_total(invoice) -> float:
                  - float(invoice.get("suplidos_total", 0) or 0), 2)
 
 
+def cuota_total(invoice) -> float:
+    """CuotaTotal VeriFactu = cuotas de IVA + cuotas de recargo de equivalencia."""
+    return round(float(invoice.get("iva_amount", 0) or 0) + float(invoice.get("re_amount", 0) or 0), 2)
+
+
+AEAT_ERRORS = {
+    "2005": "El importe total no coincide con la suma de bases, IVA y recargo. Suele pasar con suplidos, descuentos o redondeos.",
+    "2004": "La cuota total no coincide con la suma del IVA y el recargo de equivalencia de cada línea.",
+    "1100": "Algún dato tiene un formato incorrecto (fecha, NIF o importes).",
+    "1104": "El NIF del emisor no está identificado en la AEAT o no coincide con el certificado.",
+    "1105": "El NIF del cliente no está identificado en la AEAT. Revisa que esté bien escrito.",
+    "1117": "El NIF del destinatario no está identificado en el censo de la AEAT.",
+    "3000": "Esta factura ya estaba registrada en la AEAT (registro duplicado).",
+    "4102": "El certificado no es válido o ha caducado.",
+}
+
+
+def explain_error(code: str, desc: str = "") -> str:
+    return AEAT_ERRORS.get(str(code).strip(), "La AEAT ha encontrado un dato incorrecto en la factura. Revisa el motivo indicado y corrige la factura o emite una rectificativa.")
+
+
+def precheck(invoice: dict, company: dict, validate_nif) -> list:
+    """Revisión previa al envío: devuelve lista de problemas (vacía si todo cuadra)."""
+    import re as _re
+    errs = []
+    if not validate_nif(company.get("nif", "")):
+        errs.append("El NIF de tu empresa no es válido. Corrígelo en Empresas.")
+    if not (invoice.get("number") or "").strip():
+        errs.append("La factura no tiene número.")
+    try:
+        d = datetime.strptime((invoice.get("issue_date") or "")[:10], "%Y-%m-%d").date()
+        if d > datetime.now(_MADRID).date():
+            errs.append("La fecha de la factura es futura; la AEAT no la acepta.")
+    except ValueError:
+        errs.append("La fecha de la factura no es válida.")
+    cl = invoice.get("client") or {}
+    if not (cl.get("name") or "").strip():
+        errs.append("Falta el nombre del cliente.")
+    if not validate_nif(cl.get("nif", "")):
+        errs.append(f"El NIF del cliente ({cl.get('nif') or 'vacío'}) no es válido.")
+    x = _build_desglose(invoice)
+    bases = sum(map(float, _re.findall(r"BaseImponibleOimporteNoSujeto>(-?[\d.]+)<", x)))
+    cuotas = sum(map(float, _re.findall(r"CuotaRepercutida>(-?[\d.]+)<", x)))
+    recargos = sum(map(float, _re.findall(r"CuotaRecargoEquivalencia>(-?[\d.]+)<", x)))
+    for b in invoice.get("iva_breakdown") or []:
+        if abs(round(b.get("base", 0) * b.get("rate", 0) / 100, 2) - b.get("cuota", 0)) > 0.01:
+            errs.append(f"El IVA al {b.get('rate')} % no corresponde a su base ({b.get('base'):.2f} €).")
+    if abs(round(cuotas + recargos, 2) - cuota_total(invoice)) > 0.01:
+        errs.append(f"La cuota total ({cuota_total(invoice):.2f} €) no cuadra con el IVA + recargo del desglose ({cuotas + recargos:.2f} €).")
+    if abs(round(bases + cuotas + recargos, 2) - importe_total(invoice)) > 0.01:
+        errs.append(f"El total a declarar ({importe_total(invoice):.2f} €) no cuadra con bases + IVA + recargo ({bases + cuotas + recargos:.2f} €).")
+    if not x:
+        errs.append("La factura no tiene líneas con importe.")
+    return errs
+
+
 def to_ddmmyyyy(iso_date: str) -> str:
     y, m, d = iso_date[:10].split("-")
     return f"{d}-{m}-{y}"
@@ -227,7 +283,7 @@ def build_registro_alta_xml(company: dict, invoice: dict, prev_number: str, prev
         f"<sum1:NIF>{_xesc(cl.get('nif',''))}</sum1:NIF>"
         f"</sum1:IDDestinatario></sum1:Destinatarios>"
         f"<sum1:Desglose>{_build_desglose(invoice)}</sum1:Desglose>"
-        f"<sum1:CuotaTotal>{_fmt_num(invoice.get('iva_amount',0))}</sum1:CuotaTotal>"
+        f"<sum1:CuotaTotal>{_fmt_num(cuota_total(invoice))}</sum1:CuotaTotal>"
         f"<sum1:ImporteTotal>{_fmt_num(importe_total(invoice))}</sum1:ImporteTotal>"
         f"{_encadenamiento(nif, prev_number, prev_huella, prev_fecha)}"
         f"{_sistema_informatico(nif, company.get('name',''))}"
