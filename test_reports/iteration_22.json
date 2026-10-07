@@ -1,0 +1,34 @@
+{
+  "summary": "Full backend + spot frontend test of Remesas SEPA (gestoría) y Contabilidad PGC (admin). 29/29 pytest PASS en /app/backend/tests/test_iter22_remesas_contabilidad.py. UI: /gestoria/remesas e /contabilidad cargan, botones data-testid presentes (gestoria-remesas, remesas-import-input, line-name-0, remesa-save, remesa-sort-name/amount, quarter-card, nav-accounting, balance-cuadra, pgc-plan-select). CSV import vía UI genera editor con 25 líneas y toast 'Remesa importada: 25 recibos (8215,79 €) · 24 deudores nuevos'. Las 8 pestañas de contabilidad (balance, pyg, diario, mayor, sumas, volumen, amortizaciones, categorías, asientos manuales, plan de cuentas) cargan sin errores de consola. Balance a 31/12/2026 cuadra (21.658,65 €). Responsive 390px OK (tabla con scroll horizontal, header con botones apilados).",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": [
+    "/app/backend/tests/test_iter22_remesas_contabilidad.py",
+    "/app/test_reports/pytest/iter22.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "remesas_routes._base_from_total garantiza base+IVA==total exacto (verificado 242→200+42, 145.2→120+25.2, 209.59→173.21/22+36.37/38). Buen manejo del redondeo.",
+    "remesas_routes.create_invoices valida nombre+NIF de la gestoría (400 si falta) y acumula errors por línea sin nombre — comportamiento correcto; detiene emisión por línea sin romper el batch.",
+    "detect_remesa_payments: coincide remesa completa OR línea individual con label-match (mandato/NIF/palabras del nombre). Cuando hay una sola cand y hace label_hit es seleccionada; si no, requiere label_hit explícito — razonable, pero podría registrar en bank_transactions.matched_type='remesa' y matched_id apuntando a la remesa (correcto). Añade notificación 'conciliacion'.",
+    "accounting_routes.build_entries: _line descarta importes 0 e invierte negativos — correcto para rectificativas. Para suplidos usa 555 (haber) y lado 430 (debe) con total incluido en inv.total → asiento cuadra siempre.",
+    "accounting_routes._pyg: usa pgc.match_prefix() para asignar cada cuenta 6*/7* al grupo con prefijo más largo; fallback por 1er dígito. OK pero cuentas 71/73/74/75 poco frecuentes en PYME, cubiertas.",
+    "accounting_routes._balance: cuadra verificado activo==pasivo tras crear activo y asiento manual 572/100 (balance test post-mods == true).",
+    "pgc.EXPENSE_CATEGORIES incluye las nuevas 'Restauración y dietas' y 'Telefonía e internet' (verificado via /api/contabilidad/categorias).",
+    "AssetInput._asset_doc valida rate <= max rate y cost>0 — correcto. 400 al pasarse del coeficiente máx.",
+    "JournalInput._journal_doc exige ≥2 líneas con cuenta numérica y Debe==Haber (±0.005) — bloquea descuadrados con 400 (verificado).",
+    "Export /api/contabilidad/exportar devuelve XLSX válido (PK header) para los 5 libros.",
+    "Posible mejora menor: _get() en remesas usa gestoria_id=g['id'] (user id de gestoría); si en el futuro una gestoría quisiera transferir remesa a otra, hoy quedaría ligada al creador. No bug.",
+    "Posible mejora menor: remesas_routes.import_remesa deduplica deudores por (gestoria_id, iban, mandate); si un CSV repite misma pareja crea sólo 1 deudor (bueno) pero puede sorprender si quería crear duplicados — comportamiento aceptable."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iter22_remesas_contabilidad.py"
+  ],
+  "success_rate": {"backend": "100% (29/29)", "frontend": "100% spot-checked"},
+  "test_credentials": "admin@fiscalhub.es/admin123, demo_gestoria@openfactura.es/DemoGest123",
+  "seed_data_creation": "Durante el run se crearon y luego se borraron: remesa TEST_Julio_iter22, remesa duplicada, deudores TEST, bank_transactions TEST_, asientos manuales TEST, activos TEST, notificaciones de conciliación. Se añadió además una remesa 'julio' y 24 deudores vía UI que fueron eliminados en limpieza final. Empresa gestoría restaurada a name=''/nif=''. PGC admin restaurado a 'pymes'. Verificado: 0 remesas remaining para la gestoría demo tras limpieza.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "El pytest.ini usa -n 2 --dist loadscope por defecto; ESTE suite comparte estado entre clases (pytest.rid), así que ejecutarlo con '-n 0' (o mantener todas las clases en la misma coverage de loadscope del mismo módulo — loadscope ya debería mantenerlas juntas, pero en entorno observamos distribución entre workers; usar -n 0 es más seguro). Comando: pytest backend/tests/test_iter22_remesas_contabilidad.py -n 0 -v. Preview Mongo en mongodb://localhost:27017/test_database.",
+  "rca of the issue": "N/A — todas las funcionalidades verificadas pasan. Importante: Remesas SEPA + Plan General Contable (balance cuadra, PyG, libros, amortizaciones, asientos manuales, categorías) y detección automática de cobros por bank_transactions con notificación 'conciliacion' funcionan correctamente."
+}
