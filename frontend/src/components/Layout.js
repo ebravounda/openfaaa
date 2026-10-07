@@ -64,7 +64,6 @@ const baseNav = [
   { to: "/contactos", label: "Contactos", icon: Users, testid: "nav-contacts" },
   { to: "/impuestos", label: "Impuestos", icon: Landmark, testid: "nav-taxes" },
   { to: "/contabilidad", label: "Contabilidad", icon: BookOpen, testid: "nav-accounting" },
-  { to: "/remesas", label: "Remesas SEPA", icon: Banknote, testid: "nav-remesas" },
   { to: "/analiticas", label: "Analíticas", icon: BarChart3, testid: "nav-analytics" },
   { to: "/conexion", label: "Conexión", icon: Activity, testid: "nav-connection" },
   { to: "/metodos-pago", label: "Métodos de pago", icon: CreditCard, testid: "nav-payment-methods" },
@@ -91,6 +90,8 @@ export default function Layout({ children }) {
   const hasPayroll = isAdmin || !!user?.payroll_enabled;
   const hasBank = isAdmin || !!user?.bank_enabled;
   const nav = [...baseNav];
+  const hasRemesas = isAdmin || user?.role === "gestoria" || String(user?.plan || "").startsWith("multiempresas");
+  if (hasRemesas) nav.splice(nav.findIndex((n) => n.to === "/contabilidad") + 1, 0, { to: "/remesas", label: "Remesas SEPA", icon: Banknote, testid: "nav-remesas" });
   if (hasPos) nav.splice(4, 0, { to: "/pos", label: "TPV", icon: Store, testid: "nav-pos" });
   if (hasBank) nav.push({ to: "/conciliacion", label: "Conciliación", icon: Landmark, testid: "nav-bank" });
   if (hasPayroll) {

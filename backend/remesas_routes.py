@@ -15,8 +15,10 @@ from auth import get_current_user
 
 
 async def require_gestoria(user=Depends(get_current_user)):
-    """Remesas disponibles para cualquier usuario (gestoría o empresa); cada uno ve solo las suyas."""
-    return user
+    """Remesas solo para gestorías, planes Multiempresas y administradores; cada uno ve solo las suyas."""
+    if user.get("role") in ("gestoria", "admin") or str(user.get("plan") or "").startswith("multiempresas"):
+        return user
+    raise HTTPException(status_code=403, detail="Las remesas SEPA están disponibles para gestorías y planes Multiempresas.")
 
 rem = APIRouter(prefix="/api/gestoria/remesas", tags=["remesas"])
 

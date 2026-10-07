@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, Navigate } from "react-router-dom";
 import { toast } from "sonner";
 import api, { eur, formatApiErrorDetail } from "@/lib/api";
 import { Button } from "@/components/ui/button";
@@ -36,8 +36,8 @@ export default function Remesas() {
   const [nw, setNw] = useState(null);
   const [busy, setBusy] = useState(false);
   const load = useCallback(() => {
-    api.get("/gestoria/remesas").then((r) => setList(r.data));
-    api.get("/gestoria/remesas/deudores").then((r) => setDebtors(r.data));
+    api.get("/gestoria/remesas").then((r) => setList(r.data)).catch(() => {});
+    api.get("/gestoria/remesas/deudores").then((r) => setDebtors(r.data)).catch(() => {});
   }, []);
   useEffect(() => { load(); }, [load]);
   const create = async () => {
@@ -67,6 +67,8 @@ export default function Remesas() {
   };
   const { user } = useAuth();
   const isG = user?.role === "gestoria";
+  const allowed = isG || user?.role === "admin" || String(user?.plan || "").startsWith("multiempresas");
+  if (user && !allowed) return <Navigate to="/" replace />;
   return (
     <Shell isG={isG} navigate={navigate}>
         <div className="flex flex-wrap items-center justify-between gap-3">
