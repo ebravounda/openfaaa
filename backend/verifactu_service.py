@@ -20,9 +20,9 @@ def _fmt_num(x) -> str:
 
 
 def importe_total(invoice) -> float:
-    """ImporteTotal VeriFactu = Base + IVA + Recargo (SIN restar IRPF).
-    invoice['total'] resta el IRPF, así que lo re-sumamos."""
-    return round(float(invoice.get("total", 0)) + float(invoice.get("irpf_amount", 0)), 2)
+    """ImporteTotal VeriFactu = Base + IVA + Recargo (sin IRPF y sin suplidos, que no se registran)."""
+    return round(float(invoice.get("total", 0)) + float(invoice.get("irpf_amount", 0) or 0)
+                 - float(invoice.get("suplidos_total", 0) or 0), 2)
 
 
 def to_ddmmyyyy(iso_date: str) -> str:
@@ -105,6 +105,15 @@ def _build_desglose(invoice: dict) -> str:
             "<sum1:ClaveRegimen>01</sum1:ClaveRegimen>"
             "<sum1:OperacionExenta>E5</sum1:OperacionExenta>"
             f"<sum1:BaseImponibleOimporteNoSujeto>{_fmt_num(intracom)}</sum1:BaseImponibleOimporteNoSujeto>"
+            "</sum1:DetalleDesglose>")
+    no_sujeta = round(float(invoice.get("base_no_sujeta", 0) or 0), 2)
+    if no_sujeta > 0:
+        parts.append(
+            "<sum1:DetalleDesglose>"
+            "<sum1:Impuesto>01</sum1:Impuesto>"
+            "<sum1:ClaveRegimen>01</sum1:ClaveRegimen>"
+            "<sum1:CalificacionOperacion>N1</sum1:CalificacionOperacion>"
+            f"<sum1:BaseImponibleOimporteNoSujeto>{_fmt_num(no_sujeta)}</sum1:BaseImponibleOimporteNoSujeto>"
             "</sum1:DetalleDesglose>")
     if not parts:  # compatibilidad con facturas antiguas (un solo tipo)
         parts.append(

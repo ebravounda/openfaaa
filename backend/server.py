@@ -1125,6 +1125,28 @@ async def convert_quote(quote_id: str, user=Depends(get_current_user)):
     return inv
 
 
+async def _rehash_pending(inv, company):
+    """Recalcula huella/QR de un registro aún no aceptado si su ImporteTotal cambió (y de los pendientes encadenados)."""
+    produccion = company.get("verifactu_mode") == "produccion"
+    cur, prev = inv, inv["verifactu"].get("huella_anterior", "")
+    while cur and not cur["verifactu"].get("submitted"):
+        v = cur["verifactu"]
+        fecha = vf.to_ddmmyyyy(cur["issue_date"])
+        imp = vf.importe_total(cur)
+        new_h = vf.compute_fingerprint(company.get("nif", ""), cur["number"], fecha, v.get("tipo", "F1"), cur.get("iva_amount", 0), imp, prev, v["timestamp"])
+        if new_h == v["huella"]:
+            break
+        old_h = v["huella"]
+        upd = {"verifactu.huella": new_h, "verifactu.huella_anterior": prev,
+               "verifactu.qr_url": vf.build_qr_url(company.get("nif", ""), cur["number"], fecha, imp, produccion=produccion)}
+        await db.invoices.update_one({"id": cur["id"]}, {"$set": upd})
+        if cur is inv:
+            inv["verifactu"].update({k.split(".")[1]: val for k, val in upd.items()})
+        prev = new_h
+        cur = await db.invoices.find_one({"company_id": company["id"], "verifactu.huella_anterior": old_h}, {"_id": 0})
+    return inv["verifactu"]
+
+
 @api.post("/invoices/{invoice_id}/verifactu/submit")
 async def verifactu_submit(invoice_id: str, user=Depends(get_current_user)):
     plan = await plan_for_user(user)
@@ -1141,6 +1163,7 @@ async def verifactu_submit(invoice_id: str, user=Depends(get_current_user)):
                 "signed": vfd.get("signed", False), "already": True, "simulated": True}
     company = await active_company(user)
     nif = company.get("nif", "")
+    vfd = await _rehash_pending(inv, company)
 
     # Encadenamiento: número y fecha de la factura anterior
     prev_number = ""
