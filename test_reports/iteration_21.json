@@ -1,0 +1,29 @@
+{
+  "summary": "Backend-only testing of VeriFactu pre-submit precheck (blocking) + XML totals with suplidos / no_sujeto (N1). Created /app/backend/tests/test_iter21_verifactu_precheck.py — 10/10 tests PASS.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": [
+    "/app/backend/tests/test_iter21_verifactu_precheck.py",
+    "/app/test_reports/pytest/iter21.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "precheck() correctly returns Spanish list of problems; verifactu_submit raises 422 with detail prefixed 'No se ha enviado a la AEAT. Corrige esto antes:' and does NOT write to verifactu_log nor mark submitted (verified via Mongo count).",
+    "importe_total() = total + irpf − suplidos → ImporteTotal in XML (126.20 for the suplido+recargo case) matches sum(bases+cuotas+recargos) of Desglose. Suplidos (50€) correctly excluded from the XML Desglose while still included in invoice.total (176.20).",
+    "cuota_total() = iva_amount + re_amount = CuotaRepercutida+CuotaRecargoEquivalencia in Desglose (26.20 verified).",
+    "no_sujeto line produces a DetalleDesglose with CalificacionOperacion N1 and BaseImponibleOimporteNoSujeto = 30.00.",
+    "_validate_invoice already blocks creation with invalid client NIF / empty client name — so those precheck branches are only reachable for pre-existing data; tested by DB-level stale-data injection and confirmed they correctly 422.",
+    "Minor: in precheck(), f-string uses b.get('base'):.2f which crashes if base is None (unlikely in practice because iva_breakdown is machine-built). Non-blocking.",
+    "Minor: AEAT reject email (_vf_reject_notify) only fires in preprod/prod paths; not reachable in simulado as noted by main agent — not tested here (per request)."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iter21_verifactu_precheck.py"
+  ],
+  "success_rate": {"backend": "100% (10/10)", "frontend": "n/a (skipped per request)"},
+  "test_credentials": "admin@fiscalhub.es / admin123",
+  "seed_data_creation": "All TEST_VF21 invoices and TEST_ contacts were deleted after the run via Mongo (verified count=0). Company (admin) left with verifactu_enabled=True, verifactu_mode='simulado'; original state was already enabled+simulado in this preview DB, so effectively restored.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "VeriFactu precheck/XML suite lives in test_iter21_verifactu_precheck.py. Uses pymongo for DB-level stale-data injection because _validate_invoice blocks creation with invalid client NIF or empty name. Preview Mongo at mongodb://localhost:27017/test_database. The admin company NIF is temporarily switched to 'BADNIF' and restored during test_block_invalid_company_nif.",
+  "rca of the issue": "N/A — all tests pass; no bug reproduced."
+}
