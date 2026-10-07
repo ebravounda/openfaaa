@@ -153,7 +153,7 @@ def _build_desglose(invoice: dict) -> str:
             f"{re_xml}</sum1:DetalleDesglose>")
     intracom = round(float(invoice.get("base_intracom", 0) or 0), 2)
     exento_puro = round(float(invoice.get("base_exenta", 0) or 0) - intracom, 2)
-    if exento_puro > 0:
+    if abs(exento_puro) > 0.004:
         parts.append(
             "<sum1:DetalleDesglose>"
             "<sum1:Impuesto>01</sum1:Impuesto>"
@@ -161,7 +161,7 @@ def _build_desglose(invoice: dict) -> str:
             "<sum1:OperacionExenta>E1</sum1:OperacionExenta>"
             f"<sum1:BaseImponibleOimporteNoSujeto>{_fmt_num(exento_puro)}</sum1:BaseImponibleOimporteNoSujeto>"
             "</sum1:DetalleDesglose>")
-    if intracom > 0:
+    if abs(intracom) > 0.004:
         parts.append(
             "<sum1:DetalleDesglose>"
             "<sum1:Impuesto>01</sum1:Impuesto>"
@@ -170,7 +170,7 @@ def _build_desglose(invoice: dict) -> str:
             f"<sum1:BaseImponibleOimporteNoSujeto>{_fmt_num(intracom)}</sum1:BaseImponibleOimporteNoSujeto>"
             "</sum1:DetalleDesglose>")
     no_sujeta = round(float(invoice.get("base_no_sujeta", 0) or 0), 2)
-    if no_sujeta > 0:
+    if abs(no_sujeta) > 0.004:
         parts.append(
             "<sum1:DetalleDesglose>"
             "<sum1:Impuesto>01</sum1:Impuesto>"
