@@ -27,7 +27,7 @@ RESELLER_RATE = 0.5  # la gestoría paga el 50% del precio del plan
 
 
 async def require_gestoria(user=Depends(get_current_user)) -> dict:
-    if user.get("role") != "gestoria" or user.get("is_impersonating"):
+    if user.get("role") != "gestoria":
         raise HTTPException(status_code=403, detail="Acceso restringido a gestorías")
     return user
 

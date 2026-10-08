@@ -3228,10 +3228,21 @@ async def _fix_accepted_with_errors():
         logger.info(f"VeriFactu {inv['number']}: marcada como registrada (AceptadoConErrores)")
 
 
+async def _fix_gestoria_plan_roles():
+    """Usuarios con un plan de gestoría deben tener rol gestoría."""
+    from plans import PLANS
+    ids = [k for k, v in PLANS.items() if "gestor" in f"{k} {v.get('name', '')}".lower()]
+    if ids:
+        async for u in db.users.find({"plan": {"$in": ids}, "role": "user", "gestoria_id": {"$in": [None, ""]}}):
+            await db.users.update_one({"_id": u["_id"]}, {"$set": {"role": "gestoria", "firm_name": u.get("firm_name") or u.get("name") or u.get("email")}})
+            logger.info(f"Usuario {u.get('email')} pasa a rol gestoría por su plan")
+
+
 @app.on_event("startup")
 async def startup():
     try:
         await _fix_accepted_with_errors()
+        await _fix_gestoria_plan_roles()
     except Exception as e:
         logger.error(f"VF AceptadoConErrores fix failed: {e}")
     secret = os.environ.get("JWT_SECRET", "")

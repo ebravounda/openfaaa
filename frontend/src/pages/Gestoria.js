@@ -130,6 +130,9 @@ export default function Gestoria() {
             <p className="text-sm text-slate-500 mt-0.5">Da de alta y gestiona las cuentas de tus clientes.</p>
           </div>
           <div className="flex items-center gap-2 flex-wrap">
+            <Button variant="outline" className="rounded-xl" onClick={() => navigate("/empresas")} data-testid="gestoria-fiscal-data">
+              <Building2 className="w-4 h-4 mr-2" strokeWidth={1.75} /> Datos fiscales
+            </Button>
             <Button variant="outline" className="rounded-xl border-[#0052FF]/30 text-[#0052FF]" onClick={() => navigate("/gestoria/remesas")} data-testid="gestoria-remesas">
               <Banknote className="w-4 h-4 mr-2" strokeWidth={1.75} /> Remesas SEPA
             </Button>

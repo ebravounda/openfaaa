@@ -264,11 +264,17 @@ async def toggle_bank(user_id: str, admin_user=Depends(require_admin)):
 async def set_plan(user_id: str, data: PlanInput, admin_user=Depends(require_admin)):
     if data.plan not in PLANS:
         raise HTTPException(status_code=400, detail="Plan no válido")
-    res = await db.users.update_one({"_id": ObjectId(user_id)}, {"$set": {"plan": data.plan}})
+    upd = {"plan": data.plan}
+    p = PLANS.get(data.plan) or {}
+    if "gestor" in f"{data.plan} {p.get('name', '')}".lower():
+        u = await db.users.find_one({"_id": ObjectId(user_id)}, {"role": 1, "gestoria_id": 1, "name": 1, "email": 1, "firm_name": 1})
+        if u and u.get("role") == "user" and not u.get("gestoria_id"):
+            upd.update({"role": "gestoria", "firm_name": u.get("firm_name") or u.get("name") or u.get("email")})
+    res = await db.users.update_one({"_id": ObjectId(user_id)}, {"$set": upd})
     if res.matched_count == 0:
         raise HTTPException(status_code=404, detail="Usuario no encontrado")
     await _audit(admin_user["id"], f"plan:{data.plan}", user_id)
-    return {"status": "ok", "plan": data.plan}
+    return {"status": "ok", "plan": data.plan, "role": upd.get("role")}
 
 
 class RoleInput(BaseModel):

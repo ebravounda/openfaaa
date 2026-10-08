@@ -23,7 +23,13 @@ export const RemesaEditor = ({ id, debtors, onChanged }) => {
   const move = (i, d) => { const ls = [...r.lines]; const j = i + d; if (j < 0 || j >= ls.length) return; [ls[i], ls[j]] = [ls[j], ls[i]]; upd({ lines: ls }); };
   const sortBy = (k) => upd({ lines: [...r.lines].sort((a, b) => (k === "amount" ? b.amount - a.amount : String(a[k]).localeCompare(String(b[k])))) });
   const addDebtor = (did) => { const d = debtors.find((x) => x.id === did); if (d) upd({ lines: [...r.lines, { ...blank(), ...d, id: "", debtor_id: d.id }] }); };
-  const run = async (key, fn) => { setBusy(key); try { await fn(); } catch (e) { toast.error(formatApiErrorDetail(e.response?.data?.detail)); } finally { setBusy(""); } };
+  const run = async (key, fn) => {
+    setBusy(key);
+    try { await fn(); } catch (e) {
+      const msg = formatApiErrorDetail(e.response?.data?.detail);
+      toast.error(msg, msg.includes("Empresas") ? { duration: 15000, action: { label: "Ir a Empresas", onClick: () => { window.location.href = "/empresas"; } } } : undefined);
+    } finally { setBusy(""); }
+  };
   const save = () => run("save", async () => {
     const { data } = await api.put(`/gestoria/remesas/${id}`, { name: r.name, charge_date: r.charge_date, reference: r.reference, lines: r.lines.map((l) => ({ ...l, amount: Number(l.amount || 0), iva_rate: Number(l.iva_rate ?? 21) })) });
     setR(data); setDirty(false); toast.success("Remesa guardada"); onChanged();
