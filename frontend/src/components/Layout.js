@@ -139,7 +139,7 @@ export default function Layout({ children }) {
   const bannerH = user?.is_impersonating ? 36 : 0;
 
   let trialDays = null;
-  if (user && user.role !== "admin" && (user.plan || "basico") === "basico" && user.trial_ends_at) {
+  if (user && user.role !== "admin" && user.role !== "gestoria" && (user.plan || "basico") === "basico" && user.trial_ends_at) {
     try {
       const end = new Date(user.trial_ends_at);
       const diffMs = end.getTime() - Date.now();
@@ -221,7 +221,7 @@ export default function Layout({ children }) {
               <div className="text-xs text-slate-500 truncate">
                 {user?.role === "admin" && !user?.is_impersonating
                   ? "Administrador"
-                  : (PLAN_LABEL[user?.plan] ? `Plan ${PLAN_LABEL[user?.plan]}` : (user?.tax_type === "empresa" ? "Empresa" : "Autónomo"))}
+                  : user?.role === "gestoria" ? `Gestoría · ${PLAN_LABEL[String(user?.plan).startsWith("multiempresas") ? user.plan : "multiempresas"] || "Multiempresas"}` : (PLAN_LABEL[user?.plan] ? `Plan ${PLAN_LABEL[user?.plan]}` : (user?.tax_type === "empresa" ? "Empresa" : "Autónomo"))}
               </div>
             </div>
             <button onClick={handleLogout} data-testid="logout-button" title="Cerrar sesión" className="p-2 rounded-lg text-slate-400 hover:text-slate-900 hover:bg-slate-50 transition-colors duration-200">

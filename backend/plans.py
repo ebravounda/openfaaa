@@ -89,7 +89,11 @@ async def plans_list() -> list:
 async def plan_for_user(user: dict) -> dict:
     if user.get("role") == "admin":
         return dict(ADMIN_PLAN)
+    plans = await load_plans()
+    if user.get("role") == "gestoria":
+        # Las gestorías incluyen siempre Multiempresas (o el plan superior que tengan asignado)
+        pid = user.get("plan") if str(user.get("plan") or "").startswith("multiempresas") else "multiempresas"
+        return plans.get(pid, plans["multiempresas"])
     if user.get("plan", "basico") == "basico" and _trial_active(user):
         return dict(TRIAL_PLAN)
-    plans = await load_plans()
     return plans.get(user.get("plan", "basico"), plans["basico"])
