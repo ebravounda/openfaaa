@@ -258,6 +258,9 @@ async def update_remesa(rid: str, data: RemesaInput, g=Depends(require_gestoria)
             if _r(prev.get("amount")) != _r(x["amount"]):
                 raise HTTPException(status_code=400, detail=f"La línea de {x['name']} ya tiene factura ({x['invoice_number']}); no se puede cambiar su importe. Emite una rectificativa.")
         lines.append(x)
+        if x.get("debtor_id"):
+            await db.remesa_debtors.update_one({"id": x["debtor_id"], "gestoria_id": g["id"]}, {"$set": {
+                k: x[k] for k in ("name", "nif", "iban", "mandate", "mandate_date", "email", "concept", "reference") if x.get(k)}})
     await db.remesas.update_one({"id": rid}, {"$set": {"name": data.name, "charge_date": data.charge_date, "reference": data.reference,
                                                         "lines": lines, "updated_at": _now()}})
     return _summary(await _get(rid, g))
