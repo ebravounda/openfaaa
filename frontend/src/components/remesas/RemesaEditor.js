@@ -12,7 +12,7 @@ const blank = () => ({ id: "", name: "", nif: "", iban: "", mandate: "", mandate
 const COLS = [["name", "Deudor", "w-44"], ["nif", "NIF", "w-28"], ["iban", "IBAN", "w-56"], ["mandate", "Mandato", "w-32"], ["mandate_date", "F. mandato", "w-36", "date"],
   ["amount", "Importe", "w-24", "number"], ["concept", "Concepto", "w-56"]];
 
-export const RemesaEditor = ({ id, debtors, onChanged }) => {
+export const RemesaEditor = ({ id, debtors, onChanged, onNeedIssuer }) => {
   const [r, setR] = useState(null);
   const [busy, setBusy] = useState("");
   const [dirty, setDirty] = useState(false);
@@ -27,7 +27,8 @@ export const RemesaEditor = ({ id, debtors, onChanged }) => {
     setBusy(key);
     try { await fn(); } catch (e) {
       const msg = formatApiErrorDetail(e.response?.data?.detail);
-      toast.error(msg, msg.includes("Empresas") ? { duration: 15000, action: { label: "Ir a Empresas", onClick: () => { window.location.href = "/empresas"; } } } : undefined);
+      if (msg.startsWith("DATOS_FISCALES:")) { toast.error(msg.replace("DATOS_FISCALES: ", "")); onNeedIssuer?.(); }
+      else toast.error(msg);
     } finally { setBusy(""); }
   };
   const save = () => run("save", async () => {

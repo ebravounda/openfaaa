@@ -10,6 +10,7 @@ import { useAuth } from "@/context/AuthContext";
 import Layout from "@/components/Layout";
 import { Deudores } from "@/components/remesas/Deudores";
 import { RemesaEditor } from "@/components/remesas/RemesaEditor";
+import { IssuerCard } from "@/components/remesas/IssuerCard";
 import { ArrowLeft, Plus, Upload, RefreshCw, Landmark, Loader2, Trash2 } from "lucide-react";
 
 const BADGE = { borrador: "bg-slate-100 text-slate-600", enviada: "bg-blue-50 text-[#0052FF]", parcial: "bg-amber-50 text-amber-700", cobrada: "bg-emerald-50 text-emerald-700" };
@@ -35,6 +36,7 @@ export default function Remesas() {
   const [tab, setTab] = useState("remesas");
   const [nw, setNw] = useState(null);
   const [busy, setBusy] = useState(false);
+  const [issuerSignal, setIssuerSignal] = useState(0);
   const load = useCallback(() => {
     api.get("/gestoria/remesas").then((r) => setList(r.data)).catch(() => {});
     api.get("/gestoria/remesas/deudores").then((r) => setDebtors(r.data)).catch(() => {});
@@ -85,6 +87,7 @@ export default function Remesas() {
             <Button className="bg-[#0052FF] hover:bg-[#0040CC] text-white" onClick={() => setNw({ name: `Remesa ${new Date().toLocaleDateString("es-ES", { month: "long", year: "numeric" })}`, charge_date: "", reference: "", from_debtors: true })} data-testid="remesas-new"><Plus className="w-4 h-4 mr-2" /> Nueva remesa</Button>
           </div>
         </div>
+        <IssuerCard openSignal={issuerSignal} />
         <div className="flex rounded-lg border border-slate-200 overflow-hidden w-fit bg-white">
           {[["remesas", `Remesas (${list.length})`], ["deudores", `Deudores (${debtors.length})`]].map(([k, l]) => (
             <button key={k} onClick={() => setTab(k)} className={`px-4 h-9 text-sm transition-colors ${tab === k ? "bg-[#0052FF] text-white" : "text-slate-600 hover:bg-slate-50"}`} data-testid={`remesas-tab-${k}`}>{l}</button>
@@ -102,7 +105,7 @@ export default function Remesas() {
               ))}
               {!list.length && <div className="text-sm text-slate-400 bg-white border border-dashed border-slate-200 rounded-xl p-6 text-center">Aún no hay remesas.</div>}
             </div>
-            {sel ? <RemesaEditor id={sel} debtors={debtors} onChanged={load} /> : <div className="bg-white border border-dashed border-slate-200 rounded-xl p-16 text-center text-slate-400 text-sm">Selecciona o crea una remesa.</div>}
+            {sel ? <RemesaEditor id={sel} debtors={debtors} onChanged={load} onNeedIssuer={() => setIssuerSignal((n) => n + 1)} /> : <div className="bg-white border border-dashed border-slate-200 rounded-xl p-16 text-center text-slate-400 text-sm">Selecciona o crea una remesa.</div>}
           </div>
         )}
       <Dialog open={!!nw} onOpenChange={(o) => !o && setNw(null)}>

@@ -341,6 +341,48 @@ async def mark_paid(rid: str, line_id: str, data: PaidInput, g=Depends(require_g
     return _summary(await _get(rid, g))
 
 
+# ---------- Datos fiscales del emisor (gestoría) ----------
+FISCAL_FIELDS = ("name", "legal_name", "nif", "address", "email", "phone", "tax_type", "legal_notice", "invoice_footer")
+REQUIRED = {"name": "Nombre comercial o razón social", "nif": "NIF/CIF", "address": "Domicilio fiscal completo"}
+
+
+class FiscalInput(BaseModel):
+    name: str = ""
+    legal_name: str = ""
+    nif: str = ""
+    address: str = ""
+    email: str = ""
+    phone: str = ""
+    tax_type: str = "sociedad"
+    legal_notice: str = ""
+    invoice_footer: str = ""
+
+
+def _missing(c: dict) -> list:
+    import spanish_tax
+    miss = [label for k, label in REQUIRED.items() if not (c.get(k) or "").strip()]
+    if (c.get("nif") or "").strip() and not spanish_tax.validate_nif(c["nif"]):
+        miss.append("NIF/CIF válido")
+    return miss
+
+
+@rem.get("/ajustes/emisor")
+async def get_issuer(g=Depends(require_gestoria)):
+    c = await __import__("server").active_company(g)
+    return {**{k: c.get(k, "") for k in FISCAL_FIELDS}, "id": c.get("id"), "missing": _missing(c)}
+
+
+@rem.put("/ajustes/emisor")
+async def set_issuer(data: FiscalInput, g=Depends(require_gestoria)):
+    c = await __import__("server").active_company(g)
+    upd = {k: (v.strip().upper() if k == "nif" else v.strip()) for k, v in data.model_dump().items()}
+    if upd["tax_type"] not in ("autonomo", "sociedad", "empresa"):
+        upd["tax_type"] = "sociedad"
+    await db.companies.update_one({"id": c["id"]}, {"$set": upd})
+    c.update(upd)
+    return {**{k: c.get(k, "") for k in FISCAL_FIELDS}, "id": c["id"], "missing": _missing(c)}
+
+
 # ---------- Facturas ----------
 def _base_from_total(total: float, rate: float) -> float:
     base = round(total / (1 + rate / 100), 2)
@@ -356,8 +398,9 @@ async def create_invoices(rid: str, g=Depends(require_gestoria)):
     srv = __import__("server")
     r = await _get(rid, g)
     company = await srv.active_company(g)
-    if not (company.get("name") and company.get("nif")):
-        raise HTTPException(status_code=400, detail="Completa el nombre y el NIF de tu gestoría en Empresas antes de emitir facturas.")
+    miss = _missing(company)
+    if miss:
+        raise HTTPException(status_code=400, detail="DATOS_FISCALES: Completa los datos fiscales de la gestoría antes de emitir facturas: " + ", ".join(miss) + ".")
     issue = datetime.now(timezone.utc).date().isoformat()
     created, errors = 0, []
     for ln in r["lines"]:
