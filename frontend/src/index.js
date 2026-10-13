@@ -15,6 +15,8 @@ const queryClient = new QueryClient({
 });
 
 const root = ReactDOM.createRoot(document.getElementById("root"));
+// Las etiquetas SEO estáticas de index.html (para bots sin JS) se retiran: cada página pone las suyas con <Seo>/<Helmet>.
+document.querySelectorAll("[data-static-seo]").forEach((el) => el.remove());
 root.render(
   <React.StrictMode>
     <HelmetProvider>
