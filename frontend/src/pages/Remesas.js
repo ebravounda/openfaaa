@@ -13,8 +13,8 @@ import { RemesaEditor } from "@/components/remesas/RemesaEditor";
 import { IssuerCard } from "@/components/remesas/IssuerCard";
 import { ArrowLeft, Plus, Upload, RefreshCw, Landmark, Loader2, Trash2 } from "lucide-react";
 
-const BADGE = { borrador: "bg-slate-100 text-slate-600", enviada: "bg-blue-50 text-[#0052FF]", parcial: "bg-amber-50 text-amber-700", cobrada: "bg-emerald-50 text-emerald-700" };
-const LABEL = { borrador: "Borrador", enviada: "Enviada", parcial: "Parcial", cobrada: "Cobrada" };
+const BADGE = { borrador: "bg-slate-100 text-slate-600", emitida: "bg-violet-50 text-violet-700", enviada: "bg-blue-50 text-[#0052FF]", parcial: "bg-amber-50 text-amber-700", cobrada: "bg-emerald-50 text-emerald-700" };
+const LABEL = { borrador: "Borrador", emitida: "Emitida · pendiente", enviada: "Enviada", parcial: "Parcial", cobrada: "Cobrada" };
 
 const Shell = ({ isG, navigate, children }) => isG ? (
   <div className="min-h-screen bg-slate-50" data-testid="remesas-page">
@@ -36,6 +36,7 @@ export default function Remesas() {
   const [tab, setTab] = useState("remesas");
   const [nw, setNw] = useState(null);
   const [busy, setBusy] = useState(false);
+  const [onlyPending, setOnlyPending] = useState(false);
   const [issuerSignal, setIssuerSignal] = useState(0);
   const load = useCallback(() => {
     api.get("/gestoria/remesas").then((r) => setList(r.data)).catch(() => {});
@@ -58,11 +59,15 @@ export default function Remesas() {
     } catch (err) { toast.error(formatApiErrorDetail(err.response?.data?.detail)); } finally { setBusy(false); }
   };
   const check = async () => {
-    const { data } = await api.post("/gestoria/remesas/comprobar-cobros");
-    if (data.found.length) data.found.forEach((f) => toast.success(`Cobro de ${eur(f.amount)} conciliado · ${f.remesa}: ${f.detail}`));
-    else toast.message("No hay cobros nuevos de remesas en el banco");
-    load();
+    try {
+      const { data } = await api.post("/gestoria/remesas/comprobar-cobros");
+      if (data.found.length) data.found.forEach((f) => toast.success(`Cobro de ${eur(f.amount)} conciliado · ${f.remesa}: ${f.detail}`));
+      else toast.message("No hay cobros nuevos de remesas en el banco");
+      load();
+    } catch (e) { toast.error(formatApiErrorDetail(e.response?.data?.detail)); }
   };
+  const pendingList = list.filter((r) => r.status !== "cobrada" && r.pending_total > 0);
+  const shown = onlyPending ? pendingList : list;
   const del = async (r) => {
     if (!window.confirm(`¿Eliminar la remesa ${r.name}?`)) return;
     try { await api.delete(`/gestoria/remesas/${r.id}`); if (sel === r.id) setSel(""); load(); } catch (e) { toast.error(formatApiErrorDetail(e.response?.data?.detail)); }
@@ -96,14 +101,19 @@ export default function Remesas() {
         {tab === "deudores" ? <Deudores debtors={debtors} reload={load} /> : (
           <div className="grid lg:grid-cols-[280px_minmax(0,1fr)] gap-4 items-start">
             <div className="space-y-2" data-testid="remesas-list">
-              {list.map((r) => (
+              <div className="bg-white border border-slate-200 rounded-xl p-3 text-xs flex items-center justify-between gap-2" data-testid="remesas-pending-summary">
+                <span className="text-slate-600">{pendingList.length} pendientes de cobro · <b className="tabular text-amber-700">{eur(pendingList.reduce((s, r) => s + r.pending_total, 0))}</b></span>
+                <button onClick={() => setOnlyPending(!onlyPending)} className="text-[#0052FF] hover:underline" data-testid="remesas-filter-pending">{onlyPending ? "Ver todas" : "Solo pendientes"}</button>
+              </div>
+              {shown.map((r) => (
                 <div key={r.id} onClick={() => setSel(r.id)} className={`bg-white border rounded-xl p-3 cursor-pointer transition-colors ${sel === r.id ? "border-[#0052FF] ring-1 ring-[#0052FF]/20" : "border-slate-200 hover:border-slate-300"}`} data-testid={`remesa-card-${r.id}`}>
                   <div className="flex justify-between gap-2"><span className="font-medium text-sm text-slate-900 truncate">{r.name}</span><button onClick={(e) => { e.stopPropagation(); del(r); }}><Trash2 className="w-3.5 h-3.5 text-slate-300 hover:text-red-600" /></button></div>
                   <div className="flex justify-between items-center mt-1 text-xs"><span className={`rounded px-1.5 py-0.5 ${BADGE[r.status]}`}>{LABEL[r.status]}</span><span className="tabular font-semibold">{eur(r.total)}</span></div>
-                  <div className="text-[11px] text-slate-400 mt-1">{r.count} recibos{r.charge_date ? ` · cobro ${r.charge_date}` : ""}</div>
+                  <div className="text-[11px] text-slate-400 mt-1">Base {eur(r.base_total)} + IVA {eur(r.iva_total)}</div>
+                  <div className="text-[11px] text-slate-400">{r.count} recibos{r.charge_date ? ` · cobro ${r.charge_date}` : ""}{r.pending_total > 0 && r.status !== "borrador" ? <span className="text-amber-700"> · pendiente {eur(r.pending_total)}</span> : ""}</div>
                 </div>
               ))}
-              {!list.length && <div className="text-sm text-slate-400 bg-white border border-dashed border-slate-200 rounded-xl p-6 text-center">Aún no hay remesas.</div>}
+              {!shown.length && <div className="text-sm text-slate-400 bg-white border border-dashed border-slate-200 rounded-xl p-6 text-center">Aún no hay remesas.</div>}
             </div>
             {sel ? <RemesaEditor id={sel} debtors={debtors} onChanged={load} onNeedIssuer={() => setIssuerSignal((n) => n + 1)} /> : <div className="bg-white border border-dashed border-slate-200 rounded-xl p-16 text-center text-slate-400 text-sm">Selecciona o crea una remesa.</div>}
           </div>

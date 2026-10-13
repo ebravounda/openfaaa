@@ -16,6 +16,11 @@ const FIELDS = [
   ["email", "Email de facturación", "", "facturas@asesoria.es"],
   ["phone", "Teléfono", "", "910 000 000"],
 ];
+const SEPA = [
+  ["sepa_iban", "IBAN donde se abonan las remesas", "col-span-2", "ES00 0000 0000 0000 0000 0000"],
+  ["sepa_creditor_id", "Identificador de acreedor SEPA", "", ""],
+  ["sepa_bic", "BIC del banco (opcional)", "", "CAIXESBBXXX"],
+];
 
 export const IssuerCard = ({ openSignal }) => {
   const [d, setD] = useState(null);
@@ -42,7 +47,8 @@ export const IssuerCard = ({ openSignal }) => {
           <Building2 className={`w-5 h-5 ${ok ? "text-[#0052FF]" : "text-amber-600"}`} />
           {ok ? (
             <div><div className="font-semibold text-slate-900 flex items-center gap-1.5">{d.legal_name || d.name} <CheckCircle2 className="w-4 h-4 text-emerald-600" /></div>
-              <div className="text-slate-500">NIF {d.nif} · {d.address}</div></div>
+              <div className="text-slate-500">NIF {d.nif} · {d.address}</div>
+              {d.sepa_missing?.length > 0 && <div className="text-amber-700 text-xs mt-0.5" data-testid="issuer-sepa-missing">Para el XML SEPA falta: {d.sepa_missing.join(", ")}</div>}</div>
           ) : (
             <div><div className="font-semibold text-amber-800 flex items-center gap-1.5"><AlertTriangle className="w-4 h-4" /> Faltan los datos fiscales de la gestoría</div>
               <div className="text-amber-700">Aparecen como emisor en todas las facturas de las remesas. Falta: {d.missing.join(", ")}.</div></div>
@@ -68,6 +74,11 @@ export const IssuerCard = ({ openSignal }) => {
               </select></div>
             <div className="col-span-2"><Label>Texto legal (inscripción en el Registro Mercantil, protección de datos…)</Label>
               <Textarea rows={2} value={f.legal_notice || ""} onChange={(e) => setF({ ...f, legal_notice: e.target.value })} placeholder="Inscrita en el Registro Mercantil de Madrid, Tomo…, Folio…, Hoja…" data-testid="issuer-legal_notice" /></div>
+            <div className="col-span-2 pt-2 border-t border-slate-100 text-xs font-semibold text-slate-500 uppercase tracking-wide">Cobro por adeudo directo SEPA (fichero XML)</div>
+            {SEPA.map(([k, l, cls, ph]) => (
+              <div key={k} className={cls}><Label>{l}</Label><Input value={f[k] || ""} placeholder={k === "sepa_creditor_id" ? (d.suggested_creditor_id || "ES00000B12345678") : ph} onChange={(e) => setF({ ...f, [k]: e.target.value })} data-testid={`issuer-${k}`} /></div>
+            ))}
+            <p className="col-span-2 text-xs text-slate-500">Si no indicas el identificador de acreedor, se calcula a partir del NIF ({d.suggested_creditor_id || "—"}). Confírmalo con tu banco.</p>
           </div>}
           <Button onClick={save} disabled={saving} className="bg-[#0052FF] hover:bg-[#0040CC] text-white" data-testid="issuer-save">Guardar datos fiscales</Button>
         </DialogContent>

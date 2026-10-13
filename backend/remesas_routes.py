@@ -22,8 +22,11 @@ async def require_gestoria(user=Depends(get_current_user)):
 
 rem = APIRouter(prefix="/api/gestoria/remesas", tags=["remesas"])
 
-COLUMNS = ["Nº", "Importe", "Fecha cobro", "Nombre deudor", "Identificador deudor", "IBAN", "Mandato", "Fecha mandato", "Referencia operación", "Concepto"]
-STATUSES = {"borrador", "enviada", "cobrada", "parcial"}
+COLUMNS = ["Nº", "Importe", "Fecha cobro", "Nombre deudor", "Identificador deudor", "IBAN", "Mandato", "Fecha mandato", "Referencia operación", "Concepto",
+           "Base imponible", "IVA %", "Cuota IVA", "Exento", "Factura"]
+STATUSES = {"borrador", "emitida", "enviada", "cobrada", "parcial"}
+OPEN = ["borrador", "emitida", "enviada", "parcial"]
+DEFAULT_EXEMPT = "Exento art. 20.Uno Ley 37/1992 del IVA"
 
 
 def _now():
@@ -60,6 +63,8 @@ def iban_valid(iban: str) -> bool:
 
 def line_warnings(ln: dict) -> list:
     w = []
+    if (ln.get("nif") or "").strip() and not __import__("spanish_tax").validate_nif(ln["nif"]):
+        w.append("NIF no válido")
     if _r(ln.get("amount")) <= 0:
         w.append("Importe 0")
     if not iban_valid(ln.get("iban", "")):
@@ -83,6 +88,8 @@ class DebtorInput(BaseModel):
     address: str = ""
     amount: float = 0.0
     iva_rate: float = 21
+    vat_exempt: bool = False
+    exempt_reason: str = ""
     concept: str = ""
     reference: str = ""
     client_user_id: str = ""
@@ -100,6 +107,8 @@ class LineInput(BaseModel):
     email: str = ""
     amount: float = 0.0
     iva_rate: float = 21
+    vat_exempt: bool = False
+    exempt_reason: str = ""
     reference: str = ""
     concept: str = ""
     invoice_id: str = ""
@@ -132,17 +141,43 @@ def _debtor_doc(d: DebtorInput) -> dict:
 def _line_from_debtor(d: dict) -> dict:
     return {"id": str(uuid.uuid4()), "debtor_id": d["id"], "name": d.get("name", ""), "nif": d.get("nif", ""), "iban": d.get("iban", ""),
             "mandate": d.get("mandate", ""), "mandate_date": d.get("mandate_date", ""), "email": d.get("email", ""),
-            "amount": _r(d.get("amount")), "iva_rate": d.get("iva_rate", 21), "reference": d.get("reference", ""),
+            "amount": _r(d.get("amount")), "iva_rate": d.get("iva_rate", 21), "vat_exempt": bool(d.get("vat_exempt")),
+            "exempt_reason": d.get("exempt_reason", ""), "reference": d.get("reference", ""),
             "concept": d.get("concept", ""), "invoice_id": "", "invoice_number": "", "paid": False, "paid_date": ""}
+
+
+def _base_from_total(total: float, rate: float) -> float:
+    base = round(total / (1 + rate / 100), 2)
+    for delta in (0, 0.01, -0.01, 0.02, -0.02):
+        b = round(base + delta, 2)
+        if round(b + round(b * rate / 100, 2), 2) == round(total, 2):
+            return b
+    return base
+
+
+def _rate(ln: dict) -> float:
+    return 0.0 if ln.get("vat_exempt") else float(ln.get("iva_rate") or 0)
+
+
+def _tax(ln: dict):
+    """El importe del recibo es el TOTAL con IVA incluido: devuelve (base, cuota IVA)."""
+    total = _r(ln.get("amount"))
+    base = _base_from_total(total, _rate(ln))
+    return base, _r(total - base)
 
 
 def _summary(r: dict) -> dict:
     lines = r.get("lines", [])
     for ln in lines:
         ln["warnings"] = line_warnings(ln)
+        ln["base"], ln["iva"] = _tax(ln)
     r["total"] = _r(sum(_r(ln.get("amount")) for ln in lines))
+    r["base_total"] = _r(sum(ln["base"] for ln in lines))
+    r["iva_total"] = _r(r["total"] - r["base_total"])
     r["count"] = len(lines)
     r["paid_total"] = _r(sum(_r(ln.get("amount")) for ln in lines if ln.get("paid")))
+    r["pending_total"] = _r(r["total"] - r["paid_total"])
+    r["pending_count"] = sum(1 for ln in lines if not ln.get("paid"))
     r["invoiced"] = sum(1 for ln in lines if ln.get("invoice_id"))
     r["warnings"] = sum(1 for ln in lines if ln["warnings"])
     return r
@@ -252,15 +287,18 @@ async def update_remesa(rid: str, data: RemesaInput, g=Depends(require_gestoria)
         x = ln.model_dump()
         x["id"] = x["id"] or str(uuid.uuid4())
         x["iban"] = x["iban"].replace(" ", "").upper()
+        x["nif"] = x["nif"].strip().upper()
         prev = old.get(x["id"])
         if prev and prev.get("invoice_id"):
             x["invoice_id"], x["invoice_number"] = prev["invoice_id"], prev.get("invoice_number", "")
-            if _r(prev.get("amount")) != _r(x["amount"]):
-                raise HTTPException(status_code=400, detail=f"La línea de {x['name']} ya tiene factura ({x['invoice_number']}); no se puede cambiar su importe. Emite una rectificativa.")
+            x["issue_date"] = prev.get("issue_date", "")
+            if _r(prev.get("amount")) != _r(x["amount"]) or _rate(prev) != _rate(x):
+                raise HTTPException(status_code=400, detail=f"La línea de {x['name']} ya tiene factura ({x['invoice_number']}); no se puede cambiar su importe ni su IVA. Emite una rectificativa.")
         lines.append(x)
         if x.get("debtor_id"):
-            await db.remesa_debtors.update_one({"id": x["debtor_id"], "gestoria_id": g["id"]}, {"$set": {
-                k: x[k] for k in ("name", "nif", "iban", "mandate", "mandate_date", "email", "concept", "reference") if x.get(k)}})
+            upd = {k: x[k] for k in ("name", "nif", "iban", "mandate", "mandate_date", "email", "concept", "reference") if x.get(k)}
+            upd.update({"iva_rate": x["iva_rate"], "vat_exempt": x["vat_exempt"], "exempt_reason": x["exempt_reason"]})
+            await db.remesa_debtors.update_one({"id": x["debtor_id"], "gestoria_id": g["id"]}, {"$set": upd})
     await db.remesas.update_one({"id": rid}, {"$set": {"name": data.name, "charge_date": data.charge_date, "reference": data.reference,
                                                         "lines": lines, "updated_at": _now()}})
     return _summary(await _get(rid, g))
@@ -283,7 +321,7 @@ class DuplicateInput(BaseModel):
 @rem.post("/{rid}/duplicar")
 async def duplicate(rid: str, data: DuplicateInput, g=Depends(require_gestoria)):
     r = await _get(rid, g)
-    lines = [{**ln, "id": str(uuid.uuid4()), "invoice_id": "", "invoice_number": "", "paid": False, "paid_date": ""} for ln in r.get("lines", [])]
+    lines = [{**ln, "id": str(uuid.uuid4()), "invoice_id": "", "invoice_number": "", "issue_date": "", "paid": False, "paid_date": ""} for ln in r.get("lines", [])]
     for ln in lines:
         ln.pop("warnings", None)
     doc = {"id": str(uuid.uuid4()), "gestoria_id": g["id"], "name": data.name, "charge_date": data.charge_date,
@@ -322,10 +360,11 @@ async def _mark_line(r, ln, paid, pdate, source="manual"):
 async def _save_lines(r):
     lines = r["lines"]
     for ln in lines:
-        ln.pop("warnings", None)
+        for k in ("warnings", "base", "iva"):
+            ln.pop(k, None)
     allpaid = lines and all(ln.get("paid") for ln in lines)
     anypaid = any(ln.get("paid") for ln in lines)
-    status = "cobrada" if allpaid else ("parcial" if anypaid else (r.get("status") if r.get("status") in ("borrador", "enviada") else "enviada"))
+    status = "cobrada" if allpaid else ("parcial" if anypaid else (r.get("status") if r.get("status") in ("borrador", "emitida", "enviada") else "enviada"))
     await db.remesas.update_one({"id": r["id"]}, {"$set": {"lines": lines, "status": status}})
     return status
 
@@ -342,7 +381,7 @@ async def mark_paid(rid: str, line_id: str, data: PaidInput, g=Depends(require_g
 
 
 # ---------- Datos fiscales del emisor (gestoría) ----------
-FISCAL_FIELDS = ("name", "legal_name", "nif", "address", "email", "phone", "tax_type", "legal_notice", "invoice_footer")
+FISCAL_FIELDS = ("name", "legal_name", "nif", "address", "email", "phone", "tax_type", "legal_notice", "invoice_footer", "sepa_creditor_id", "sepa_iban", "sepa_bic")
 REQUIRED = {"name": "Nombre comercial o razón social", "nif": "NIF/CIF", "address": "Domicilio fiscal completo"}
 
 
@@ -356,6 +395,24 @@ class FiscalInput(BaseModel):
     tax_type: str = "sociedad"
     legal_notice: str = ""
     invoice_footer: str = ""
+    sepa_creditor_id: str = ""
+    sepa_iban: str = ""
+    sepa_bic: str = ""
+
+
+def _sepa_missing(c: dict) -> list:
+    miss = []
+    if not iban_valid(c.get("sepa_iban", "")):
+        miss.append("IBAN de abono de la gestoría")
+    if not (c.get("sepa_creditor_id") or (c.get("nif") or "").strip()):
+        miss.append("Identificador de acreedor SEPA")
+    return miss
+
+
+def _issuer_out(c: dict) -> dict:
+    from remesa_docs import creditor_id_from_nif
+    return {**{k: c.get(k, "") for k in FISCAL_FIELDS}, "id": c.get("id"), "missing": _missing(c), "sepa_missing": _sepa_missing(c),
+            "suggested_creditor_id": creditor_id_from_nif(c.get("nif", ""))}
 
 
 def _missing(c: dict) -> list:
@@ -369,29 +426,24 @@ def _missing(c: dict) -> list:
 @rem.get("/ajustes/emisor")
 async def get_issuer(g=Depends(require_gestoria)):
     c = await __import__("server").active_company(g)
-    return {**{k: c.get(k, "") for k in FISCAL_FIELDS}, "id": c.get("id"), "missing": _missing(c)}
+    return _issuer_out(c)
 
 
 @rem.put("/ajustes/emisor")
 async def set_issuer(data: FiscalInput, g=Depends(require_gestoria)):
     c = await __import__("server").active_company(g)
-    upd = {k: (v.strip().upper() if k == "nif" else v.strip()) for k, v in data.model_dump().items()}
+    upper = ("nif", "sepa_creditor_id", "sepa_iban", "sepa_bic")
+    upd = {k: (v.replace(" ", "").upper() if k in upper else v.strip()) for k, v in data.model_dump().items()}
     if upd["tax_type"] not in ("autonomo", "sociedad", "empresa"):
         upd["tax_type"] = "sociedad"
+    if upd["sepa_iban"] and not iban_valid(upd["sepa_iban"]):
+        raise HTTPException(status_code=400, detail="El IBAN de abono de la gestoría no es válido.")
     await db.companies.update_one({"id": c["id"]}, {"$set": upd})
     c.update(upd)
-    return {**{k: c.get(k, "") for k in FISCAL_FIELDS}, "id": c["id"], "missing": _missing(c)}
+    return _issuer_out(c)
 
 
 # ---------- Facturas ----------
-def _base_from_total(total: float, rate: float) -> float:
-    base = round(total / (1 + rate / 100), 2)
-    for delta in (0, 0.01, -0.01, 0.02, -0.02):
-        b = round(base + delta, 2)
-        if round(b + round(b * rate / 100, 2), 2) == round(total, 2):
-            return b
-    return base
-
 
 @rem.post("/{rid}/facturas")
 async def create_invoices(rid: str, g=Depends(require_gestoria)):
@@ -401,34 +453,103 @@ async def create_invoices(rid: str, g=Depends(require_gestoria)):
     miss = _missing(company)
     if miss:
         raise HTTPException(status_code=400, detail="DATOS_FISCALES: Completa los datos fiscales de la gestoría antes de emitir facturas: " + ", ".join(miss) + ".")
+    import spanish_tax
     issue = datetime.now(timezone.utc).date().isoformat()
-    created, errors = 0, []
-    for ln in r["lines"]:
-        if ln.get("invoice_id") or _r(ln.get("amount")) <= 0:
+    created, errors, skipped = 0, [], 0
+    for i, ln in enumerate(r["lines"], 1):
+        who = (ln.get("name") or "").strip() or f"Recibo nº {i}"
+        if ln.get("invoice_id"):
+            skipped += 1
             continue
+        rate = _rate(ln)
+        probs = []
         if not (ln.get("name") or "").strip():
-            errors.append(f"Recibo {ln.get('iban') or ''}: falta el nombre del deudor")
+            probs.append("falta el nombre del cliente")
+        if _r(ln.get("amount")) <= 0:
+            probs.append("el importe es 0")
+        nif = (ln.get("nif") or "").strip().upper()
+        if not nif:
+            probs.append("falta el NIF/CIF del cliente")
+        elif not spanish_tax.validate_nif(nif):
+            probs.append(f"el NIF/CIF {nif} no es válido")
+        if rate not in (0, 4, 10, 21):
+            probs.append(f"el IVA {rate:g}% no es válido (0, 4, 10 o 21)")
+        if probs:
+            errors.append(f"{who}: " + ", ".join(probs))
             continue
-        rate = float(ln.get("iva_rate", 21) or 0)
-        base = _base_from_total(_r(ln["amount"]), rate)
+        base, _ = _tax(ln)
+        reason = (ln.get("exempt_reason") or DEFAULT_EXEMPT).strip()
+        notes = f"Se cargará en su cuenta {ln.get('iban', '')} (mandato {ln.get('mandate', '')})."
+        if ln.get("vat_exempt"):
+            notes = f"Operación exenta de IVA: {reason}. " + notes
         try:
             inv = await srv._make_invoice(g, company, srv.InvoiceInput(
                 issue_date=issue,
-                client=srv.Client(name=ln.get("name") or "Cliente", nif=ln.get("nif", ""), email=ln.get("email", "")),
+                client=srv.Client(name=ln["name"].strip(), nif=nif, email=ln.get("email", "")),
                 line_items=[srv.LineItem(description=ln.get("concept") or ln.get("reference") or r["name"],
                                          detail=f"Remesa {r['name']} · Mandato {ln.get('mandate', '')}", quantity=1, unit_price=base,
-                                         iva_rate=rate, iva_type="general" if rate else "exento")],
+                                         iva_rate=rate, iva_type="exento" if (ln.get("vat_exempt") or not rate) else "general")],
                 iva_rate=rate, status="pending", payment_method="Domiciliación bancaria SEPA", iban=ln.get("iban", ""),
-                due_date=r.get("charge_date") or issue, notes=f"Se cargará en su cuenta {ln.get('iban', '')} (mandato {ln.get('mandate', '')})."))
-            ln["invoice_id"], ln["invoice_number"] = inv["id"], inv["number"]
+                due_date=r.get("charge_date") or issue, notes=notes))
+            if abs(_r(inv["total"]) - _r(ln["amount"])) >= 0.01:
+                errors.append(f"{who}: la factura {inv['number']} suma {inv['total']:.2f} € y el recibo {_r(ln['amount']):.2f} €")
+            ln["invoice_id"], ln["invoice_number"], ln["issue_date"] = inv["id"], inv["number"], issue
             await db.invoices.update_one({"id": inv["id"]}, {"$set": {"remesa_id": rid, "remesa_line_id": ln["id"]}})
             created += 1
         except HTTPException as e:
-            errors.append(f"{ln.get('name')}: {e.detail}")
+            errors.append(f"{who}: {e.detail}")
+        except Exception as e:
+            errors.append(f"{who}: error al crear la factura ({e})")
     for ln in r["lines"]:
-        ln.pop("warnings", None)
-    await db.remesas.update_one({"id": rid}, {"$set": {"lines": r["lines"]}})
-    return {"created": created, "errors": errors, "remesa": _summary(await _get(rid, g))}
+        for k in ("warnings", "base", "iva"):
+            ln.pop(k, None)
+    upd = {"lines": r["lines"]}
+    if created and r.get("status") == "borrador":
+        upd["status"] = "emitida"
+    await db.remesas.update_one({"id": rid}, {"$set": upd})
+    return {"created": created, "skipped": skipped, "errors": errors, "remesa": _summary(await _get(rid, g))}
+
+
+# ---------- Recibos PDF y fichero SEPA ----------
+def _doc_lines(r: dict, line_id: str = "") -> list:
+    s = _summary(r)
+    out = []
+    for i, ln in enumerate(s["lines"], 1):
+        if not line_id or ln["id"] == line_id:
+            out.append({**ln, "_idx": i})
+    return out
+
+
+@rem.get("/{rid}/recibos")
+async def receipts_pdf(rid: str, line_id: str = "", g=Depends(require_gestoria)):
+    from remesa_docs import build_receipts_pdf
+    r = await _get(rid, g)
+    lines = [ln for ln in _doc_lines(r, line_id) if _r(ln.get("amount")) > 0]
+    if not lines:
+        raise HTTPException(status_code=404, detail="No hay recibos con importe en esta remesa.")
+    pdf = build_receipts_pdf(r, lines, await __import__("server").active_company(g))
+    safe = "".join(c if c.isalnum() else "_" for c in (lines[0]["name"] if line_id else r["name"]))[:60] or "recibos"
+    return Response(pdf, media_type="application/pdf", headers={"Content-Disposition": f'inline; filename="recibo_{safe}.pdf"'})
+
+
+@rem.get("/{rid}/sepa-xml")
+async def sepa_xml(rid: str, g=Depends(require_gestoria)):
+    from remesa_docs import build_sepa_xml
+    r = await _get(rid, g)
+    company = await __import__("server").active_company(g)
+    miss = _missing(company) + _sepa_missing(company)
+    if miss:
+        raise HTTPException(status_code=400, detail="DATOS_FISCALES: Para generar el fichero SEPA completa: " + ", ".join(miss) + ".")
+    lines = [ln for ln in _doc_lines(r) if not ln.get("paid")]
+    bad = [f"{ln.get('name') or 'Recibo nº ' + str(ln['_idx'])}: {', '.join(w for w in ln['warnings'] if w != 'NIF no válido')}"
+           for ln in lines if any(w != "NIF no válido" for w in ln["warnings"])]
+    if bad:
+        raise HTTPException(status_code=400, detail="Corrige estos recibos antes de generar el XML: " + " · ".join(bad))
+    if not lines:
+        raise HTTPException(status_code=400, detail="No hay recibos pendientes de cobro en esta remesa.")
+    xml = build_sepa_xml(r, lines, company)
+    safe = "".join(c if c.isalnum() else "_" for c in r["name"])[:60] or "remesa"
+    return Response(xml, media_type="application/xml", headers={"Content-Disposition": f'attachment; filename="{safe}_pain008.xml"'})
 
 
 # ---------- Importar / Exportar ----------
@@ -457,16 +578,22 @@ def _rows_from_file(name: str, raw: bytes) -> list:
         return None
     idx = {"amount": col("importe"), "charge": col("fecha cobro"), "name": col("nombre"), "nif": col("identificador", "nif"),
            "iban": col("iban"), "mandate": col("mandato") if col("mandato") != col("fecha mandato") else None,
-           "mandate_date": col("fecha mandato"), "reference": col("referencia"), "concept": col("concepto"), "email": col("email", "correo")}
+           "mandate_date": col("fecha mandato"), "reference": col("referencia"), "concept": col("concepto"), "email": col("email", "correo"),
+           "iva": None, "exempt": col("exento", "exenta")}
     for i, h in enumerate(head):
         if h == "mandato":
             idx["mandate"] = i
+        if h in ("iva", "iva %", "% iva", "tipo iva", "tipo de iva", "iva (%)"):
+            idx["iva"] = i
     out = []
     for r in rows[1:]:
         g = lambda k: (str(r[idx[k]]).strip() if idx[k] is not None and idx[k] < len(r) else "")
+        ex = norm(g("exempt")) in ("si", "s", "x", "1", "true", "exento", "exenta")
+        iva_raw = g("iva").replace("%", "")
         out.append({"amount": _num(g("amount")), "charge_date": g("charge")[:10], "name": g("name"), "nif": g("nif").upper(),
                     "iban": g("iban").replace(" ", "").upper(), "mandate": g("mandate"), "mandate_date": g("mandate_date")[:10],
-                    "reference": g("reference"), "concept": g("concept"), "email": g("email")})
+                    "reference": g("reference"), "concept": g("concept"), "email": g("email"),
+                    "iva_rate": 0.0 if ex else (_num(iva_raw) if iva_raw else 21.0), "vat_exempt": ex})
     return [x for x in out if x["iban"] or x["amount"]]
 
 
@@ -486,10 +613,14 @@ async def import_remesa(file: UploadFile = File(...), name: str = Query(""), sav
             d = await db.remesa_debtors.find_one({"gestoria_id": g["id"], "iban": x["iban"], "mandate": x["mandate"]})
             if d:
                 did = d["id"]
+                if d.get("vat_exempt") and not x["vat_exempt"]:
+                    x.update(vat_exempt=True, iva_rate=0.0)
+                x["exempt_reason"] = d.get("exempt_reason", "")
             else:
                 did = str(uuid.uuid4())
                 await db.remesa_debtors.insert_one({**DebtorInput(name=x["name"], nif=x["nif"], iban=x["iban"], mandate=x["mandate"],
                                                                   mandate_date=x["mandate_date"], email=x["email"], amount=x["amount"],
+                                                                  iva_rate=x["iva_rate"], vat_exempt=x["vat_exempt"],
                                                                   concept=x["concept"], reference=x["reference"]).model_dump(),
                                                     "id": did, "gestoria_id": g["id"], "created_at": _now()})
                 new_debtors += 1
@@ -504,9 +635,10 @@ async def import_remesa(file: UploadFile = File(...), name: str = Query(""), sav
 
 @rem.get("/{rid}/exportar")
 async def export_remesa(rid: str, formato: str = "xlsx", g=Depends(require_gestoria)):
-    r = await _get(rid, g)
+    r = _summary(await _get(rid, g))
     rows = [[i, _r(ln.get("amount")), r.get("charge_date", ""), ln.get("name", ""), ln.get("nif", ""), ln.get("iban", ""), ln.get("mandate", ""),
-             ln.get("mandate_date", ""), ln.get("reference", ""), ln.get("concept", "")] for i, ln in enumerate(r["lines"], 1)]
+             ln.get("mandate_date", ""), ln.get("reference", ""), ln.get("concept", ""), ln["base"], _rate(ln), ln["iva"],
+             "Sí" if ln.get("vat_exempt") else "No", ln.get("invoice_number", "")] for i, ln in enumerate(r["lines"], 1)]
     safe = "".join(c if c.isalnum() else "_" for c in r["name"])[:60] or "remesa"
     if formato == "csv":
         buf = io.StringIO()
@@ -523,13 +655,15 @@ async def export_remesa(rid: str, formato: str = "xlsx", g=Depends(require_gesto
         c.font, c.fill = Font(bold=True), PatternFill("solid", fgColor="DBEAFE")
     for row in rows:
         ws.append(row)
-        ws.cell(ws.max_row, 2).number_format = "#,##0.00"
-    for col, wd in zip("ABCDEFGHIJ", (6, 12, 13, 32, 18, 30, 18, 14, 34, 50)):
+        for c in (2, 11, 13):
+            ws.cell(ws.max_row, c).number_format = "#,##0.00"
+    for col, wd in zip("ABCDEFGHIJKLMNO", (6, 12, 13, 32, 18, 30, 18, 14, 34, 50, 14, 8, 12, 8, 16)):
         ws.column_dimensions[col].width = wd
     s = wb.create_sheet("Resumen")
     tot = _r(sum(x[1] for x in rows))
     for k, v in (("Remesa", r["name"]), ("Fecha de cobro", r.get("charge_date", "")), ("Referencia", r.get("reference", "")),
-                 ("Nº de recibos", len(rows)), ("Importe total", tot), ("Generada", datetime.now(timezone.utc).strftime("%d/%m/%Y %H:%M"))):
+                 ("Nº de recibos", len(rows)), ("Base imponible", r["base_total"]), ("IVA", r["iva_total"]), ("Importe total", tot),
+                 ("Pendiente de cobro", r["pending_total"]), ("Generada", datetime.now(timezone.utc).strftime("%d/%m/%Y %H:%M"))):
         s.append([k, v])
     s.column_dimensions["A"].width, s.column_dimensions["B"].width = 18, 40
     buf = io.BytesIO(); wb.save(buf)
@@ -547,10 +681,23 @@ def _label_hit(label: str, ln: dict) -> bool:
 async def detect_remesa_payments(gestoria_id: str, company_id: str) -> list:
     srv = __import__("server")
     found = []
-    remesas = await db.remesas.find({"gestoria_id": gestoria_id, "status": {"$in": ["borrador", "enviada", "parcial"]}}, {"_id": 0}).to_list(500)
+    remesas = await db.remesas.find({"gestoria_id": gestoria_id, "status": {"$in": OPEN}}, {"_id": 0}).sort("created_at", -1).to_list(500)
     if not remesas:
         return found
-    txs = await db.bank_transactions.find({"company_id": company_id, "matched": {"$ne": True}, "deleted": {"$ne": True}, "value": {"$gt": 0}}, {"_id": 0}).to_list(3000)
+    # Facturas de remesa cobradas desde la conciliación general → marcar el recibo como cobrado
+    for r in remesas:
+        ids = [ln["invoice_id"] for ln in r["lines"] if ln.get("invoice_id") and not ln.get("paid")]
+        if not ids:
+            continue
+        paid = {i["id"]: i async for i in db.invoices.find({"id": {"$in": ids}, "status": "paid"}, {"_id": 0, "id": 1, "payment": 1})}
+        for ln in r["lines"]:
+            if ln.get("invoice_id") in paid:
+                ln["paid"], ln["paid_date"] = True, ((paid[ln["invoice_id"]].get("payment") or {}).get("date") or datetime.now(timezone.utc).date().isoformat())[:10]
+                found.append({"remesa": r["name"], "amount": _r(ln["amount"]), "detail": f"recibo de {ln.get('name')} (factura ya cobrada)"})
+        if paid:
+            r["status"] = await _save_lines(r)
+    remesas = [r for r in remesas if r["status"] != "cobrada"]
+    txs = await db.bank_transactions.find({"company_id": company_id, "matched": {"$ne": True}, "deleted": {"$ne": True}, "value": {"$gt": 0}}, {"_id": 0}).sort("date", -1).to_list(5000)
     for tx in txs:
         val = _r(tx.get("value"))
         hit = None
