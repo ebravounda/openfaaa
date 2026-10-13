@@ -1,5 +1,6 @@
 """Remesas SEPA para gestorías: deudores, remesas, facturas automáticas, exportación Excel/CSV y detección de cobros."""
 import io
+import re
 import csv
 import uuid
 from datetime import datetime, timezone
@@ -115,6 +116,8 @@ class LineInput(BaseModel):
     invoice_number: str = ""
     paid: bool = False
     paid_date: str = ""
+    cancelled: bool = False
+    rect_number: str = ""
 
 
 class RemesaInput(BaseModel):
@@ -176,10 +179,28 @@ def _summary(r: dict) -> dict:
     r["iva_total"] = _r(r["total"] - r["base_total"])
     r["count"] = len(lines)
     r["paid_total"] = _r(sum(_r(ln.get("amount")) for ln in lines if ln.get("paid")))
-    r["pending_total"] = _r(r["total"] - r["paid_total"])
-    r["pending_count"] = sum(1 for ln in lines if not ln.get("paid"))
+    r["cancelled_total"] = _r(sum(_r(ln.get("amount")) for ln in lines if ln.get("cancelled") and not ln.get("paid")))
+    r["pending_total"] = _r(r["total"] - r["paid_total"] - r["cancelled_total"])
+    r["pending_count"] = sum(1 for ln in lines if not ln.get("paid") and not ln.get("cancelled"))
     r["invoiced"] = sum(1 for ln in lines if ln.get("invoice_id"))
     r["warnings"] = sum(1 for ln in lines if ln["warnings"])
+    return r
+
+
+async def _full(rid, g):
+    """Remesa con totales + estado VeriFactu y de anulación de la factura de cada línea."""
+    r = _summary(await _get(rid, g))
+    ids = [ln["invoice_id"] for ln in r["lines"] if ln.get("invoice_id")]
+    invs = {i["id"]: i async for i in db.invoices.find({"id": {"$in": ids}}, {"_id": 0, "id": 1, "status": 1, "verifactu": 1, "rectified_number": 1})} if ids else {}
+    for ln in r["lines"]:
+        inv = invs.get(ln.get("invoice_id"))
+        if not inv:
+            continue
+        v = inv.get("verifactu") or {}
+        ln["invoice_status"] = inv.get("status", "")
+        ln["vf"] = {"enabled": bool(v), "submitted": bool(v.get("submitted")), "status": v.get("status", ""), "csv": v.get("csv") or "", "mode": v.get("mode", "")}
+        if inv.get("rectified_number") and not ln.get("rect_number"):
+            ln["rect_number"] = inv["rectified_number"]
     return r
 
 
@@ -275,7 +296,7 @@ async def create_remesa(data: CreateInput, g=Depends(require_gestoria)):
 
 @rem.get("/{rid}")
 async def get_remesa(rid: str, g=Depends(require_gestoria)):
-    return _summary(await _get(rid, g))
+    return await _full(rid, g)
 
 
 @rem.put("/{rid}")
@@ -292,6 +313,7 @@ async def update_remesa(rid: str, data: RemesaInput, g=Depends(require_gestoria)
         if prev and prev.get("invoice_id"):
             x["invoice_id"], x["invoice_number"] = prev["invoice_id"], prev.get("invoice_number", "")
             x["issue_date"] = prev.get("issue_date", "")
+            x["cancelled"], x["rect_number"] = bool(prev.get("cancelled")), prev.get("rect_number", "")
             if _r(prev.get("amount")) != _r(x["amount"]) or _rate(prev) != _rate(x):
                 raise HTTPException(status_code=400, detail=f"La línea de {x['name']} ya tiene factura ({x['invoice_number']}); no se puede cambiar su importe ni su IVA. Emite una rectificativa.")
         lines.append(x)
@@ -301,7 +323,7 @@ async def update_remesa(rid: str, data: RemesaInput, g=Depends(require_gestoria)
             await db.remesa_debtors.update_one({"id": x["debtor_id"], "gestoria_id": g["id"]}, {"$set": upd})
     await db.remesas.update_one({"id": rid}, {"$set": {"name": data.name, "charge_date": data.charge_date, "reference": data.reference,
                                                         "lines": lines, "updated_at": _now()}})
-    return _summary(await _get(rid, g))
+    return await _full(rid, g)
 
 
 @rem.delete("/{rid}")
@@ -377,11 +399,13 @@ async def mark_paid(rid: str, line_id: str, data: PaidInput, g=Depends(require_g
         raise HTTPException(status_code=404, detail="Línea no encontrada")
     await _mark_line(r, ln, data.paid, data.date)
     await _save_lines(r)
-    return _summary(await _get(rid, g))
+    return await _full(rid, g)
 
 
 # ---------- Datos fiscales del emisor (gestoría) ----------
-FISCAL_FIELDS = ("name", "legal_name", "nif", "address", "email", "phone", "tax_type", "legal_notice", "invoice_footer", "sepa_creditor_id", "sepa_iban", "sepa_bic")
+FISCAL_FIELDS = ("name", "legal_name", "nif", "address", "email", "phone", "tax_type", "legal_notice", "invoice_footer", "sepa_creditor_id", "sepa_iban", "sepa_bic",
+                 "verifactu_enabled", "verifactu_mode", "verifactu_cert_type")
+VF_MODES = ("simulado", "preproduccion", "produccion")
 REQUIRED = {"name": "Nombre comercial o razón social", "nif": "NIF/CIF", "address": "Domicilio fiscal completo"}
 
 
@@ -398,6 +422,9 @@ class FiscalInput(BaseModel):
     sepa_creditor_id: str = ""
     sepa_iban: str = ""
     sepa_bic: str = ""
+    verifactu_enabled: bool = False
+    verifactu_mode: str = "simulado"
+    verifactu_cert_type: str = "personal"
 
 
 def _sepa_missing(c: dict) -> list:
@@ -433,7 +460,11 @@ async def get_issuer(g=Depends(require_gestoria)):
 async def set_issuer(data: FiscalInput, g=Depends(require_gestoria)):
     c = await __import__("server").active_company(g)
     upper = ("nif", "sepa_creditor_id", "sepa_iban", "sepa_bic")
-    upd = {k: (v.replace(" ", "").upper() if k in upper else v.strip()) for k, v in data.model_dump().items()}
+    upd = {k: (v.replace(" ", "").upper() if k in upper else v.strip()) if isinstance(v, str) else v for k, v in data.model_dump().items()}
+    if upd["verifactu_mode"] not in VF_MODES:
+        upd["verifactu_mode"] = "simulado"
+    if upd["verifactu_cert_type"] not in ("personal", "sello"):
+        upd["verifactu_cert_type"] = "personal"
     if upd["tax_type"] not in ("autonomo", "sociedad", "empresa"):
         upd["tax_type"] = "sociedad"
     if upd["sepa_iban"] and not iban_valid(upd["sepa_iban"]):
@@ -507,7 +538,47 @@ async def create_invoices(rid: str, g=Depends(require_gestoria)):
     if created and r.get("status") == "borrador":
         upd["status"] = "emitida"
     await db.remesas.update_one({"id": rid}, {"$set": upd})
-    return {"created": created, "skipped": skipped, "errors": errors, "remesa": _summary(await _get(rid, g))}
+    return {"created": created, "skipped": skipped, "errors": errors, "remesa": await _full(rid, g)}
+
+
+# ---------- VeriFactu y anulación por línea ----------
+def _line(r, line_id):
+    ln = next((x for x in r["lines"] if x["id"] == line_id), None)
+    if not ln or not ln.get("invoice_id"):
+        raise HTTPException(status_code=404, detail="Esta línea todavía no tiene factura emitida.")
+    return ln
+
+
+@rem.post("/{rid}/lineas/{line_id}/verifactu")
+async def line_verifactu(rid: str, line_id: str, g=Depends(require_gestoria)):
+    srv = __import__("server")
+    ln = _line(await _get(rid, g), line_id)
+    res = await srv.verifactu_submit(ln["invoice_id"], g)
+    return {"result": res, "remesa": await _full(rid, g)}
+
+
+@rem.post("/{rid}/lineas/{line_id}/anular")
+async def line_cancel(rid: str, line_id: str, data: dict, g=Depends(require_gestoria)):
+    srv = __import__("server")
+    r = await _get(rid, g)
+    ln = _line(r, line_id)
+    if ln.get("cancelled"):
+        raise HTTPException(status_code=400, detail="Esta factura ya está anulada.")
+    inv = await db.invoices.find_one({"id": ln["invoice_id"]}, {"_id": 0, "verifactu": 1})
+    vfd = (inv or {}).get("verifactu") or {}
+    if vfd and not vfd.get("submitted") and data.get("reason") != "error_no_entregada":
+        # La rectificativa debe referirse a una factura ya registrada en la AEAT
+        first = await srv.verifactu_submit(ln["invoice_id"], g)
+        if re.search(r"rechaz|error", str(first.get("status", "")), re.I):
+            raise HTTPException(status_code=400, detail=f"No se ha anulado: la factura original {ln['invoice_number']} no se pudo registrar en VeriFactu ({first.get('status')}). Corrígela y reenvíala antes de anular.")
+    res = await srv.cancel_with_rectificativa(ln["invoice_id"], srv.CancelInput(reason=str(data.get("reason", "")), detail=str(data.get("detail", ""))), g)
+    ln["cancelled"] = True
+    ln["rect_number"] = (res.get("rectificativa") or {}).get("number", "")
+    for x in r["lines"]:
+        for k in ("warnings", "base", "iva"):
+            x.pop(k, None)
+    await db.remesas.update_one({"id": rid}, {"$set": {"lines": r["lines"]}})
+    return {**res, "remesa": await _full(rid, g)}
 
 
 # ---------- Recibos PDF y fichero SEPA ----------
@@ -540,7 +611,7 @@ async def sepa_xml(rid: str, g=Depends(require_gestoria)):
     miss = _missing(company) + _sepa_missing(company)
     if miss:
         raise HTTPException(status_code=400, detail="DATOS_FISCALES: Para generar el fichero SEPA completa: " + ", ".join(miss) + ".")
-    lines = [ln for ln in _doc_lines(r) if not ln.get("paid")]
+    lines = [ln for ln in _doc_lines(r) if not ln.get("paid") and not ln.get("cancelled")]
     bad = [f"{ln.get('name') or 'Recibo nº ' + str(ln['_idx'])}: {', '.join(w for w in ln['warnings'] if w != 'NIF no válido')}"
            for ln in lines if any(w != "NIF no válido" for w in ln["warnings"])]
     if bad:
@@ -635,7 +706,7 @@ async def import_remesa(file: UploadFile = File(...), name: str = Query(""), sav
 
 @rem.get("/{rid}/exportar")
 async def export_remesa(rid: str, formato: str = "xlsx", g=Depends(require_gestoria)):
-    r = _summary(await _get(rid, g))
+    r = await _full(rid, g)
     rows = [[i, _r(ln.get("amount")), r.get("charge_date", ""), ln.get("name", ""), ln.get("nif", ""), ln.get("iban", ""), ln.get("mandate", ""),
              ln.get("mandate_date", ""), ln.get("reference", ""), ln.get("concept", ""), ln["base"], _rate(ln), ln["iva"],
              "Sí" if ln.get("vat_exempt") else "No", ln.get("invoice_number", "")] for i, ln in enumerate(r["lines"], 1)]
@@ -702,7 +773,7 @@ async def detect_remesa_payments(gestoria_id: str, company_id: str) -> list:
         val = _r(tx.get("value"))
         hit = None
         for r in remesas:
-            pend = [ln for ln in r["lines"] if not ln.get("paid")]
+            pend = [ln for ln in r["lines"] if not ln.get("paid") and not ln.get("cancelled")]
             if pend and abs(_r(sum(_r(ln["amount"]) for ln in pend)) - val) < 0.01:
                 for ln in pend:
                     await _mark_line(r, ln, True, tx.get("date"), "bank")

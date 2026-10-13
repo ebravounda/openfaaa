@@ -13,7 +13,7 @@ const HINT = {
   ANULACION: "Solo si la factura NUNCA se entregó al cliente. Se registra la anulación en VeriFactu y no se emite rectificativa.",
 };
 
-export const CancelInvoiceDialog = ({ invoice, onClose, onDone }) => {
+export const CancelInvoiceDialog = ({ invoice, onClose, onDone, endpoint }) => {
   const [reasons, setReasons] = useState([]);
   const [reason, setReason] = useState("error_datos");
   const [detail, setDetail] = useState("");
@@ -26,7 +26,7 @@ export const CancelInvoiceDialog = ({ invoice, onClose, onDone }) => {
   const go = async () => {
     setBusy(true);
     try {
-      const { data } = await api.post(`/invoices/${invoice.id}/cancel`, { reason, detail });
+      const { data } = await api.post(endpoint || `/invoices/${invoice.id}/cancel`, { reason, detail });
       if (data.mode === "anulacion") toast.success(`Factura ${invoice.number} anulada${data.verifactu ? ` · ${data.verifactu.status}` : ""}`);
       else {
         const r = data.rectificativa;
@@ -36,7 +36,7 @@ export const CancelInvoiceDialog = ({ invoice, onClose, onDone }) => {
           duration: 12000,
         });
       }
-      onDone();
+      onDone(data);
     } catch (e) { toast.error(formatApiErrorDetail(e.response?.data?.detail), { duration: 10000 }); }
     finally { setBusy(false); }
   };

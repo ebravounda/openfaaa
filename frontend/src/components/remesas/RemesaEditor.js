@@ -6,8 +6,9 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
-import { ArrowUp, ArrowDown, Trash2, Plus, FileText, Download, Save, Loader2, CheckCircle2, AlertTriangle, Copy, Receipt, FileCode2 } from "lucide-react";
+import { ArrowUp, ArrowDown, Trash2, Plus, FileText, Download, Save, Loader2, CheckCircle2, AlertTriangle, Copy, Receipt, FileCode2, Send, Ban } from "lucide-react";
 import { lineTax } from "./tax";
+import { CancelInvoiceDialog } from "@/components/CancelInvoiceDialog";
 
 const STATUS = { borrador: "Borrador", emitida: "Facturas emitidas · pendiente de cobro", enviada: "Enviada al banco", parcial: "Cobrada parcialmente", cobrada: "Cobrada" };
 const blank = () => ({ id: "", name: "", nif: "", iban: "", mandate: "", mandate_date: "", amount: 0, iva_rate: 21, vat_exempt: false, exempt_reason: "", concept: "", reference: "", invoice_id: "", paid: false });
@@ -31,6 +32,20 @@ const Totals = ({ r, lines }) => {
   );
 };
 
+const VfCell = ({ l, i, busy, onSend }) => {
+  if (!l.invoice_id) return <span className="text-slate-400 text-xs">—</span>;
+  if (!l.vf?.enabled) return <span className="text-xs text-slate-400" title="La factura se emitió con VeriFactu desactivado">Sin VeriFactu</span>;
+  if (l.vf.submitted) return <span className="text-xs text-emerald-700 whitespace-nowrap" title={l.vf.status} data-testid={`line-vf-status-${i}`}><CheckCircle2 className="inline w-3.5 h-3.5 mr-0.5" />Aceptada{l.vf.csv && !l.vf.csv.startsWith("VF-") ? ` · CSV ${l.vf.csv}` : l.vf.mode === "simulado" ? " (simulado)" : ""}</span>;
+  const rejected = /rechaz|error/i.test(l.vf.status || "");
+  return (
+    <div className="flex flex-col gap-0.5">
+      <button onClick={onSend} disabled={!!busy} className="text-xs text-[#0052FF] hover:underline flex items-center gap-1 whitespace-nowrap" data-testid={`line-vf-send-${i}`}>
+        {busy === `vf${i}` ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Send className="w-3.5 h-3.5" />}{rejected ? "Reenviar" : "Enviar a VeriFactu"}</button>
+      <span className={`text-[11px] max-w-[180px] truncate ${rejected ? "text-red-600" : "text-amber-700"}`} title={l.vf.status} data-testid={`line-vf-status-${i}`}>{rejected ? l.vf.status : "Pendiente de envío"}</span>
+    </div>
+  );
+};
+
 const ResultDialog = ({ res, onClose }) => (
   <Dialog open={!!res} onOpenChange={(o) => !o && onClose()}>
     <DialogContent className="max-w-lg" data-testid="invoice-result-dialog">
@@ -49,6 +64,7 @@ export const RemesaEditor = ({ id, debtors, onChanged, onNeedIssuer }) => {
   const [busy, setBusy] = useState("");
   const [dirty, setDirty] = useState(false);
   const [res, setRes] = useState(null);
+  const [cancelLine, setCancelLine] = useState(null);
   useEffect(() => { setR(null); api.get(`/gestoria/remesas/${id}`).then((x) => { setR(x.data); setDirty(false); }); }, [id]);
   if (!r) return <div className="flex justify-center py-16"><Loader2 className="w-6 h-6 animate-spin text-slate-300" /></div>;
   const upd = (patch) => { setR({ ...r, ...patch }); setDirty(true); };
@@ -80,6 +96,13 @@ export const RemesaEditor = ({ id, debtors, onChanged, onNeedIssuer }) => {
   const doc = (key, url, name) => run(key, async () => { if (dirty) await persist(); await downloadFile(url, name); });
   const status = (s) => run("st", async () => { await api.post(`/gestoria/remesas/${id}/estado`, { status: s }); setR({ ...r, status: s }); onChanged(); });
   const paid = (l) => run("p", async () => { const { data } = await api.post(`/gestoria/remesas/${id}/lineas/${l.id}/cobro`, { paid: !l.paid }); setR(data); onChanged(); });
+  const sendVf = (l, i) => run(`vf${i}`, async () => {
+    if (dirty) await persist();
+    const { data } = await api.post(`/gestoria/remesas/${id}/lineas/${l.id}/verifactu`);
+    setR(data.remesa); onChanged();
+    const st = data.result?.status || "";
+    if (/rechaz|error/i.test(st)) toast.error(`${l.invoice_number}: ${st}`, { duration: 12000 }); else toast.success(`${l.invoice_number}: ${st}`);
+  });
   const dup = () => run("dup", async () => { const n = window.prompt("Nombre de la nueva remesa", `${r.name} (copia)`); if (!n) return; await api.post(`/gestoria/remesas/${id}/duplicar`, { name: n, charge_date: "" }); toast.success("Remesa duplicada"); onChanged(); });
   const spin = (k, Icon) => (busy === k ? <Loader2 className="w-4 h-4 mr-1 animate-spin" /> : <Icon className="w-4 h-4 mr-1" />);
   return (
@@ -113,12 +136,12 @@ export const RemesaEditor = ({ id, debtors, onChanged, onNeedIssuer }) => {
       <div className="overflow-x-auto"><table className="text-sm min-w-full">
         <thead className="bg-slate-50 text-xs text-slate-500"><tr><th className="px-2 py-2">Nº</th>{COLS.map(([k, l]) => <th key={k} className="px-2 py-2 text-left whitespace-nowrap">{l}</th>)}
           <th className="px-2 py-2 text-left">IVA</th><th className="px-2 py-2 text-right">Base</th><th className="px-2 py-2 text-right">Cuota IVA</th><th className="px-2 py-2 text-left">Concepto</th>
-          <th className="px-2 py-2 text-left">Factura</th><th className="px-2 py-2 text-left">Cobro</th><th /></tr></thead>
+          <th className="px-2 py-2 text-left">Factura</th><th className="px-2 py-2 text-left">VeriFactu</th><th className="px-2 py-2 text-left">Cobro</th><th /></tr></thead>
         <tbody>{r.lines.map((l, i) => {
           const t = lineTax(l);
           const locked = !!l.invoice_id;
           return (
-            <tr key={l.id || `n${i}`} className={`border-t border-slate-100 ${l.paid ? "bg-emerald-50/40" : ""}`} data-testid={`remesa-line-${i}`}>
+            <tr key={l.id || `n${i}`} className={`border-t border-slate-100 ${l.cancelled ? "bg-red-50/40 text-slate-400" : l.paid ? "bg-emerald-50/40" : ""}`} data-testid={`remesa-line-${i}`}>
               <td className="px-2 text-slate-400 text-xs whitespace-nowrap">{i + 1}<div className="flex"><button onClick={() => move(i, -1)}><ArrowUp className="w-3 h-3" /></button><button onClick={() => move(i, 1)}><ArrowDown className="w-3 h-3" /></button></div></td>
               {COLS.map(([k, , w, type]) => (
                 <td key={k} className="px-1 py-1"><Input type={type || "text"} value={l[k] ?? ""} disabled={k === "amount" && locked} onChange={(e) => setLine(i, { [k]: e.target.value })}
@@ -130,12 +153,15 @@ export const RemesaEditor = ({ id, debtors, onChanged, onNeedIssuer }) => {
               <td className="px-2 text-xs text-right tabular whitespace-nowrap" data-testid={`line-cuota-${i}`}>{l.vat_exempt ? <span className="text-slate-400">Exento</span> : eur(t.iva)}</td>
               <td className="px-1 py-1"><Input value={l.concept ?? ""} onChange={(e) => setLine(i, { concept: e.target.value })} className="h-8 text-xs w-56" data-testid={`line-concept-${i}`} /></td>
               <td className="px-2 text-xs whitespace-nowrap">{locked
-                ? <button className="text-[#0052FF] hover:underline" onClick={() => doc(`f${i}`, `/invoices/${l.invoice_id}/pdf`, `Factura ${l.invoice_number}.pdf`)} data-testid={`line-invoice-pdf-${i}`}>{l.invoice_number}</button>
+                ? <div><button className={`text-[#0052FF] hover:underline ${l.cancelled ? "line-through" : ""}`} onClick={() => doc(`f${i}`, `/invoices/${l.invoice_id}/pdf`, `Factura ${l.invoice_number}.pdf`)} data-testid={`line-invoice-pdf-${i}`}>{l.invoice_number}</button>
+                  {l.cancelled && <div className="text-[11px] text-red-600" data-testid={`line-cancelled-${i}`}>Anulada{l.rect_number ? ` · Rect. ${l.rect_number}` : ""}</div>}</div>
                 : <span className="text-slate-400">—</span>}</td>
+              <td className="px-2"><VfCell l={l} i={i} busy={busy} onSend={() => sendVf(l, i)} /></td>
               <td className="px-2"><button onClick={() => paid(l)} disabled={!l.id} className={`text-xs flex items-center gap-1 whitespace-nowrap ${l.paid ? "text-emerald-700" : "text-slate-400 hover:text-[#0052FF]"}`} data-testid={`line-paid-${i}`}>
                 <CheckCircle2 className="w-3.5 h-3.5" />{l.paid ? `Cobrado ${l.paid_date || ""}` : "Pendiente"}</button></td>
               <td className="px-2 whitespace-nowrap">
                 {l.id && <button title="Recibo PDF" className="mr-2" onClick={() => doc(`r${i}`, `/gestoria/remesas/${id}/recibos?line_id=${l.id}`, `Recibo ${l.name || i + 1}.pdf`)} data-testid={`line-receipt-${i}`}><Receipt className="w-4 h-4 text-slate-400 hover:text-[#0052FF]" /></button>}
+                {locked && !l.cancelled && <button title="Anular factura (rectificativa automática)" className="mr-2" onClick={() => setCancelLine(l)} data-testid={`line-cancel-${i}`}><Ban className="w-4 h-4 text-slate-400 hover:text-red-600" /></button>}
                 {!locked && <button onClick={() => upd({ lines: r.lines.filter((_, j) => j !== i) })} data-testid={`line-delete-${i}`}><Trash2 className="w-4 h-4 text-slate-400 hover:text-red-600" /></button>}
               </td>
             </tr>
@@ -143,6 +169,9 @@ export const RemesaEditor = ({ id, debtors, onChanged, onNeedIssuer }) => {
         })}</tbody></table>
         {!r.lines.length && <div className="text-center text-slate-400 py-10 text-sm">La remesa está vacía. Añade deudores o líneas.</div>}</div>
       <ResultDialog res={res} onClose={() => setRes(null)} />
+      <CancelInvoiceDialog invoice={cancelLine && { id: cancelLine.invoice_id, number: cancelLine.invoice_number, status: cancelLine.invoice_status }}
+        endpoint={cancelLine && `/gestoria/remesas/${id}/lineas/${cancelLine.id}/anular`} onClose={() => setCancelLine(null)}
+        onDone={(data) => { setCancelLine(null); if (data?.remesa) setR(data.remesa); onChanged(); }} />
     </div>
   );
 };
