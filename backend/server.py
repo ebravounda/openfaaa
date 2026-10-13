@@ -3127,6 +3127,9 @@ app.include_router(pos_router)
 from gestoria_routes import gestoria as gestoria_router, branding as branding_router
 app.include_router(gestoria_router)
 app.include_router(branding_router)
+from blog_routes import admin_blog as admin_blog_router, blog as blog_router
+app.include_router(admin_blog_router)
+app.include_router(blog_router)
 app.include_router(api)
 
 

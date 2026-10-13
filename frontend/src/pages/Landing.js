@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { Seo } from "@/components/Seo";
 import { Button } from "@/components/ui/button";
+import { LatestArticles } from "@/components/blog/BlogCards";
 import {
   Accordion, AccordionItem, AccordionTrigger, AccordionContent,
 } from "@/components/ui/accordion";
@@ -594,6 +595,7 @@ export default function Landing() {
             <a href="#funcionalidades" className="hover:text-slate-900 transition-colors">Funcionalidades</a>
             <a href="#gestorias" className="hover:text-slate-900 transition-colors">Gestorías</a>
             <a href="#precios" className="hover:text-slate-900 transition-colors">Precios</a>
+            <Link to="/blog" className="hover:text-slate-900 transition-colors" data-testid="nav-blog">Blog</Link>
           </nav>
           <div className="flex items-center gap-2 sm:gap-3">
             <Link to="/login"><Button variant="ghost" className="text-slate-600 rounded-full" data-testid="landing-login">Entrar</Button></Link>
@@ -1105,6 +1107,8 @@ export default function Landing() {
           </Reveal>
         </div>
       </section>
+
+      <LatestArticles />
 
       {/* Footer */}
       <footer className="border-t border-slate-100 py-10 bg-white">

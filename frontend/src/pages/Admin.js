@@ -21,6 +21,7 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription,
 } from "@/components/ui/dialog";
 import { Users, ShieldOff, FileText, Search, UserCog, Ban, CheckCircle2, Loader2, Save, CreditCard, History, TrendingUp, Euro, Rocket, UserPlus, Mail, Store, Eye, Phone, MapPin, IdCard, Percent, Clock, UserMinus, UserCheck, Building2, Plus } from "lucide-react";
+import { BlogSeoSection } from "@/components/admin/BlogSeoSection";
 
 const PLAN_LABEL = { basico: "Básico", medio: "Medio", platino: "Platino" };
 const actionLabel = (a) => {
@@ -540,6 +541,8 @@ export default function Admin() {
           </div>
         </div>
       </div>
+
+      <BlogSeoSection />
 
       <div className="bg-white border border-slate-200 rounded-lg shadow-sm max-w-3xl overflow-hidden mt-8" data-testid="integrations-section">
         <div className="px-5 py-4 border-b border-slate-100 flex items-center gap-2">
