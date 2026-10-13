@@ -1,0 +1,36 @@
+{
+  "summary": "Iter 25: VeriFactu por línea + anulación con rectificativa automática en remesas de gestoría. Backend 8/8 pytest PASS (/app/backend/tests/test_iter25_remesas_verifactu.py): PUT /gestoria/remesas/ajustes/emisor acepta verifactu_enabled/_mode/_cert_type y persiste; modos inválidos (foobar/weird) caen a 'simulado'/'personal'; crear remesa+2 líneas+Emitir facturas deja ln.vf.mode='simulado' y submitted False (o True); POST /{rid}/lineas/{lid}/verifactu marca submitted=True con status 'Aceptada ... (simulado)'; POST /{rid}/lineas/{lid}/anular con reason=error_datos sobre línea NO enviada ejecuta auto-submit VeriFactu primero y luego crea rectificativa R-2026-XXXX, deja ln.cancelled=True, ln.rect_number=R-, pending_total descuenta el importe; segunda anulación -> 400 'ya está anulada'; SEPA XML (pain.008) excluye el mandato de la línea anulada. Regresión iter24 serial 16/16 PASS. UI (/gestoria/remesas con gestoría demo): issuer-edit muestra checkbox issuer-verifactu_enabled, selector issuer-verifactu_mode (3 opciones), al elegir produccion aparece issuer-vf-prod-warning y bloque issuer-cert con issuer-cert-password + issuer-cert-file (y issuer-cert-upload); al guardar en modo simulado issuer-vf-summary muestra 'VeriFactu activo · Simulado (pruebas)'. En editor de remesa emitida: columna VeriFactu muestra 'Aceptada (simulado)' / botón line-vf-send-{i} y 'Pendiente de envío' según estado; click en line-cancel-{i} abre cancel-invoice-dialog con 8 radios cancel-reason-*, cancel-detail y cancel-confirm. Al confirmar error_datos: POST /lineas/{lid}/anular 200, toast 'Rectificativa R-2026-0004 (R1) emitida por -121,00 € · VeriFactu: Aceptado por la AEAT (simulado)', aparece line-cancelled-{i} 'Anulada · Rect. R-...', desaparece line-cancel-{i}, pending_total/pending_count excluyen la línea. Modo final del issuer: SIMULADO (dejado así tras el test, cumple requisito).",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "RemesaEditor (<select> IVA)", "issues": ["Hydration warning React: In HTML, <span> cannot be a child of <option>. Causado por el wrapper del tracker/instrumentación que inyecta <span style=display:contents> dentro de <option> value='21' (file RemesaEditor.js:151). No bloquea la funcionalidad pero genera consola llena de warnings en cada render."]}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iter25_remesas_verifactu.py",
+    "/app/test_reports/pytest/iter25.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "remesas_routes.set_issuer: valida verifactu_mode contra VF_MODES y verifactu_cert_type contra (personal, sello), con fallback a 'simulado'/'personal'. Perfecto para evitar valores basura.",
+    "line_cancel: lógica correcta — si la factura original no tiene registro VF submitted y el motivo NO es 'error_no_entregada' (anulación pura permitida en pending), auto-ejecuta verifactu_submit antes de crear la rectificativa. Si el submit es rechazado, 400 claro al usuario. La rectificativa generada se envía automáticamente a VeriFactu dentro de cancel_with_rectificativa.",
+    "_full() construye ln['vf'] con {enabled, submitted, status, csv, mode} desde el documento invoice.verifactu — buena abstracción para el frontend.",
+    "pending_total en _summary() descuenta correctamente las líneas con ln.cancelled (línea 182-183). sepa-xml también filtra cancelled (línea 614). SEPA XML del test muestra que el mandato TEST-M-VFB desaparece tras anular. ✓",
+    "FISCAL_FIELDS incluye los 3 campos VeriFactu nuevos; FiscalInput los expone con defaults seguros (enabled=False, mode='simulado', cert_type='personal'). ✓",
+    "IssuerCard.js UI: cert-password+cert-file solo se montan si verifactu_enabled; para modo simulado el certificado NO es obligatorio (correcto, pero el aviso 'falta el certificado digital' aparece solo en preproduccion/produccion gracias al condicional línea 69). ✓",
+    "CancelInvoiceDialog soporta prop endpoint→reutilizable entre /facturas y /gestoria/remesas sin duplicar lógica. ✓",
+    "Minor UX: el wrapper del tracker inyecta <span> dentro de <option> provocando warnings de hidratación (no es un bug del código de negocio sino de la instrumentación del preview). No afecta a producción.",
+    "Minor: cuando _full() construye ln['vf'], usa bool(v) para 'enabled' — pero el campo invoice.verifactu puede existir con submitted:False tras un intento fallido. Esto se expone como enabled:True + submitted:False correctamente. Para una factura nunca enviada, invoice.verifactu es None y el frontend muestra 'Pendiente de envío' con botón.",
+    "Minor: en POST /anular, el line_id debe pertenecer a una línea con invoice_id (_line valida 404). No valida que la remesa.gestoria_id==g.id salvo a través de _get(). ✓ coherente."
+  ],
+  "updated_files": ["/app/backend/tests/test_iter25_remesas_verifactu.py"],
+  "success_rate": {"backend": "100% (8/8 iter25 + 16/16 iter24 regresión)", "frontend": "100% (issuer VF edit + modo simulado/produccion warning + certificado inputs + cancel dialog + rectificativa automática + estado línea)"},
+  "test_credentials": "demo_gestoria@openfactura.es / DemoGest123",
+  "seed_data_creation": "Durante el test de UI se creó una nueva remesa 'Remesa octubre de 2026' (borrador vacío) al pulsar 'Nueva remesa' (comportamiento del botón: crea borrador sin pedir nombre). También se generaron rectificativas R-2026-0002 y R-2026-0004 al anular líneas de TEST_Iter25_VF existentes. El pytest crea remesa TEST_Iter25_VF por iteración y la deja en estado 'emitida' (no se puede borrar; el delete fuerza 400 y queda documentado en el test_cleanup).",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Para probar línea-cancel sobre una remesa que ya haya consumido su línea 'buena' hay varias TEST_Iter25_VF emitidas acumuladas; busca una con 'pendiente' en la lista. El modo VeriFactu del emisor queda en SIMULADO (requisito explícito del usuario); no cambiar a preproduccion/produccion por falta de certificado válido. POST /gestoria/remesas/{rid}/lineas/{lid}/verifactu y /anular exigen cookie + X-OF-Client: web. El dialog CancelInvoiceDialog ahora acepta prop endpoint y onDone(data) — reutilizable para otros contextos (ej.: facturas regulares).",
+  "rca of the issue": "N/A — feature funcional end-to-end. VeriFactu en modo simulado no contacta con la AEAT (pretendido). La única observación de 'ruido' es un warning de hidratación de React provocado por la instrumentación del preview, no por el código de negocio."
+}
