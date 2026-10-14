@@ -233,10 +233,16 @@ export default function Layout({ children }) {
 
       <main className="lg:ml-[248px] min-h-screen pt-14 lg:pt-0" style={{ marginTop: bannerH }}>
         {trialDays != null && (
-          <div className="px-4 sm:px-8 lg:px-10 py-2.5 flex items-center gap-3 text-xs sm:text-sm border-b bg-[#0052FF]/5 border-[#0052FF]/10 text-[#0052FF]" data-testid="trial-banner">
-            <Sparkles className="w-4 h-4 shrink-0" strokeWidth={1.5} />
-            <span className="min-w-0">Prueba gratuita: te {trialDays === 1 ? "queda 1 día" : `quedan ${trialDays} días`} con todas las funciones.</span>
-            <NavLink to="/precios" className="ml-auto shrink-0 font-medium underline underline-offset-2" data-testid="trial-upgrade">Ver planes</NavLink>
+          <div className={`px-4 sm:px-8 lg:px-10 py-2.5 flex flex-wrap items-center gap-x-4 gap-y-2 text-xs sm:text-sm border-b ${trialDays <= 3 ? "bg-amber-50 border-amber-200 text-amber-900" : "bg-gradient-to-r from-[#0052FF]/[0.07] via-[#0052FF]/[0.04] to-emerald-50 border-[#0052FF]/10 text-slate-700"}`} data-testid="trial-banner">
+            <Sparkles className={`w-4 h-4 shrink-0 ${trialDays <= 3 ? "text-amber-600" : "text-[#0052FF]"}`} strokeWidth={1.5} />
+            <span className="min-w-0 flex-1">
+              {trialDays <= 3 ? "¡Tu prueba está a punto de terminar! " : "¡Hola! Estás disfrutando de tu prueba gratuita. "}
+              Te <b data-testid="trial-days-left">{trialDays === 1 ? "queda 1 día" : `quedan ${trialDays} días`}</b>: completa tu suscripción y sigue sin interrupciones.
+            </span>
+            <div className="hidden md:block w-28 h-1.5 rounded-full bg-white/80 overflow-hidden" title={`${14 - trialDays} de 14 días usados`}>
+              <div className={`h-full rounded-full ${trialDays <= 3 ? "bg-amber-500" : "bg-[#0052FF]"}`} style={{ width: `${Math.min(100, Math.max(4, ((14 - trialDays) / 14) * 100))}%` }} />
+            </div>
+            <NavLink to="/precios" className={`shrink-0 rounded-full px-3.5 py-1.5 text-xs font-semibold text-white transition-transform hover:-translate-y-0.5 ${trialDays <= 3 ? "bg-amber-600" : "bg-[#0052FF]"}`} data-testid="trial-upgrade">Completa tu suscripción</NavLink>
           </div>
         )}
         {usageWarn && (

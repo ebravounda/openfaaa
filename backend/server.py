@@ -130,6 +130,8 @@ class CompanyInput(BaseModel):
     logo: str = ""
     invoice_footer: str = ""
     legal_name: str = ""
+    trade_name: str = ""
+    delivery_prefix: str = "ALB"
     legal_notice: str = ""
     footer_message: str = ""
     autonomo_start_date: str = ""
@@ -532,7 +534,7 @@ def _gate_template(company, user):
 async def preview_company_pdf(overrides: dict = Body(default={}), user=Depends(get_current_user)):
     """Genera una miniatura PNG del PDF real con los ajustes de aspecto indicados (sin guardar)."""
     company = await active_company(user)
-    for k in ("template_id", "accent_color", "logo", "name", "legal_name", "nif", "address",
+    for k in ("template_id", "accent_color", "logo", "name", "legal_name", "trade_name", "nif", "address",
               "email", "phone", "invoice_footer", "legal_notice", "footer_message"):
         if overrides.get(k) is not None:
             company[k] = overrides[k]
@@ -1101,6 +1103,15 @@ async def create_quote(data: QuoteInput, user=Depends(get_current_user)):
     await db.quotes.insert_one(doc)
     doc.pop("_id", None)
     return doc
+
+
+@api.post("/quotes/preview-pdf")
+async def preview_quote_pdf(data: QuoteInput, user=Depends(get_current_user)):
+    company = await active_company(user)
+    doc = data.model_dump()
+    doc.update({"doc_type": "presupuesto", "number": "BORRADOR"})
+    compute_invoice(doc)
+    return Response(content=build_invoice_pdf(doc, company), media_type="application/pdf")
 
 
 @api.get("/quotes/{quote_id}")
@@ -3128,6 +3139,8 @@ from gestoria_routes import gestoria as gestoria_router, branding as branding_ro
 app.include_router(gestoria_router)
 app.include_router(branding_router)
 from blog_routes import admin_blog as admin_blog_router, blog as blog_router
+from albaranes_routes import alb as albaranes_router
+app.include_router(albaranes_router)
 app.include_router(admin_blog_router)
 app.include_router(blog_router)
 app.include_router(api)

@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
-import api, { API, eur, formatApiErrorDetail } from "@/lib/api";
+import api, { eur, formatApiErrorDetail } from "@/lib/api";
 import Layout from "@/components/Layout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -19,8 +19,11 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import {
-  Plus, Trash2, FileSignature, Mail, Download, Loader2, Pencil, Search, FileCheck2,
+  Plus, Trash2, FileSignature, Mail, Loader2, Pencil, Search, FileCheck2, Eye, Truck,
 } from "lucide-react";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import { PdfPreviewDialog } from "@/components/PdfPreviewDialog";
+import { AlbaranesTab } from "@/components/albaranes/AlbaranesTab";
 import {
   Tooltip, TooltipContent, TooltipProvider, TooltipTrigger,
 } from "@/components/ui/tooltip";
@@ -95,6 +98,9 @@ export default function Quotes() {
   const [sendingId, setSendingId] = useState(null);
   const [convertingId, setConvertingId] = useState(null);
   const [lookingUp, setLookingUp] = useState(false);
+  const [tab, setTab] = useState("presupuestos");
+  const [preview, setPreview] = useState(null);
+  const [albSignal, setAlbSignal] = useState(0);
 
   const load = () => {
     setLoading(true);
@@ -202,17 +208,7 @@ export default function Quotes() {
     if (!form.client.name.trim()) return toast.error("Introduce el nombre del cliente");
     if (form.line_items.some((i) => !i.description.trim())) return toast.error("Todas las líneas necesitan descripción");
     setSaving(true);
-    const payload = {
-      issue_date: form.issue_date,
-      valid_until: form.valid_until,
-      client: form.client,
-      line_items: form.line_items.map((i) => ({ description: i.description, detail: i.detail || "", quantity: Number(i.quantity), unit_price: Number(i.unit_price), discount: Number(i.discount) || 0, ...selToTax(i.iva_sel ?? "21") })),
-      irpf_rate: Number(form.irpf_rate),
-      recargo_equivalencia: !!form.recargo_equivalencia,
-      global_discount: Number(form.global_discount) || 0,
-      notes: form.notes,
-      series: form.series,
-    };
+    const payload = buildPayload();
     try {
       if (editingId) {
         await api.put(`/quotes/${editingId}`, payload);
@@ -228,7 +224,28 @@ export default function Quotes() {
     } finally { setSaving(false); }
   };
 
-  const openPdf = (q) => window.open(`${API}/quotes/${q.id}/pdf`, "_blank");
+  const buildPayload = () => ({
+    issue_date: form.issue_date,
+    valid_until: form.valid_until,
+    client: form.client,
+    line_items: form.line_items.map((i) => ({ description: i.description || "—", detail: i.detail || "", quantity: Number(i.quantity), unit_price: Number(i.unit_price), discount: Number(i.discount) || 0, ...selToTax(i.iva_sel ?? "21") })),
+    irpf_rate: Number(form.irpf_rate),
+    recargo_equivalencia: !!form.recargo_equivalencia,
+    global_discount: Number(form.global_discount) || 0,
+    notes: form.notes,
+    series: form.series,
+  });
+  const previewDraft = () => setPreview({ title: "Vista previa del presupuesto", filename: "presupuesto-borrador.pdf",
+    load: () => api.post("/quotes/preview-pdf", buildPayload(), { responseType: "blob" }).then((r) => r.data) });
+  const openPdf = (q) => setPreview({ title: `Presupuesto ${q.number}`, filename: `presupuesto-${q.number}.pdf`,
+    load: () => api.get(`/quotes/${q.id}/pdf`, { responseType: "blob" }).then((r) => r.data) });
+  const toAlbaran = async (q) => {
+    if (!window.confirm(`¿Crear un albarán de entrega a partir del presupuesto ${q.number}?`)) return;
+    try {
+      const { data } = await api.post(`/albaranes/desde-presupuesto/${q.id}`);
+      toast.success(`Albarán ${data.number} creado`); setAlbSignal((x) => x + 1); setTab("albaranes"); load();
+    } catch (e) { toast.error(formatApiErrorDetail(e.response?.data?.detail)); }
+  };
 
   const sendEmail = async (q) => {
     if (!q.client?.email) return toast.error("El cliente no tiene email registrado");
@@ -270,14 +287,21 @@ export default function Quotes() {
     <Layout>
       <div className="flex items-center justify-between mb-6 gap-4 flex-wrap">
         <div>
-          <h1 className="font-display text-[28px] font-semibold tracking-tight text-slate-900">Presupuestos</h1>
-          <p className="text-sm text-slate-500 mt-0.5">Crea presupuestos, envíalos a tus clientes y conviértelos en factura</p>
+          <h1 className="font-display text-[28px] font-semibold tracking-tight text-slate-900">Presupuestos y albaranes</h1>
+          <p className="text-sm text-slate-500 mt-0.5">Crea presupuestos, entrega con albarán y conviértelos en factura</p>
         </div>
-        <Button onClick={openNew} className="bg-[#0052FF] hover:bg-[#0040CC] text-white rounded-xl shadow-[0_4px_14px_0_rgba(0,82,255,0.39)] transition-all hover:-translate-y-0.5 active:scale-95" data-testid="new-quote-button">
+        {tab === "presupuestos" && <Button onClick={openNew} className="bg-[#0052FF] hover:bg-[#0040CC] text-white rounded-xl shadow-[0_4px_14px_0_rgba(0,82,255,0.39)] transition-all hover:-translate-y-0.5 active:scale-95" data-testid="new-quote-button">
           <Plus className="w-4 h-4 mr-2" strokeWidth={1.5} /> Nuevo presupuesto
-        </Button>
+        </Button>}
       </div>
 
+      <Tabs value={tab} onValueChange={setTab}>
+        <TabsList className="mb-5" data-testid="quotes-tabs">
+          <TabsTrigger value="presupuestos" data-testid="tab-presupuestos"><FileSignature className="w-4 h-4 mr-1.5" />Presupuestos</TabsTrigger>
+          <TabsTrigger value="albaranes" data-testid="tab-albaranes"><Truck className="w-4 h-4 mr-1.5" />Albaranes</TabsTrigger>
+        </TabsList>
+        <TabsContent value="albaranes"><AlbaranesTab clients={clients} reloadSignal={albSignal} /></TabsContent>
+        <TabsContent value="presupuestos">
       <div className="bg-white border border-slate-200/60 rounded-[20px] shadow-[0_8px_30px_rgb(0,0,0,0.04)] overflow-hidden">
         {loading ? (
           <div className="p-5 space-y-3">{[0, 1, 2, 3].map((i) => <Skeleton key={i} className="h-12 rounded-md" />)}</div>
@@ -302,7 +326,7 @@ export default function Quotes() {
             <TableBody>
               {quotes.map((q) => (
                 <TableRow key={q.id} data-testid={`quote-row-${q.number}`} className="hover:bg-slate-50/60 transition-colors border-b border-slate-100 last:border-0">
-                  <TableCell className="font-mono text-sm font-medium text-slate-900">{q.number}</TableCell>
+                  <TableCell className="font-mono text-sm font-medium text-slate-900">{q.number}{q.albaranes?.length > 0 && <div className="text-[11px] text-slate-400 font-sans">Albarán {q.albaranes.join(", ")}</div>}</TableCell>
                   <TableCell className="text-sm text-slate-600 tabular">{q.issue_date}</TableCell>
                   <TableCell className="text-sm font-medium text-slate-900">{q.client?.name}</TableCell>
                   <TableCell className="text-right text-sm tabular">{eur(q.base)}</TableCell>
@@ -336,8 +360,11 @@ export default function Quotes() {
                             <Button variant="ghost" size="icon" onClick={() => openEdit(q)} data-testid={`quote-edit-${q.number}`} className="h-8 w-8 text-slate-500 hover:text-[#0052FF]"><Pencil className="w-4 h-4" strokeWidth={1.5} /></Button>
                           </Tip>
                         )}
-                        <Tip label="Ver / descargar PDF">
-                          <Button variant="ghost" size="icon" onClick={() => openPdf(q)} data-testid={`quote-pdf-${q.number}`} className="h-8 w-8 text-slate-500 hover:text-slate-900"><Download className="w-4 h-4" strokeWidth={1.5} /></Button>
+                        <Tip label="Crear albarán de entrega">
+                          <Button variant="ghost" size="icon" onClick={() => toAlbaran(q)} data-testid={`quote-albaran-${q.number}`} className="h-8 w-8 text-slate-500 hover:text-amber-600"><Truck className="w-4 h-4" strokeWidth={1.5} /></Button>
+                        </Tip>
+                        <Tip label="Vista previa PDF">
+                          <Button variant="ghost" size="icon" onClick={() => openPdf(q)} data-testid={`quote-pdf-${q.number}`} className="h-8 w-8 text-slate-500 hover:text-slate-900"><Eye className="w-4 h-4" strokeWidth={1.5} /></Button>
                         </Tip>
                         <Tip label="Enviar por email al cliente">
                           <Button variant="ghost" size="icon" onClick={() => sendEmail(q)} disabled={sendingId === q.id} data-testid={`quote-email-${q.number}`} className="h-8 w-8 text-slate-500 hover:text-[#0052FF]">
@@ -356,6 +383,9 @@ export default function Quotes() {
           </Table>
         )}
       </div>
+        </TabsContent>
+      </Tabs>
+      <PdfPreviewDialog open={!!preview} title={preview?.title} filename={preview?.filename} load={preview?.load || (() => Promise.reject())} onClose={() => setPreview(null)} />
 
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto" data-testid="quote-dialog">
@@ -467,7 +497,8 @@ export default function Quotes() {
               <div className="flex justify-between font-display text-lg font-semibold text-slate-900 pt-2 border-t border-slate-200 mt-2"><span>Total</span><span className="tabular" data-testid="summary-total">{eur(calc.total)}</span></div>
             </div>
           </div>
-          <DialogFooter>
+          <DialogFooter className="gap-2">
+            <Button variant="outline" onClick={previewDraft} className="border-slate-200" data-testid="quote-preview"><Eye className="w-4 h-4 mr-1.5" />Vista previa</Button>
             <Button variant="outline" onClick={() => setOpen(false)} className="border-slate-200">Cancelar</Button>
             <Button onClick={save} disabled={saving} className="bg-[#0052FF] hover:bg-[#0040CC] text-white rounded-xl shadow-[0_4px_14px_0_rgba(0,82,255,0.39)] transition-all hover:-translate-y-0.5 active:scale-95" data-testid="save-quote">
               {saving && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}{editingId ? "Guardar cambios" : "Crear presupuesto"}

@@ -131,7 +131,9 @@ def _stamp_anulada(canvas, doc, anulada: bool):
 def build_invoice_pdf(invoice: dict, company: dict, qr_png: bytes = None, verifactu: dict = None) -> bytes:
     comp0 = company or {}
     is_quote = invoice.get("doc_type") == "presupuesto"
-    if not is_quote and TEMPLATE_MAP.get(comp0.get("template_id", ""), {}).get("layout") == "goroky":
+    is_alb = invoice.get("doc_type") == "albaran"
+    hide_prices = is_alb and not invoice.get("show_prices", True)
+    if not is_quote and not is_alb and TEMPLATE_MAP.get(comp0.get("template_id", ""), {}).get("layout") == "goroky":
         return build_goroky_invoice_pdf(invoice, comp0, qr_png=qr_png, verifactu=verifactu)
     buf = BytesIO()
     doc = SimpleDocTemplate(buf, pagesize=A4, topMargin=20 * mm,
@@ -160,10 +162,18 @@ def build_invoice_pdf(invoice: dict, company: dict, qr_png: bytes = None, verifa
         Paragraph(f"{comp.get('email','')} {comp.get('phone','')}", small),
     ]
     _lg = _logo_flowable(comp)
+    trade = (comp.get("trade_name") or "").strip()
+    if trade:
+        trade_p = Paragraph(trade, ParagraphStyle("trade", parent=styles["Normal"], fontName="Helvetica-Bold", fontSize=13 if _lg else 18,
+                                                  textColor=accent, leading=16 if _lg else 22))
+        header_left = [trade_p, Spacer(1, 1.5 * mm),
+                       Paragraph(comp.get("name", ""), ParagraphStyle("hname2", parent=normal, fontName="Helvetica-Bold", fontSize=10, leading=13))] + header_left[1:]
     if _lg:
-        header_left = [_lg, Spacer(1, 3 * mm)] + header_left
+        header_left = [_lg, Spacer(1, 2.5 * mm)] + header_left
     is_rect = invoice.get("invoice_type") == "rectificativa"
-    if is_quote:
+    if is_alb:
+        _title, _tsize, _tlead = "ALBARÁN", 20, 25
+    elif is_quote:
         _title, _tsize, _tlead = "PRESUPUESTO", 20, 25
     elif is_rect:
         _title, _tsize, _tlead = "FACTURA RECTIFICATIVA", 16, 20
@@ -183,6 +193,11 @@ def build_invoice_pdf(invoice: dict, company: dict, qr_png: bytes = None, verifa
         header_right.append(Paragraph(f"Válido hasta: {invoice['valid_until']}",
                             ParagraphStyle("v", parent=styles["Normal"], fontSize=9,
                                            textColor=MUTED, alignment=2, leading=13)))
+    if is_alb:
+        for lbl, key in (("Fecha de entrega", "delivery_date"), ("Ref. presupuesto", "quote_number"), ("Factura", "invoice_number")):
+            if invoice.get(key):
+                header_right.append(Paragraph(f"{lbl}: {invoice[key]}", ParagraphStyle(f"a{key}", parent=styles["Normal"], fontSize=9,
+                                                                                    textColor=MUTED, alignment=2, leading=13)))
     if is_rect and invoice.get("rectifies_number"):
         header_right.append(Paragraph(f"Rectifica a: {invoice['rectifies_number']}",
                             ParagraphStyle("r", parent=styles["Normal"], fontSize=9,
@@ -200,7 +215,7 @@ def build_invoice_pdf(invoice: dict, company: dict, qr_png: bytes = None, verifa
 
     # Client
     cl = invoice.get("client", {})
-    story.append(Paragraph("FACTURAR A", label))
+    story.append(Paragraph("CLIENTE" if is_alb else "FACTURAR A", label))
     story.append(Spacer(1, 2 * mm))
     story.append(Paragraph(cl.get("name", ""), ParagraphStyle("cn", parent=normal,
                  fontName="Helvetica-Bold", fontSize=11)))
@@ -210,13 +225,23 @@ def build_invoice_pdf(invoice: dict, company: dict, qr_png: bytes = None, verifa
         story.append(Paragraph(cl.get("address"), normal))
     if cl.get("email"):
         story.append(Paragraph(cl.get("email"), normal))
+    if is_alb and invoice.get("delivery_address"):
+        story.append(Spacer(1, 3 * mm))
+        story.append(Paragraph("DIRECCIÓN DE ENTREGA", label))
+        story.append(Paragraph(invoice["delivery_address"], normal))
     story.append(Spacer(1, 8 * mm))
 
     # Line items
     gd = invoice.get("global_discount") or 0
     detail_style = ParagraphStyle("det", parent=normal, fontSize=8, textColor=MUTED, leading=10)
-    data = [["Descripción", "Cant.", "Precio", "Dto.", "IVA", "Importe"]]
-    for it in invoice.get("line_items", []):
+    if hide_prices:
+        data = [["Descripción", "Cantidad"]]
+        for it in invoice.get("line_items", []):
+            cell = [Paragraph(it["description"], normal)] + ([Paragraph(it["detail"], detail_style)] if it.get("detail") else [])
+            data.append([cell, f"{it['quantity']:g}"])
+    else:
+        data = [["Descripción", "Cant.", "Precio", "Dto.", "IVA", "Importe"]]
+    for it in ([] if hide_prices else invoice.get("line_items", [])):
         desc_cell = [Paragraph(it["description"], normal)]
         if it.get("detail"):
             desc_cell.append(Paragraph(it["detail"], detail_style))
@@ -229,7 +254,7 @@ def build_invoice_pdf(invoice: dict, company: dict, qr_png: bytes = None, verifa
             _iva_label(it),
             _eur(_line_net(it, gd)),
         ])
-    tbl = Table(data, colWidths=[66 * mm, 14 * mm, 24 * mm, 16 * mm, 22 * mm, 32 * mm])
+    tbl = Table(data, colWidths=[144 * mm, 30 * mm] if hide_prices else [66 * mm, 14 * mm, 24 * mm, 16 * mm, 22 * mm, 32 * mm])
     tbl.setStyle(TableStyle([
         ("BACKGROUND", (0, 0), (-1, 0), accent),
         ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
@@ -260,13 +285,28 @@ def build_invoice_pdf(invoice: dict, company: dict, qr_png: bytes = None, verifa
         ("TOPPADDING", (0, 0), (-1, -1), 5),
         ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
     ]))
-    story.append(tt)
+    if not hide_prices:
+        story.append(tt)
 
     if invoice.get("notes"):
         story.append(Spacer(1, 10 * mm))
-        story.append(Paragraph("NOTAS", label))
+        story.append(Paragraph("OBSERVACIONES" if is_alb else "NOTAS", label))
         story.append(Spacer(1, 2 * mm))
         story.append(Paragraph(invoice["notes"], small))
+
+    if is_alb:
+        story.append(Spacer(1, 12 * mm))
+        sig_l = ParagraphStyle("sigl", parent=small, fontSize=8.5, leading=12)
+        sig = Table([[Paragraph("<b>RECIBÍ CONFORME</b>", sig_l), ""],
+                     [Paragraph("Nombre y apellidos:", sig_l), Paragraph("Firma:", sig_l)],
+                     [Paragraph("DNI/NIE:", sig_l), ""],
+                     [Paragraph("Fecha de recepción:&nbsp;&nbsp;____ / ____ / ________", sig_l), ""]],
+                    colWidths=[100 * mm, 74 * mm], rowHeights=[8 * mm, 10 * mm, 10 * mm, 10 * mm])
+        sig.setStyle(TableStyle([("BOX", (0, 0), (-1, -1), 0.6, BORDER), ("LINEAFTER", (0, 1), (0, -1), 0.6, BORDER),
+                                 ("LINEBELOW", (0, 0), (-1, 0), 0.6, BORDER), ("SPAN", (1, 1), (1, -1)), ("SPAN", (0, 0), (1, 0)),
+                                 ("VALIGN", (0, 0), (-1, -1), "TOP"), ("LEFTPADDING", (0, 0), (-1, -1), 6), ("TOPPADDING", (0, 0), (-1, -1), 5),
+                                 ("BACKGROUND", (0, 0), (-1, 0), LIGHT)]))
+        story.append(sig)
 
     if comp.get("invoice_footer"):
         story.append(Spacer(1, 6 * mm))
@@ -373,6 +413,10 @@ def _grk_header_footer(canvas, doc, comp, footer_msg):
         logo_h = logo_w * ih / iw
         canvas.drawImage(img, lm, top - logo_h, width=logo_w, height=logo_h,
                          mask="auto", preserveAspectRatio=True)
+        if (comp.get("trade_name") or "").strip():
+            canvas.setFont("Helvetica-Bold", 10)
+            canvas.setFillColor(GRK_NAVY)
+            canvas.drawString(lm, max(top - logo_h - 11, top - 20 * mm + 3), comp["trade_name"].strip()[:60])
     except Exception:
         pass
     # Emisor (derecha)

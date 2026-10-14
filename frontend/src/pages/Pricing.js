@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import api, { formatApiErrorDetail } from "@/lib/api";
 import Layout from "@/components/Layout";
+import { useAuth } from "@/context/AuthContext";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -44,6 +45,11 @@ export default function Pricing() {
     setUpgrading(planId);
     try {
       const { data } = await api.post("/payments/checkout", { plan: planId, cycle, origin_url: window.location.origin });
+      if (data.changed) {
+        toast.success("¡Plan cambiado! Ya tienes las nuevas funciones activas.");
+        setTimeout(() => window.location.reload(), 1200);
+        return;
+      }
       window.location.href = data.checkout_url;
     } catch (e) {
       toast.error(formatApiErrorDetail(e.response?.data?.detail));
@@ -63,6 +69,10 @@ export default function Pricing() {
   };
 
   const isAdmin = current?.id === "admin";
+  const { user } = useAuth() || {};
+  const paying = !!user && !["basico", "", undefined].includes(user.plan) && user.role !== "admin";
+  const inTrial = current?.id === "trial";
+  const trialDaysLeft = inTrial && user?.trial_ends_at ? Math.max(0, Math.ceil((new Date(user.trial_ends_at) - Date.now()) / 86400000)) : null;
   const invLimit = current?.max_invoices;
   const conLimit = current?.max_contacts;
   const invPct = invLimit != null ? (usage?.invoices_month ?? 0) / invLimit : 0;
@@ -94,7 +104,7 @@ export default function Pricing() {
               className={`px-4 py-1.5 text-sm font-medium rounded-full transition-colors duration-200 flex items-center gap-1.5 ${cycle === "yearly" ? "bg-white text-slate-900 shadow-sm" : "text-slate-500"}`}
             >Anual <span className="text-[10px] font-semibold text-emerald-600 bg-emerald-50 px-1.5 py-0.5 rounded-full">2 meses gratis</span></button>
           </div>
-          {(current?.id === "medio" || current?.id === "platino") && (
+          {paying && current?.id !== "basico" && current?.id !== "trial" && !isAdmin && (
             <Button onClick={manageSubscription} disabled={portalLoading} variant="outline" className="border-slate-200" data-testid="manage-subscription">
               {portalLoading ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Settings2 className="w-4 h-4 mr-2" strokeWidth={1.5} />}
               Gestionar / cancelar suscripción
@@ -146,6 +156,18 @@ export default function Pricing() {
           )}
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+            {inTrial && (
+              <div className="md:col-span-3 rounded-xl border border-[#0052FF]/15 bg-gradient-to-r from-[#0052FF]/[0.06] to-emerald-50 p-4 flex items-start gap-3" data-testid="pricing-trial-note">
+                <Sparkles className="w-5 h-5 text-[#0052FF] shrink-0 mt-0.5" strokeWidth={1.5} />
+                <div className="text-sm text-slate-700">
+                  <b className="text-slate-900">Estás en tu prueba gratuita{trialDaysLeft != null ? ` (te ${trialDaysLeft === 1 ? "queda 1 día" : `quedan ${trialDaysLeft} días`})` : ""}.</b>{" "}
+                  Puedes elegir tu plan ahora, sin esperar a que termine: se cobra hoy y se activa al momento. Elige pago mensual o anual (2 meses gratis).
+                </div>
+              </div>
+            )}
+            {paying && !isAdmin && (
+              <div className="md:col-span-3 text-sm text-slate-500" data-testid="pricing-change-note">Al cambiar de plan o de periodicidad se ajusta tu suscripción actual y solo se cobra la diferencia proporcional.</div>
+            )}
             {plans.map((p) => {
               const isCurrent = current?.id === p.id;
               const popular = p.id === "medio";
@@ -209,7 +231,7 @@ export default function Pricing() {
                     ) : (
                       <Button onClick={() => upgrade(p.id)} disabled={!!upgrading} className="w-full bg-[#0052FF] hover:bg-[#0040CC] text-white" data-testid={`upgrade-${p.id}`}>
                         {upgrading === p.id ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <ArrowUpCircle className="w-4 h-4 mr-2" strokeWidth={1.5} />}
-                        Mejorar a {p.name}
+                        {paying ? `Cambiar a ${p.name}` : inTrial ? `Elegir ${p.name}` : `Mejorar a ${p.name}`}
                       </Button>
                     )}
                   </div>

@@ -66,6 +66,25 @@ async def create_checkout(req: CheckoutReq, user=Depends(get_current_user)):
     if not price_id:
         raise HTTPException(status_code=500, detail="Precio no disponible en Stripe")
     meta = {"user_id": user["id"], "plan": req.plan}
+    udoc = await db.users.find_one({"_id": ObjectId(user["id"])}, {"stripe_subscription_id": 1, "plan": 1}) or {}
+    sub_id = udoc.get("stripe_subscription_id")
+    if sub_id:
+        # Ya paga una suscripción: se cambia de plan/periodicidad en la misma (prorrateo cobrado hoy), sin crear otra.
+        try:
+            sub = stripe.Subscription.retrieve(sub_id)
+            if sub.get("status") in ("active", "trialing", "past_due"):
+                items = sub["items"]["data"]
+                if items and items[0]["price"]["id"] == price_id:
+                    raise HTTPException(status_code=400, detail="Ya tienes este plan con esta periodicidad.")
+                stripe.Subscription.modify(sub_id, items=[{"id": items[0]["id"], "price": price_id}], metadata=meta,
+                                           proration_behavior="always_invoice", payment_behavior="error_if_incomplete")
+                await db.users.update_one({"_id": ObjectId(user["id"])}, {"$set": {
+                    "plan": req.plan, "billing_cycle": cycle, "plan_updated_at": datetime.now(timezone.utc).isoformat()}})
+                return {"changed": True, "plan": req.plan, "cycle": cycle}
+        except stripe.error.CardError as e:
+            raise HTTPException(status_code=402, detail=f"No se pudo cobrar la diferencia del cambio de plan: {e.user_message or 'tarjeta rechazada'}.")
+        except stripe.error.StripeError as e:
+            logger.warning(f"subscription change fallback to checkout: {e}")
     try:
         session = ss.create_subscription_session(price_id, req.origin_url, meta)
     except stripe.error.StripeError as e:
