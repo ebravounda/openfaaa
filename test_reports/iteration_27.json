@@ -1,0 +1,38 @@
+{
+  "summary": "Iter 27: tested trial banner, pricing upgrade flow, nombre de fantasía (trade_name), quotes PDF preview, albaranes CRUD + facturar (single/each). Backend: 17/17 pytest OK (test_iter27_albaranes_trial.py) covering: trial user has trial_ends_at + plan=basico; PUT /api/company persists trade_name; POST /api/quotes/preview-pdf → %PDF; /api/albaranes next-number returns ALB-YYYY-NNNN, create/get/update, preview-pdf, {id}/pdf, PATCH /status, desde-presupuesto/{quote_id} (asociando quote_id+quote_number), POST /facturar modo single rechaza clientes distintos (400 'mismo cliente'), modo each crea N facturas, albaranes quedan status=facturado con invoice_number, no se puede editar/eliminar facturado (400), rechaza ya facturados (400), modo single mismo cliente agrupa en 1 factura con 2 albaranes; POST /api/payments/checkout plan=medio devuelve checkout_url (nuevo suscriptor). Code review payments_routes.create_checkout: si hay stripe_subscription_id activo (active|trialing|past_due) hace Subscription.modify con proration_behavior='always_invoice' y payment_behavior='error_if_incomplete' devolviendo {changed:true,plan,cycle}; captura CardError (402) y fallback a checkout si StripeError genérico; mismo precio => 400 'Ya tienes este plan con esta periodicidad'. Correcto. Frontend (desktop 1366 + mobile 390): registro de TEST_trial_* vía API; /facturas muestra trial-banner con trial-days-left='quedan 14 días' y trial-upgrade href=/precios; /precios lista todos los testids esperados (billing-cycle-toggle, cycle-monthly/yearly, pricing-trial-note con 'Estás en tu prueba gratuita (te quedan 14 días)…se cobra hoy y se activa al momento. Elige pago mensual o anual (2 meses gratis).', pricing-card-{basico,medio,platino,multiempresas,multiempresas_50}, upgrade-{medio,platino,multiempresas,multiempresas_50}); toggle anual/mensual cambia precios; /configuracion tiene company-trade-name editable y persiste (verificado vía GET /api/company después del guardar), restaurado al valor original; /presupuestos pestañas tab-presupuestos/tab-albaranes funcionan; new-albaran-button abre albaran-dialog con albaran-next-number 'ALB-2026-0001', albaran-line-desc-0, albaran-show-prices (checked por defecto), albaran-preview, albaran-save presentes; quote-pdf-{number} abre pdf-preview-dialog con pdf-preview-frame + pdf-preview-download; quote-albaran-{number} dispara window.confirm nativo (en el test se descartó); vista móvil 390px de /presupuestos renderiza banner y pestaña Albaranes sin desbordes.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "AlbaranDialog (Nuevo albarán)", "issues": ["Los inputs 'Fecha' y 'Fecha de entrega' usan <input type=date> nativo del navegador en lugar del DatePicker shadcn (Calendar) usado en otras pantallas. Inconsistencia visual con el resto de la app."]},
+      {"screen": "Quotes toAlbaran", "issues": ["Confirmación de 'Crear albarán desde presupuesto' usa window.confirm nativo (estilo del navegador) en vez de un AlertDialog de shadcn — inconsistente con el resto de confirmaciones de la app."]}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iter27_albaranes_trial.py",
+    "/app/test_reports/pytest/iter27.xml"
+  ],
+  "action_items": [
+    "(Minor UX) Reemplazar <input type=date> en AlbaranDialog por el DatePicker shadcn para mantener consistencia visual con InvoiceDialog/QuoteDialog.",
+    "(Minor UX) Sustituir window.confirm en Quotes.toAlbaran por un AlertDialog shadcn."
+  ],
+  "critical_code_review_comments": [
+    "albaranes_routes.invoice_albaranes: la clave _client_key cae a nombre lowercased si no hay NIF; está bien pero dos clientes distintos con el mismo nombre colisionarían — aceptable para MVP.",
+    "albaranes_routes._next_number: hace find() paginado y calcula max() en Python en vez de aggregation; para volúmenes pequeños OK, para >1k albaranes/año conviene índice compuesto (user_id, company_id, number) + sort desc + limit 1.",
+    "albaranes_routes.create: _validate_invoice se ejecuta antes del _doc() que normaliza status a 'pendiente' si viene inválido — correcto que no permita crear directamente con status='facturado'.",
+    "payments_routes.create_checkout: proration_behavior='always_invoice' cobra la diferencia inmediatamente (cumple el requerimiento 'pago en prueba se cobra hoy y activa al momento'). ✓",
+    "server.CompanyInput.trade_name default '' y _public_user/active_company lo propagan; pdf_service.build_invoice_pdf lo muestra bajo el logo. ✓",
+    "server.preview_quote_pdf no requiere auth adicional ni límites de plan — correcto porque es solo render en memoria del borrador del usuario autenticado.",
+    "Rate limit de /auth/register (collection register_attempts, ventana 1h) golpeó durante testing — es correcto por seguridad; hubo que limpiar la colección para iterar tests.",
+    "Observación menor: _public_user devuelve trial_ends_at como string ISO; el frontend parsea con new Date() en Layout — ok."
+  ],
+  "updated_files": ["/app/backend/tests/test_iter27_albaranes_trial.py"],
+  "success_rate": {"backend": "100% (17/17)", "frontend": "100% (todos los data-testid presentes y flujos verificados)"},
+  "test_credentials": "admin@fiscalhub.es/admin123; usuarios trial creados vía /api/auth/register con prefijo TEST_trial_*/TEST_pf_*/TEST_qf_* (passwords TestPass123).",
+  "seed_data_creation": "Varios usuarios TEST_* registrados durante el test; cada uno con sus propios albaranes/presupuestos/facturas aisladas. No se tocaron datos reales. db.register_attempts purgada al terminar los tests para evitar 429 al próximo agente.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Los tests están en /app/backend/tests/test_iter27_albaranes_trial.py y se reejecutan limpiamente si la collection register_attempts no está saturada (si falla con 429 → db.register_attempts.delete_many({})). Settings page: ruta real es /configuracion (no /ajustes). El flujo quote-albaran-{number} usa window.confirm nativo — en playwright hay que hacer page.on('dialog', lambda d: d.accept()). Payments.checkout con plan='basico' responde 400 'Este plan no requiere pago'; usar 'medio' o 'platino'.",
+  "rca of the issue": "N/A — no bugs encontrados. Dos observaciones de UX (inputs de fecha nativos y window.confirm) son consistencia visual, no funcionalidad."
+}
