@@ -1,5 +1,7 @@
 import os
+import base64
 import re as _re
+from datetime import datetime
 from io import BytesIO
 from reportlab.lib.pagesizes import A4
 from reportlab.lib.units import mm
@@ -297,10 +299,29 @@ def build_invoice_pdf(invoice: dict, company: dict, qr_png: bytes = None, verifa
     if is_alb:
         story.append(Spacer(1, 12 * mm))
         sig_l = ParagraphStyle("sigl", parent=small, fontSize=8.5, leading=12)
-        sig = Table([[Paragraph("<b>RECIBÍ CONFORME</b>", sig_l), ""],
-                     [Paragraph("Nombre y apellidos:", sig_l), Paragraph("Firma:", sig_l)],
-                     [Paragraph("DNI/NIE:", sig_l), ""],
-                     [Paragraph("Fecha de recepción:&nbsp;&nbsp;____ / ____ / ________", sig_l), ""]],
+        sg = invoice.get("signature") or {}
+        sig_img = ""
+        if sg.get("image"):
+            try:
+                from reportlab.platypus import Image as RLImage
+                from reportlab.lib.utils import ImageReader
+                raw = base64.b64decode(sg["image"])
+                iw, ih = ImageReader(BytesIO(raw)).getSize()
+                sc = min(66 * mm / iw, 24 * mm / ih)
+                sig_img = RLImage(BytesIO(raw), width=iw * sc, height=ih * sc)
+            except Exception:
+                sig_img = ""
+        when = ""
+        if sg.get("signed_at"):
+            try:
+                when = datetime.fromisoformat(sg["signed_at"]).strftime("%d/%m/%Y %H:%M") + " UTC"
+            except ValueError:
+                when = sg["signed_at"][:16]
+        firma_cell = [Paragraph("Firma:", sig_l)] + ([sig_img] if sig_img else [])
+        sig = Table([[Paragraph("<b>RECIBÍ CONFORME</b>" + (f" · firmado electrónicamente ({'enlace' if sg.get('method') == 'enlace' else 'en el momento de la entrega'})" if sg else ""), sig_l), ""],
+                     [Paragraph(f"Nombre y apellidos: <b>{sg.get('name', '')}</b>", sig_l), firma_cell],
+                     [Paragraph(f"DNI/NIE: <b>{sg.get('dni', '')}</b>", sig_l), ""],
+                     [Paragraph(f"Fecha de recepción: <b>{when}</b>" if when else "Fecha de recepción:&nbsp;&nbsp;____ / ____ / ________", sig_l), ""]],
                     colWidths=[100 * mm, 74 * mm], rowHeights=[8 * mm, 10 * mm, 10 * mm, 10 * mm])
         sig.setStyle(TableStyle([("BOX", (0, 0), (-1, -1), 0.6, BORDER), ("LINEAFTER", (0, 1), (0, -1), 0.6, BORDER),
                                  ("LINEBELOW", (0, 0), (-1, 0), 0.6, BORDER), ("SPAN", (1, 1), (1, -1)), ("SPAN", (0, 0), (1, 0)),

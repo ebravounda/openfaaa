@@ -3139,8 +3139,9 @@ from gestoria_routes import gestoria as gestoria_router, branding as branding_ro
 app.include_router(gestoria_router)
 app.include_router(branding_router)
 from blog_routes import admin_blog as admin_blog_router, blog as blog_router
-from albaranes_routes import alb as albaranes_router
+from albaranes_routes import alb as albaranes_router, pub as albaranes_public_router
 app.include_router(albaranes_router)
+app.include_router(albaranes_public_router)
 app.include_router(admin_blog_router)
 app.include_router(blog_router)
 app.include_router(api)
@@ -3275,6 +3276,8 @@ async def startup():
     await db.certificates.create_index("user_id", unique=True)
     await db.verifactu_log.create_index("user_id")
     await seed_admin()
+    from trial_reminders import trial_reminder_loop
+    asyncio.create_task(trial_reminder_loop())
     try:
         storage_service.init_storage()
         logger.info("Storage initialized")

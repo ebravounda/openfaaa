@@ -32,6 +32,7 @@ import Pricing from "@/pages/Pricing";
 import PreciosRoute from "@/pages/PreciosRoute";
 import Blog from "@/pages/Blog";
 import BlogPost from "@/pages/BlogPost";
+import FirmarAlbaran from "@/pages/FirmarAlbaran";
 import PaymentSuccess from "@/pages/PaymentSuccess";
 import PaymentCancel from "@/pages/PaymentCancel";
 import PagoExito from "@/pages/PagoExito";
@@ -80,6 +81,7 @@ function App() {
           <Route path="/precios" element={<PreciosRoute />} />
           <Route path="/blog" element={<Blog />} />
           <Route path="/blog/:slug" element={<BlogPost />} />
+          <Route path="/firmar/:token" element={<FirmarAlbaran />} />
           <Route path="/pago/exito" element={<PagoExito />} />
           <Route path="/pago/cancelado" element={<PagoCancelado />} />
           <Route path="/payment/success" element={<ProtectedRoute><PaymentSuccess /></ProtectedRoute>} />

@@ -8,8 +8,9 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { Plus, Trash2, Mail, Eye, Pencil, FileCheck2, Truck, Loader2 } from "lucide-react";
+import { Plus, Trash2, Mail, Eye, Pencil, FileCheck2, Truck, Loader2, PenLine, BadgeCheck } from "lucide-react";
 import { PdfPreviewDialog } from "@/components/PdfPreviewDialog";
+import { SignAlbaranDialog } from "./SignAlbaranDialog";
 import { AlbaranDialog, FacturarDialog, emptyAlbaran, albaranToForm, formToPayload } from "./AlbaranDialogs";
 
 const ST = { pendiente: ["Pendiente", "bg-amber-100 text-amber-800"], entregado: ["Entregado", "bg-emerald-100 text-emerald-700"], facturado: ["Facturado", "bg-purple-100 text-purple-700"] };
@@ -23,6 +24,7 @@ export const AlbaranesTab = ({ clients, reloadSignal }) => {
   const [preview, setPreview] = useState(null);
   const [facturar, setFacturar] = useState(null);
   const [sending, setSending] = useState("");
+  const [signing, setSigning] = useState(null);
   const load = () => api.get("/albaranes").then((r) => { setList(r.data); setSel([]); });
   useEffect(() => { load(); }, [reloadSignal]);
 
@@ -71,7 +73,7 @@ export const AlbaranesTab = ({ clients, reloadSignal }) => {
                   <TableCell>{a.status !== "facturado" && <Checkbox checked={sel.includes(a.id)} onCheckedChange={() => toggle(a.id)} data-testid={`albaran-select-${a.number}`} />}</TableCell>
                   <TableCell className="font-mono text-sm font-medium">{a.number}{a.quote_number && <div className="text-[11px] text-slate-400 font-sans">de {a.quote_number}</div>}</TableCell>
                   <TableCell className="text-sm text-slate-600 tabular">{a.delivery_date || a.issue_date}</TableCell>
-                  <TableCell className="text-sm font-medium">{a.client?.name}</TableCell>
+                  <TableCell className="text-sm font-medium">{a.client?.name}{a.signature && <div className="text-[11px] text-emerald-700 font-normal inline-flex items-center gap-1" data-testid={`albaran-signed-${a.number}`}><BadgeCheck className="w-3 h-3" />Firmado por {a.signature.name}</div>}</TableCell>
                   <TableCell className="text-right text-sm font-semibold tabular">{eur(a.total)}{a.show_prices === false && <div className="text-[11px] text-slate-400 font-normal">PDF sin precios</div>}</TableCell>
                   <TableCell>{a.status === "facturado"
                     ? <Badge className={`${ST.facturado[1]} rounded-full`} data-testid={`albaran-status-${a.number}`}>Facturado · {a.invoice_number}</Badge>
@@ -79,7 +81,8 @@ export const AlbaranesTab = ({ clients, reloadSignal }) => {
                       <SelectContent><SelectItem value="pendiente">Pendiente</SelectItem><SelectItem value="entregado">Entregado</SelectItem></SelectContent></Select>}</TableCell>
                   <TableCell className="text-right"><TooltipProvider delayDuration={150}><div className="flex justify-end gap-0.5">
                     {a.status !== "facturado" && <Tip label="Facturar"><Button variant="ghost" size="icon" className="h-8 w-8 text-slate-500 hover:text-purple-600" onClick={() => setFacturar([a])} data-testid={`albaran-facturar-${a.number}`}><FileCheck2 className="w-4 h-4" /></Button></Tip>}
-                    {a.status !== "facturado" && <Tip label="Editar"><Button variant="ghost" size="icon" className="h-8 w-8 text-slate-500 hover:text-[#0052FF]" onClick={() => openEdit(a)} data-testid={`albaran-edit-${a.number}`}><Pencil className="w-4 h-4" /></Button></Tip>}
+                    {!a.signature && <Tip label="Firmar entrega"><Button variant="ghost" size="icon" className="h-8 w-8 text-slate-500 hover:text-emerald-600" onClick={() => setSigning(a)} data-testid={`albaran-sign-${a.number}`}><PenLine className="w-4 h-4" /></Button></Tip>}
+                    {a.status !== "facturado" && !a.signature && <Tip label="Editar"><Button variant="ghost" size="icon" className="h-8 w-8 text-slate-500 hover:text-[#0052FF]" onClick={() => openEdit(a)} data-testid={`albaran-edit-${a.number}`}><Pencil className="w-4 h-4" /></Button></Tip>}
                     <Tip label="Vista previa PDF"><Button variant="ghost" size="icon" className="h-8 w-8 text-slate-500" onClick={() => setPreview({ title: `Albarán ${a.number}`, filename: `albaran-${a.number}.pdf`, load: () => api.get(`/albaranes/${a.id}/pdf`, { responseType: "blob" }).then((r) => r.data) })} data-testid={`albaran-pdf-${a.number}`}><Eye className="w-4 h-4" /></Button></Tip>
                     <Tip label="Enviar por email"><Button variant="ghost" size="icon" className="h-8 w-8 text-slate-500 hover:text-[#0052FF]" disabled={sending === a.id} onClick={() => email(a)} data-testid={`albaran-email-${a.number}`}>{sending === a.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <Mail className="w-4 h-4" />}</Button></Tip>
                     {a.status !== "facturado" && <Tip label="Eliminar"><Button variant="ghost" size="icon" className="h-8 w-8 text-slate-400 hover:text-red-600" onClick={() => remove(a)} data-testid={`albaran-delete-${a.number}`}><Trash2 className="w-4 h-4" /></Button></Tip>}
@@ -92,6 +95,7 @@ export const AlbaranesTab = ({ clients, reloadSignal }) => {
       <AlbaranDialog open={!!dlg} onClose={() => setDlg(null)} editing={dlg?.editing} number={dlg?.number} form={form} setForm={setForm} clients={clients}
         onSaved={() => { setDlg(null); load(); }}
         onPreview={() => setPreview({ title: "Vista previa del albarán", filename: "albaran-borrador.pdf", load: () => api.post("/albaranes/preview-pdf", formToPayload(form), { responseType: "blob" }).then((r) => r.data) })} />
+      <SignAlbaranDialog a={signing} onClose={() => setSigning(null)} onDone={() => { setSigning(null); load(); }} />
       <FacturarDialog items={facturar} onClose={() => setFacturar(null)} onDone={() => { setFacturar(null); load(); }} />
       <PdfPreviewDialog open={!!preview} title={preview?.title} filename={preview?.filename} load={preview?.load || (() => Promise.reject())} onClose={() => setPreview(null)} />
     </div>
