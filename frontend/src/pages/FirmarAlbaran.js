@@ -20,7 +20,7 @@ export default function FirmarAlbaran() {
   }, [token]);
   const submit = async (body) => {
     setBusy(true); setSendErr("");
-    try { const { data } = await axios.post(`${API}/${token}`, body); setDone(data); }
+    try { const { data } = await axios.post(`${API}/${token}`, body, { headers: { "X-OF-Client": "web" } }); setDone(data); }
     catch (e) { setSendErr(e.response?.data?.detail || "No se ha podido firmar. Inténtalo de nuevo."); } finally { setBusy(false); }
   };
   return (

@@ -1,0 +1,52 @@
+{
+  "summary": "Iter 28: Probados firma de entrega de albaranes (presencial + enlace público) y recordatorios de trial. Backend 15/15 pytest OK, UI de firma presencial OK, UI de página pública /firmar/{token} funcional (invalid-token y 'ya firmado' muestran correctamente public-sign-error). BUG CRÍTICO detectado: la página pública /firmar/{token} falla con 403 'Petición no autorizada (CSRF)' cuando la abre un usuario que YA tiene cookie access_token en el mismo dominio (p.ej. el propio emisor del albarán previsualizando el enlace o un cliente que es a su vez usuario). El POST público desde FirmarAlbaran.js usa axios sin la cabecera X-OF-Client: web, y el middleware CSRF rechaza cualquier POST con cookie si falta esa cabecera. En producción, un cliente sin cookie firmaría correctamente, pero la ruta pública debería ser accesible siempre.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {
+        "component": "FirmarAlbaran (/firmar/:token)",
+        "issue": "POST público devuelve 403 CSRF cuando el navegador trae cookie access_token (owner probando enlace, cliente logueado). axios usado directamente sin cabecera X-OF-Client",
+        "selector": "[data-testid=\"public-sign-page\"] + sign-submit",
+        "priority": "CRITICAL"
+      }
+    ],
+    "integration_issues": [
+      {
+        "flow": "Firma pública /firmar/{token}",
+        "issue": "Respuesta backend 403 CSRF para POST /api/public/albaran-firma/{token} si llega con cookie de sesión sin cabecera X-OF-Client",
+        "affected_selectors": ["[data-testid=\"public-sign-submit-error\"]"]
+      }
+    ],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iter28_firma_trial.py",
+    "/app/test_reports/pytest/iter28.xml"
+  ],
+  "action_items": [
+    "FIX CRÍTICO: En /app/backend/security.py añadir '/api/public/' a CSRF_EXEMPT_PREFIXES (son endpoints por token, no por cookie), O en /app/frontend/src/pages/FirmarAlbaran.js enviar axios.post con headers {'X-OF-Client':'web'}. Recomiendo lo primero porque el endpoint es public-by-token y no debe depender de un header anti-CSRF.",
+    "Opcional: el input de fecha en el modal 'Nuevo albarán' usa el picker nativo del navegador (no shadcn Calendar). Si se busca estilo uniforme, considerar DatePicker consistente."
+  ],
+  "critical_code_review_comments": [
+    "security.py: la ruta pública /api/public/albaran-firma/{token} es por capability-token y no necesita CSRF. Añadirla a CSRF_EXEMPT_PREFIXES.",
+    "trial_reminders.py: run_trial_reminders usa claim atómico correcto (update_one con filtro del flag) → idempotente, verificado.",
+    "albaranes_routes.py _apply_signature: correcto que el GET /api/albaranes excluya signature.image (verificado). _check_png valida PNG magic bytes y límite 400kB.",
+    "FirmarAlbaran.js debería usar el cliente api común (que ya pone X-OF-Client) o incluir ese header explícitamente para robustez."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iter28_firma_trial.py"
+  ],
+  "success_rate": {
+    "backend": "100%",
+    "frontend": "80% (CSRF bloquea firma pública cuando hay cookie)"
+  },
+  "test_credentials": "admin@fiscalhub.es / admin123",
+  "seed_data_creation": "Albaranes TEST creados en UI (ALB-2026-0003, ALB-2026-0004) ya borrados. Usuarios TEST en Mongo creados/borrados por el test de trial_reminders.",
+  "retest_needed": true,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "La firma presencial (POST /api/albaranes/{id}/firmar) funciona en backend y UI (toasts validación, dibujo canvas, borrado, lista actualizada con albaran-signed-{number}). Creación de enlace (sign-link-create) devuelve URL correcta, email button se deshabilita si cliente sin email. GET público, PDF público, invalid-token, token-ya-firmado todos OK. ÚNICO fallo: POST público /api/public/albaran-firma/{token} devuelve 403 CSRF si el navegador tiene cookie access_token. Retestar tras aplicar fix de CSRF_EXEMPT_PREFIXES.",
+  "rca_of_the_issue": "security.py middleware anti-CSRF comprueba toda petición STATE_CHANGING con cookie access_token. La ruta /api/public/albaran-firma/{token} POST (firma pública) sí lleva cookie si el navegador del firmante tiene sesión activa en el mismo dominio (caso típico: el emisor abre su propio enlace para previsualizar; o cliente que es también usuario). FirmarAlbaran.js hace axios.post sin X-OF-Client. Resultado: 403 'Petición no autorizada (CSRF)'. Fix recomendado: añadir prefix '/api/public/' a CSRF_EXEMPT_PREFIXES en /app/backend/security.py (línea 20)."
+}
