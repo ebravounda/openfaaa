@@ -15,7 +15,7 @@ from reportlab.lib.units import mm
 from reportlab.lib import colors
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.platypus import (
-    SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer, HRFlowable, Image, PageBreak
+    SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer, HRFlowable, Image, PageBreak, Flowable
 )
 from reportlab.lib.utils import ImageReader
 from io import BytesIO as _BytesIO
@@ -25,6 +25,43 @@ DARK = colors.HexColor("#0A0A0A")
 MUTED = colors.HexColor("#666666")
 BORDER = colors.HexColor("#E5E5E5")
 LIGHT = colors.HexColor("#FAFAFA")
+OF_URL = "https://openfactura.es"
+OF_LOGO = os.path.join(os.path.dirname(os.path.abspath(__file__)), "assets", "openfactura-logo.png")
+
+
+class _PoweredBy(Flowable):
+    """«{Documento} emitido con [logo OpenFactura]» centrado, todo enlazado a openfactura.es."""
+
+    def __init__(self, label: str, logo_h=5.2 * mm):
+        super().__init__()
+        self.label = label
+        self.logo_h = logo_h
+        iw, ih = ImageReader(OF_LOGO).getSize()
+        self.logo_w = logo_h * iw / ih
+        self.height = logo_h + 2
+
+    def wrap(self, aw, ah):
+        self.aw = aw
+        return aw, self.height
+
+    def draw(self):
+        c = self.canv
+        c.setFont("Helvetica", 7.5)
+        tw = c.stringWidth(self.label + " ", "Helvetica", 7.5)
+        total = tw + self.logo_w
+        x0 = (self.aw - total) / 2
+        c.setFillColor(MUTED)
+        c.drawString(x0, self.logo_h * 0.32, self.label)
+        c.drawImage(OF_LOGO, x0 + tw, 0, width=self.logo_w, height=self.logo_h, mask="auto")
+        c.linkURL(OF_URL, (x0, -1, x0 + total, self.logo_h + 1), relative=1, thickness=0)
+
+
+def _powered_by(invoice: dict, company: dict) -> list:
+    if (company or {}).get("show_powered_by", True) is False or not os.path.exists(OF_LOGO):
+        return []
+    t = invoice.get("doc_type")
+    label = "Presupuesto emitido con" if t == "presupuesto" else "Albarán emitido con" if t == "albaran" else "Factura emitida con"
+    return [Spacer(1, 9 * mm), _PoweredBy(label)]
 
 
 import base64 as _b64
@@ -373,6 +410,7 @@ def build_invoice_pdf(invoice: dict, company: dict, qr_png: bytes = None, verifa
         vt.setStyle(TableStyle([("VALIGN", (0, 0), (-1, -1), "MIDDLE")]))
         story.append(vt)
 
+    story.extend(_powered_by(invoice, comp))
     _anulada = str(invoice.get("status", "")).lower() == "anulada"
     doc.build(story, onFirstPage=lambda c, d: _stamp_anulada(c, d, _anulada),
               onLaterPages=lambda c, d: _stamp_anulada(c, d, _anulada))
@@ -638,6 +676,7 @@ def build_goroky_invoice_pdf(invoice: dict, company: dict, qr_png: bytes = None,
     story.append(Spacer(1, 3 * mm))
     story.append(HRFlowable(width="100%", thickness=0.6, color=GRK_LINE))
     story.extend(_grk_parse_legal(legal_text, styles))
+    story.extend(_powered_by(invoice, comp))
 
     def _on_page(canvas, d):
         _grk_header_footer(canvas, d, comp, footer_msg)

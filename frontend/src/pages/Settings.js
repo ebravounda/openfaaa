@@ -48,7 +48,7 @@ export default function Settings() {
         const { data } = await api.post("/company/preview-pdf", {
           template_id: form.template_id, accent_color: form.accent_color,
           name: form.name, nif: form.nif, address: form.address,
-          legal_name: form.legal_name, trade_name: form.trade_name, legal_notice: form.legal_notice,
+          legal_name: form.legal_name, trade_name: form.trade_name, show_powered_by: form.show_powered_by !== false, legal_notice: form.legal_notice,
           footer_message: form.footer_message, invoice_footer: form.invoice_footer,
           logo: form.logo,
         }, { responseType: "blob" });
@@ -59,7 +59,7 @@ export default function Settings() {
     }, 600);
     return () => { active = false; clearTimeout(t); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [loading, form.template_id, form.accent_color, form.name, form.nif, form.address, form.legal_name, form.trade_name, form.legal_notice, form.footer_message, form.invoice_footer, form.logo]);
+  }, [loading, form.template_id, form.accent_color, form.name, form.nif, form.address, form.legal_name, form.trade_name, form.show_powered_by, form.legal_notice, form.footer_message, form.invoice_footer, form.logo]);
 
   const uploadCert = async (e) => {
     const file = e.target.files?.[0];
@@ -155,6 +155,11 @@ export default function Settings() {
             <div className="space-y-2"><Label>Nombre legal (2ª línea, opcional)</Label><Input value={form.legal_name} onChange={(e) => setForm({ ...form, legal_name: e.target.value })} placeholder="Razón social (S.L., S.A., …)" data-testid="company-legal-name" /></div>
             <div className="space-y-2"><Label>Nombre de fantasía (opcional)</Label><Input value={form.trade_name || ""} onChange={(e) => setForm({ ...form, trade_name: e.target.value })} placeholder="Nombre comercial de tu marca" data-testid="company-trade-name" />
               <p className="text-xs text-slate-400">Aparece debajo del logo en facturas, presupuestos y albaranes.</p></div>
+            <label className="sm:col-span-2 flex items-start gap-3 rounded-lg border border-slate-200 p-3 cursor-pointer" data-testid="company-powered-by">
+              <Switch checked={form.show_powered_by !== false} onCheckedChange={(v) => setForm({ ...form, show_powered_by: v })} data-testid="company-powered-by-switch" />
+              <span className="text-sm"><span className="font-medium text-slate-900 inline-flex items-center gap-1.5">OpenFactura <img src="/openfactura-logo.png" alt="OpenFactura" className="h-3.5 w-auto" /></span>
+                <span className="block text-xs text-slate-500 mt-0.5">Muestra «Factura emitida con OpenFactura» al final de tus facturas, presupuestos y albaranes, con enlace a openfactura.es.</span></span>
+            </label>
             <div className="space-y-2"><Label>Fecha de alta como autónomo (para el IRPF reducido del 7%)</Label><Input type="date" value={form.autonomo_start_date || ""} onChange={(e) => setForm({ ...form, autonomo_start_date: e.target.value })} data-testid="company-autonomo-start" /></div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="space-y-2"><Label>Email</Label><Input type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} data-testid="company-email" /></div>

@@ -131,6 +131,7 @@ class CompanyInput(BaseModel):
     invoice_footer: str = ""
     legal_name: str = ""
     trade_name: str = ""
+    show_powered_by: bool = True
     delivery_prefix: str = "ALB"
     legal_notice: str = ""
     footer_message: str = ""
@@ -534,7 +535,7 @@ def _gate_template(company, user):
 async def preview_company_pdf(overrides: dict = Body(default={}), user=Depends(get_current_user)):
     """Genera una miniatura PNG del PDF real con los ajustes de aspecto indicados (sin guardar)."""
     company = await active_company(user)
-    for k in ("template_id", "accent_color", "logo", "name", "legal_name", "trade_name", "nif", "address",
+    for k in ("template_id", "accent_color", "logo", "name", "legal_name", "trade_name", "show_powered_by", "nif", "address",
               "email", "phone", "invoice_footer", "legal_notice", "footer_message"):
         if overrides.get(k) is not None:
             company[k] = overrides[k]
