@@ -1,5 +1,12 @@
 import os
 import base64
+from html import escape as _esc
+
+
+def _ml(s) -> str:
+    """Texto de usuario seguro para Paragraph, respetando los saltos de línea."""
+    return _esc(str(s or "")).replace("\r\n", "\n").replace("\n", "<br/>")
+
 import re as _re
 from datetime import datetime
 from io import BytesIO
@@ -235,18 +242,19 @@ def build_invoice_pdf(invoice: dict, company: dict, qr_png: bytes = None, verifa
 
     # Line items
     gd = invoice.get("global_discount") or 0
-    detail_style = ParagraphStyle("det", parent=normal, fontSize=8, textColor=MUTED, leading=10)
+    detail_style = ParagraphStyle("det", parent=normal, textColor=DARK, spaceBefore=1)
+    concept_style = ParagraphStyle("concept", parent=normal, fontName="Helvetica-Bold", textColor=DARK)
     if hide_prices:
         data = [["Descripción", "Cantidad"]]
         for it in invoice.get("line_items", []):
-            cell = [Paragraph(it["description"], normal)] + ([Paragraph(it["detail"], detail_style)] if it.get("detail") else [])
+            cell = [Paragraph(_ml(it["description"]), concept_style)] + ([Paragraph(_ml(it["detail"]), detail_style)] if it.get("detail") else [])
             data.append([cell, f"{it['quantity']:g}"])
     else:
         data = [["Descripción", "Cant.", "Precio", "Dto.", "IVA", "Importe"]]
     for it in ([] if hide_prices else invoice.get("line_items", [])):
-        desc_cell = [Paragraph(it["description"], normal)]
+        desc_cell = [Paragraph(_ml(it["description"]), concept_style)]
         if it.get("detail"):
-            desc_cell.append(Paragraph(it["detail"], detail_style))
+            desc_cell.append(Paragraph(_ml(it["detail"]), detail_style))
         ld = float(it.get("discount") or 0)
         data.append([
             desc_cell,
@@ -567,9 +575,9 @@ def build_goroky_invoice_pdf(invoice: dict, company: dict, qr_png: bytes = None,
         if it.get("description"):
             ld = float(it.get("discount") or 0)
             extra = f" · Dto. {ld:g}%" if ld else ""
-            left_block.append(Paragraph(f"{it['description']} · {_iva_label(it)}{extra}", normal))
+            left_block.append(Paragraph(f"<b>{_ml(it['description'])}</b> · {_iva_label(it)}{extra}", normal))
             if it.get("detail"):
-                left_block.append(Paragraph(f"<i>{it['detail']}</i>", normal))
+                left_block.append(Paragraph(_ml(it["detail"]), normal))
 
     # Importes (derecha)
     amt_l = ParagraphStyle("grkal", parent=styles["Normal"], fontSize=9.5, textColor=GRK_BODY, leading=14)

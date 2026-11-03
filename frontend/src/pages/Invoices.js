@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { DetailTextarea } from "@/components/DetailTextarea";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -696,8 +697,8 @@ export default function Invoices() {
                     </div>
                     <div className="col-span-1"><Button variant="ghost" size="icon" onClick={() => removeItem(idx)} disabled={form.line_items.length === 1} className="h-9 w-9 text-slate-400 hover:text-red-600"><Trash2 className="w-4 h-4" strokeWidth={1.5} /></Button></div>
                   </div>
-                  <div className="flex items-center gap-3">
-                    <Input className="text-sm h-8 flex-1" placeholder="Descripción (opcional)" value={it.detail || ""} onChange={(e) => updateItem(idx, "detail", e.target.value)} data-testid={`line-detail-${idx}`} />
+                  <div className="flex items-start gap-3">
+                    <DetailTextarea value={it.detail || ""} onChange={(e) => updateItem(idx, "detail", e.target.value)} data-testid={`line-detail-${idx}`} />
                     <div className="text-sm text-slate-500 whitespace-nowrap">Total: <span className="font-medium text-slate-800 tabular" data-testid={`line-total-${idx}`}>{eur(lineNet(it))}</span></div>
                   </div>
                 </div>

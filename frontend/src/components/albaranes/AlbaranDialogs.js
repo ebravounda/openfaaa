@@ -9,6 +9,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Plus, Trash2, Loader2, Eye } from "lucide-react";
+import { DetailTextarea } from "@/components/DetailTextarea";
 
 const IVA = [["21", "IVA 21%"], ["10", "IVA 10%"], ["4", "IVA 4%"], ["0", "IVA 0%"], ["exento", "Exento"], ["no_sujeto", "No sujeto"]];
 export const emptyLine = () => ({ description: "", detail: "", quantity: 1, unit_price: 0, discount: 0, iva_sel: "21" });
@@ -61,8 +62,8 @@ const Lines = ({ form, setForm }) => {
                 <SelectContent>{IVA.map(([v, l]) => <SelectItem key={v} value={v}>{l}</SelectItem>)}</SelectContent></Select></div>
             <div className="col-span-12 sm:col-span-1 flex justify-end"><Button variant="ghost" size="icon" disabled={form.line_items.length === 1} onClick={() => setForm({ ...form, line_items: form.line_items.filter((_, j) => j !== i) })} className="h-9 w-9 text-slate-400 hover:text-red-600"><Trash2 className="w-4 h-4" /></Button></div>
           </div>
-          <div className="flex items-center gap-3">
-            <Input className="text-sm h-8 flex-1" placeholder="Detalle, lote, nº de serie… (opcional)" value={it.detail} onChange={(e) => upd(i, "detail", e.target.value)} data-testid={`albaran-line-detail-${i}`} />
+          <div className="flex items-start gap-3">
+            <DetailTextarea placeholder="Detalle, lote, nº de serie… (opcional) · Intro para más líneas" value={it.detail} onChange={(e) => upd(i, "detail", e.target.value)} data-testid={`albaran-line-detail-${i}`} />
             <span className="text-sm text-slate-500 whitespace-nowrap">{eur(lineNet(it))}</span>
           </div>
         </div>
