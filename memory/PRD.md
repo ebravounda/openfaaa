@@ -432,6 +432,8 @@ Sistema de facturación para España: crear facturas introduciendo datos (CIF/NI
 - Iter 61 (2026-11-03): Facturas (crear/editar): flechas subir/bajar en cada línea (line-up-{i}/line-down-{i}) para cambiar el orden antes de emitir; el orden se guarda tal cual en la factura y su PDF.
 - Iter 62 (2026-11-03): Marca "emitida con OpenFactura": company.show_powered_by (por defecto activo; interruptor en Configuración con el logo). Al final de facturas/presupuestos/albaranes (plantilla clásica y goroky) "Factura emitida con / Presupuesto emitido con / Albarán emitido con" + imagen del logo (backend/assets/openfactura-logo.png), todo enlazado a https://openfactura.es (_PoweredBy flowable con linkURL).
 - Iter 63 (2026-11-03): Botón "Vista previa" al crear/editar facturas (invoice-preview) → POST /api/invoices/preview-pdf (borrador sin guardar, nº "BORRADOR"), mostrado en PdfPreviewDialog con Descargar. Demo pública temporal en /demo/factura-demo.pdf|png (borrar antes de publicar si el usuario lo pide).
+- Iter 64 (2026-11-03): Service worker (PWA) cambiado de cache-first a network-first para estáticos y caché renombrada a openfactura-v2 (borra la v1): el navegador del usuario mostraba la versión antigua de la app (bundle.js cacheado).
+
 
 
 

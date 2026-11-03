@@ -1,5 +1,5 @@
 /* OpenFactura PWA service worker — cache mínimo del app shell */
-const CACHE = "openfactura-v1";
+const CACHE = "openfactura-v2";
 const SHELL = ["/", "/manifest.json", "/openfactura-logo.png"];
 
 self.addEventListener("install", (e) => {
@@ -23,12 +23,14 @@ self.addEventListener("fetch", (e) => {
     e.respondWith(fetch(req).catch(() => caches.match("/")));
     return;
   }
-  // Estáticos: cache-first
+  // Estáticos: network-first (siempre la versión nueva); la caché solo se usa sin conexión
   e.respondWith(
-    caches.match(req).then((cached) => cached || fetch(req).then((res) => {
-      const copy = res.clone();
-      caches.open(CACHE).then((c) => c.put(req, copy)).catch(() => {});
+    fetch(req).then((res) => {
+      if (res.ok) {
+        const copy = res.clone();
+        caches.open(CACHE).then((c) => c.put(req, copy)).catch(() => {});
+      }
       return res;
-    }).catch(() => cached))
+    }).catch(() => caches.match(req))
   );
 });
