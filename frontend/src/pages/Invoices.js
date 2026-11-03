@@ -20,10 +20,11 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import {
-  Plus, Trash2, ArrowUp, ArrowDown, FileText, Mail, Download, CheckCircle2, Loader2, Pencil, Undo2, ShieldCheck, ShieldAlert, Search, Ban, Sparkles, HelpCircle, CreditCard, Wallet, Clock3, Receipt,
+  Plus, Trash2, ArrowUp, ArrowDown, Eye, FileText, Mail, Download, CheckCircle2, Loader2, Pencil, Undo2, ShieldCheck, ShieldAlert, Search, Ban, Sparkles, HelpCircle, CreditCard, Wallet, Clock3, Receipt,
 } from "lucide-react";
 import RectificativaGuide, { RECTIFY_GUIDE_KEY } from "@/components/RectificativaGuide";
 import { CancelInvoiceDialog } from "@/components/CancelInvoiceDialog";
+import { PdfPreviewDialog } from "@/components/PdfPreviewDialog";
 import {
   Tooltip, TooltipContent, TooltipProvider, TooltipTrigger,
 } from "@/components/ui/tooltip";
@@ -90,6 +91,7 @@ export default function Invoices() {
   const [nextNumber, setNextNumber] = useState("");
   const [form, setForm] = useState(emptyForm());
   const [saving, setSaving] = useState(false);
+  const [preview, setPreview] = useState(null);
   const [sendingId, setSendingId] = useState(null);
   const [lookingUp, setLookingUp] = useState(false);
   const [payingId, setPayingId] = useState(null);
@@ -298,29 +300,35 @@ export default function Invoices() {
     setOpen(true);
   };
 
+  const buildPayload = () => ({
+    issue_date: form.issue_date,
+    client: form.client,
+    line_items: form.line_items.map((i) => ({ description: i.description, detail: i.detail || "", quantity: Number(i.quantity), unit_price: Number(i.unit_price), discount: Number(i.discount) || 0, ...selToTax(i.iva_sel ?? "21") })),
+    irpf_rate: Number(form.irpf_rate),
+    recargo_equivalencia: !!form.recargo_equivalencia,
+    global_discount: Number(form.global_discount) || 0,
+    notes: form.notes,
+    series: form.series,
+    invoice_type: form.invoice_type,
+    rectifies: form.rectifies,
+    rectifies_number: form.rectifies_number,
+    rectify_type: form.rectify_type || "I",
+    due_date: form.due_date,
+    period: form.period,
+    payment_method: form.payment_method,
+    iban: form.iban,
+    concept_label: form.concept_label,
+  });
+  const previewDraft = () => setPreview({
+    title: "Vista previa de la factura", filename: "factura-borrador.pdf",
+    load: () => api.post("/invoices/preview-pdf", { ...buildPayload(), line_items: buildPayload().line_items.map((l) => ({ ...l, description: l.description || "—" })) }, { responseType: "blob" }).then((r) => r.data),
+  });
+
   const save = async () => {
     if (!form.client.name.trim()) return toast.error("Introduce el nombre del cliente");
     if (form.line_items.some((i) => !i.description.trim())) return toast.error("Todas las líneas necesitan descripción");
     setSaving(true);
-    const payload = {
-      issue_date: form.issue_date,
-      client: form.client,
-      line_items: form.line_items.map((i) => ({ description: i.description, detail: i.detail || "", quantity: Number(i.quantity), unit_price: Number(i.unit_price), discount: Number(i.discount) || 0, ...selToTax(i.iva_sel ?? "21") })),
-      irpf_rate: Number(form.irpf_rate),
-      recargo_equivalencia: !!form.recargo_equivalencia,
-      global_discount: Number(form.global_discount) || 0,
-      notes: form.notes,
-      series: form.series,
-      invoice_type: form.invoice_type,
-      rectifies: form.rectifies,
-      rectifies_number: form.rectifies_number,
-      rectify_type: form.rectify_type || "I",
-      due_date: form.due_date,
-      period: form.period,
-      payment_method: form.payment_method,
-      iban: form.iban,
-      concept_label: form.concept_label,
-    };
+    const payload = buildPayload();
     try {
       if (editingId) {
         await api.put(`/invoices/${editingId}`, payload);
@@ -812,6 +820,7 @@ export default function Invoices() {
             <Button variant="outline" onClick={reviewWithAI} disabled={reviewing} className="border-slate-200 mr-auto" data-testid="review-ai">
               {reviewing ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Sparkles className="w-4 h-4 mr-2" strokeWidth={1.5} />}Revisar con IA
             </Button>
+            <Button variant="outline" onClick={previewDraft} className="border-slate-200" data-testid="invoice-preview"><Eye className="w-4 h-4 mr-1.5" strokeWidth={1.5} />Vista previa</Button>
             <Button variant="outline" onClick={() => setOpen(false)} className="border-slate-200">Cancelar</Button>
             <Button onClick={save} disabled={saving} className="bg-[#0052FF] hover:bg-[#0040CC] text-white" data-testid="save-invoice">
               {saving && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}{editingId ? "Guardar cambios" : "Emitir factura"}
@@ -819,6 +828,7 @@ export default function Invoices() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+      <PdfPreviewDialog open={!!preview} title={preview?.title} filename={preview?.filename} load={preview?.load || (() => Promise.reject())} onClose={() => setPreview(null)} />
     </Layout>
   );
 }

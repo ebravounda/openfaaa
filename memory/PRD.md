@@ -431,6 +431,8 @@ Sistema de facturación para España: crear facturas introduciendo datos (CIF/NI
 - Iter 60 (2026-11-03): Descripción de línea en varias líneas (DetailTextarea autoajustable) al crear/editar facturas, presupuestos y albaranes; PDF: concepto en negrita y descripción debajo, mismo tamaño y en negro, respetando saltos de línea (`_ml` escapa HTML y convierte \n en <br/>), también en plantilla goroky.
 - Iter 61 (2026-11-03): Facturas (crear/editar): flechas subir/bajar en cada línea (line-up-{i}/line-down-{i}) para cambiar el orden antes de emitir; el orden se guarda tal cual en la factura y su PDF.
 - Iter 62 (2026-11-03): Marca "emitida con OpenFactura": company.show_powered_by (por defecto activo; interruptor en Configuración con el logo). Al final de facturas/presupuestos/albaranes (plantilla clásica y goroky) "Factura emitida con / Presupuesto emitido con / Albarán emitido con" + imagen del logo (backend/assets/openfactura-logo.png), todo enlazado a https://openfactura.es (_PoweredBy flowable con linkURL).
+- Iter 63 (2026-11-03): Botón "Vista previa" al crear/editar facturas (invoice-preview) → POST /api/invoices/preview-pdf (borrador sin guardar, nº "BORRADOR"), mostrado en PdfPreviewDialog con Descargar. Demo pública temporal en /demo/factura-demo.pdf|png (borrar antes de publicar si el usuario lo pide).
+
 
 
 

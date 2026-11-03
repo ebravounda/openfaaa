@@ -722,6 +722,15 @@ async def _make_invoice(user, company, data: InvoiceInput) -> dict:
     return doc
 
 
+@api.post("/invoices/preview-pdf")
+async def preview_invoice_pdf(data: InvoiceInput, user=Depends(get_current_user)):
+    company = await active_company(user)
+    doc = data.model_dump()
+    doc.update({"number": "BORRADOR", "status": "pending"})
+    compute_invoice(doc)
+    return Response(content=build_invoice_pdf(doc, _gate_template(company, user)), media_type="application/pdf")
+
+
 @api.post("/invoices")
 async def create_invoice(data: InvoiceInput, user=Depends(get_current_user)):
     _validate_invoice(data)
