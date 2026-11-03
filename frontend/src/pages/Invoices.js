@@ -20,7 +20,7 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import {
-  Plus, Trash2, FileText, Mail, Download, CheckCircle2, Loader2, Pencil, Undo2, ShieldCheck, ShieldAlert, Search, Ban, Sparkles, HelpCircle, CreditCard, Wallet, Clock3, Receipt,
+  Plus, Trash2, ArrowUp, ArrowDown, FileText, Mail, Download, CheckCircle2, Loader2, Pencil, Undo2, ShieldCheck, ShieldAlert, Search, Ban, Sparkles, HelpCircle, CreditCard, Wallet, Clock3, Receipt,
 } from "lucide-react";
 import RectificativaGuide, { RECTIFY_GUIDE_KEY } from "@/components/RectificativaGuide";
 import { CancelInvoiceDialog } from "@/components/CancelInvoiceDialog";
@@ -221,6 +221,13 @@ export default function Invoices() {
   };
   const addItem = () => setForm({ ...form, line_items: [...form.line_items, emptyLine()] });
   const removeItem = (idx) => setForm({ ...form, line_items: form.line_items.filter((_, i) => i !== idx) });
+  const moveItem = (idx, d) => {
+    const j = idx + d;
+    if (j < 0 || j >= form.line_items.length) return;
+    const ls = [...form.line_items];
+    [ls[idx], ls[j]] = [ls[j], ls[idx]];
+    setForm({ ...form, line_items: ls });
+  };
 
   const pickClient = (id) => {
     const c = clients.find((x) => x.id === id);
@@ -695,7 +702,13 @@ export default function Invoices() {
                         <SelectContent>{LINE_IVA_OPTIONS.map((o) => <SelectItem key={o.v} value={o.v}>{o.l}</SelectItem>)}</SelectContent>
                       </Select>
                     </div>
-                    <div className="col-span-1"><Button variant="ghost" size="icon" onClick={() => removeItem(idx)} disabled={form.line_items.length === 1} className="h-9 w-9 text-slate-400 hover:text-red-600"><Trash2 className="w-4 h-4" strokeWidth={1.5} /></Button></div>
+                    <div className="col-span-1 flex items-center justify-end gap-0.5">
+                      <div className="flex flex-col">
+                        <button type="button" title="Subir línea" onClick={() => moveItem(idx, -1)} disabled={idx === 0} className="h-4 w-5 flex items-center justify-center text-slate-400 hover:text-[#0052FF] disabled:opacity-25 disabled:hover:text-slate-400" data-testid={`line-up-${idx}`}><ArrowUp className="w-3.5 h-3.5" /></button>
+                        <button type="button" title="Bajar línea" onClick={() => moveItem(idx, 1)} disabled={idx === form.line_items.length - 1} className="h-4 w-5 flex items-center justify-center text-slate-400 hover:text-[#0052FF] disabled:opacity-25 disabled:hover:text-slate-400" data-testid={`line-down-${idx}`}><ArrowDown className="w-3.5 h-3.5" /></button>
+                      </div>
+                      <Button variant="ghost" size="icon" onClick={() => removeItem(idx)} disabled={form.line_items.length === 1} className="h-9 w-7 text-slate-400 hover:text-red-600"><Trash2 className="w-4 h-4" strokeWidth={1.5} /></Button>
+                    </div>
                   </div>
                   <div className="flex items-start gap-3">
                     <DetailTextarea value={it.detail || ""} onChange={(e) => updateItem(idx, "detail", e.target.value)} data-testid={`line-detail-${idx}`} />
