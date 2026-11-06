@@ -3156,6 +3156,9 @@ app.include_router(albaranes_router)
 app.include_router(albaranes_public_router)
 app.include_router(admin_blog_router)
 app.include_router(blog_router)
+from maintenance_routes import admin_maint, public_maint, maintenance_middleware
+app.include_router(admin_maint)
+app.include_router(public_maint)
 app.include_router(api)
 
 
@@ -3232,6 +3235,7 @@ async def check_cert_expiry(request: Request, background: BackgroundTasks):
 _cors_env = os.environ.get("CORS_ORIGINS") or os.environ.get("FRONTEND_URL", "http://localhost:3000")
 _cors_origins = [o.strip().rstrip("/") for o in _cors_env.split(",") if o.strip()]
 
+app.middleware("http")(maintenance_middleware)
 app.add_middleware(SecurityMiddleware)
 app.add_middleware(
     CORSMiddleware,

@@ -40,6 +40,7 @@ import PagoCancelado from "@/pages/PagoCancelado";
 import Landing from "@/pages/Landing";
 import { Terms, Privacy } from "@/pages/Legal";
 import Welcome from "@/pages/Welcome";
+import { MaintenanceGate } from "@/components/maintenance/MaintenanceGate";
 
 function Home() {
   const { user, checking } = useAuth();
@@ -53,6 +54,7 @@ function App() {
     <AuthProvider>
       <BrowserRouter>
         <Toaster position="top-right" richColors closeButton />
+        <MaintenanceGate>
         <Routes>
           <Route path="/login" element={<Login />} />
           <Route path="/recuperar-contrasena" element={<ForgotPassword />} />
@@ -92,6 +94,7 @@ function App() {
           <Route path="/remesas" element={<ProtectedRoute><Remesas /></ProtectedRoute>} />
           <Route path="/contabilidad" element={<ProtectedRoute><Contabilidad /></ProtectedRoute>} />
         </Routes>
+        </MaintenanceGate>
       </BrowserRouter>
     </AuthProvider>
   );

@@ -22,6 +22,7 @@ import {
 } from "@/components/ui/dialog";
 import { Users, ShieldOff, FileText, Search, UserCog, Ban, CheckCircle2, Loader2, Save, CreditCard, History, TrendingUp, Euro, Rocket, UserPlus, Mail, Store, Eye, Phone, MapPin, IdCard, Percent, Clock, UserMinus, UserCheck, Building2, Plus } from "lucide-react";
 import { BlogSeoSection } from "@/components/admin/BlogSeoSection";
+import { MaintenanceSection } from "@/components/admin/MaintenanceSection";
 
 const PLAN_LABEL = { basico: "Básico", medio: "Medio", platino: "Platino" };
 const actionLabel = (a) => {
@@ -541,6 +542,8 @@ export default function Admin() {
           </div>
         </div>
       </div>
+
+      <MaintenanceSection />
 
       <BlogSeoSection />
 
