@@ -71,7 +71,8 @@ async def _is_admin(request: Request) -> bool:
 
 async def maintenance_middleware(request: Request, call_next):
     path = request.url.path
-    if (path.startswith("/api/") and request.method != "OPTIONS" and not path.startswith(ALLOWED_PREFIXES)
+    blocked = path.startswith("/api/auth/register") or not path.startswith(ALLOWED_PREFIXES)
+    if (path.startswith("/api/") and request.method != "OPTIONS" and blocked
             and (await get_state())["enabled"] and not await _is_admin(request)):
         return JSONResponse({"detail": "Estamos en mantenimiento. Volvemos pronto.", "maintenance": True}, status_code=503)
     return await call_next(request)

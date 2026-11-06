@@ -1,0 +1,36 @@
+{
+  "summary": "Tested maintenance mode end to end. Backend: 9/9 pytest passed. Public GET /api/maintenance works. Admin GET/PUT works and is guarded (403 for a normal user, 401/403 for anonymous, 422 when 'enabled' is missing). Message is trimmed and saved. With maintenance on, a normal user and an anonymous visitor get 503 {maintenance:true} on /api/invoices and /api/blog. /api/auth/me still works. The admin gets 200 with a cookie and with a Bearer token; an invalid token gets 503. Frontend: the admin section works (confirm dialog -> enable -> status 'En mantenimiento' -> disable/update buttons). After reload the admin sees the normal app plus maintenance-admin-badge. An anonymous visitor sees maintenance-screen on /, /blog and /precios, with the custom message and the countdown. /login stays reachable. A normal user who logs in is sent to the maintenance screen. Mobile at 390px: the screen is visible with no horizontal overflow. After disabling, reloading removes the screen for both the anonymous visitor and the user. Maintenance is left DISABLED and the TEST_ user was deleted.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "/api/auth/register", "issue": "Whitelisted through /api/auth/, so anonymous users can still register by API during maintenance. The /registro page itself is hidden behind the maintenance screen. Probably fine, but worth noting."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "MaintenanceScreen Countdown", "issue": "There is no days unit. A far-off return date shows e.g. 27642 HORAS, and 5-digit hours overflow the w-20 box (the text touches or overflows its edges on desktop and mobile). Add a 'días' box, or show days when there are 100 hours or more.", "selector": "[data-testid='maintenance-countdown']", "priority": "LOW"}
+    ],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "MaintenanceGate", "issues": ["Until GET /api/maintenance resolves (state=null), children are rendered, so app or public content flashes briefly before the maintenance screen.", "The datetime-local 'until' value has no timezone, so a visitor in another timezone sees a different return time. Consider storing an ISO string with an offset."]}
+    ]
+  },
+  "test_report_links": ["/app/backend/tests/test_iter29_maintenance.py", "/app/test_reports/pytest/iter29.xml"],
+  "action_items": [
+    "(LOW) Countdown: add a days unit or widen the boxes for large hour values",
+    "(LOW) Store 'until' with a timezone offset (new Date(until).toISOString()) so the countdown is correct for every visitor",
+    "(LOW, optional) Show nothing or a loader while the maintenance state is loading, to avoid the content flash"
+  ],
+  "critical_code_review_comments": [
+    "Middleware order is OK: maintenance_middleware is innermost, so 503 responses still carry CORS headers.",
+    "_is_admin correctly rejects impersonation tokens ('imp'), matching require_admin.",
+    "The state cache is 5 s per process. With multiple workers each one caches separately, which is acceptable.",
+    "Public paths such as /firmar/:token (delivery-note signing) and /pago/exito are also blocked during maintenance. This is by design, but worth confirming with the user."
+  ],
+  "updated_files": ["/app/backend/tests/test_iter29_maintenance.py"],
+  "success_rate": {"backend": "100%", "frontend": "100%"},
+  "seed_data_creation": "Created TEST user test_maint_22baa031@example.com (id 6aedebc9f659abdee5ead19b) plus its default company; both deleted by id. Maintenance setting left enabled=false, message='', until=''.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Maintenance tests: tests/test_iter29_maintenance.py. Send Origin/Referer and X-OF-Client: web. The backend caches the state for 5 s, so wait 6 s after toggling. The fixture always disables maintenance at teardown."
+}

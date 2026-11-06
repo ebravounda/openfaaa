@@ -7,19 +7,25 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Wrench, Loader2, Power } from "lucide-react";
 
+const toLocalInput = (iso) => {
+  const d = iso ? new Date(iso) : null;
+  if (!d || Number.isNaN(d.getTime())) return "";
+  return new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
+};
+
 export const MaintenanceSection = () => {
   const [cfg, setCfg] = useState(null);
   const [message, setMessage] = useState("");
   const [until, setUntil] = useState("");
   const [busy, setBusy] = useState(false);
   useEffect(() => {
-    api.get("/admin/maintenance").then((r) => { setCfg(r.data); setMessage(r.data.message || ""); setUntil(r.data.until || ""); }).catch(() => {});
+    api.get("/admin/maintenance").then((r) => { setCfg(r.data); setMessage(r.data.message || ""); setUntil(toLocalInput(r.data.until)); }).catch(() => {});
   }, []);
   const save = async (enabled) => {
     if (enabled && !cfg?.enabled && !window.confirm("¿Poner el sitio en mantenimiento? Todos los usuarios y visitantes verán la pantalla de mantenimiento.")) return;
     setBusy(true);
     try {
-      const { data } = await api.put("/admin/maintenance", { enabled, message, until });
+      const { data } = await api.put("/admin/maintenance", { enabled, message, until: until ? new Date(until).toISOString() : "" });
       setCfg(data);
       toast.success(enabled ? "Sitio en mantenimiento" : "Sitio activo de nuevo");
     } catch (e) {

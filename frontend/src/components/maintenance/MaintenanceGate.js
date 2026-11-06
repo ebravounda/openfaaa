@@ -11,12 +11,13 @@ export const MaintenanceGate = ({ children }) => {
   const { pathname } = useLocation();
   const [state, setState] = useState(null);
   useEffect(() => {
-    const load = () => api.get("/maintenance").then((r) => setState(r.data)).catch(() => {});
+    const load = () => api.get("/maintenance").then((r) => setState(r.data)).catch(() => setState((s) => s || { enabled: false }));
     load();
     const t = setInterval(load, 30000);
     return () => clearInterval(t);
   }, []);
   const isAdmin = user && user.role === "admin" && !user.is_impersonating;
+  if (state === null && !OPEN_PATHS.includes(pathname)) return null;
   if (!state?.enabled || OPEN_PATHS.includes(pathname)) return children;
   if (isAdmin) {
     return (

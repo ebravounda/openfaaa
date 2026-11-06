@@ -13,7 +13,7 @@ const useCountdown = (until) => {
   const target = until ? new Date(until).getTime() : NaN;
   if (!target || Number.isNaN(target) || target <= now) return null;
   const s = Math.floor((target - now) / 1000);
-  return { h: Math.floor(s / 3600), m: Math.floor((s % 3600) / 60), s: s % 60 };
+  return { d: Math.floor(s / 86400), h: Math.floor((s % 86400) / 3600), m: Math.floor((s % 3600) / 60), s: s % 60 };
 };
 
 const Blob = ({ className, delay }) => (
@@ -33,8 +33,8 @@ const Countdown = ({ until }) => {
       <div className="flex items-center gap-2 text-sm text-slate-400"><Clock className="w-4 h-4" /> Volvemos el {when.toLocaleString("es-ES", { dateStyle: "long", timeStyle: "short" })}</div>
       {c && (
         <div className="mt-4 flex gap-3">
-          {[["h", "horas"], ["m", "min"], ["s", "seg"]].map(([k, l]) => (
-            <div key={k} className="w-20 rounded-xl border border-white/10 bg-white/5 backdrop-blur-md py-3 text-center">
+          {[...(c.d ? [["d", "días"]] : []), ["h", "horas"], ["m", "min"], ["s", "seg"]].map(([k, l]) => (
+            <div key={k} className="min-w-[4.5rem] px-2 rounded-xl border border-white/10 bg-white/5 backdrop-blur-md py-3 text-center">
               <motion.div key={c[k]} initial={{ y: -8, opacity: 0 }} animate={{ y: 0, opacity: 1 }} className="font-mono text-3xl text-white">{pad(c[k])}</motion.div>
               <div className="text-[10px] uppercase tracking-widest text-slate-500 mt-1">{l}</div>
             </div>
