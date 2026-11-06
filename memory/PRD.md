@@ -433,6 +433,8 @@ Sistema de facturación para España: crear facturas introduciendo datos (CIF/NI
 - Iter 62 (2026-11-03): Marca "emitida con OpenFactura": company.show_powered_by (por defecto activo; interruptor en Configuración con el logo). Al final de facturas/presupuestos/albaranes (plantilla clásica y goroky) "Factura emitida con / Presupuesto emitido con / Albarán emitido con" + imagen del logo (backend/assets/openfactura-logo.png), todo enlazado a https://openfactura.es (_PoweredBy flowable con linkURL).
 - Iter 63 (2026-11-03): Botón "Vista previa" al crear/editar facturas (invoice-preview) → POST /api/invoices/preview-pdf (borrador sin guardar, nº "BORRADOR"), mostrado en PdfPreviewDialog con Descargar. Demo pública temporal en /demo/factura-demo.pdf|png (borrar antes de publicar si el usuario lo pide).
 - Iter 64 (2026-11-03): Service worker (PWA) cambiado de cache-first a network-first para estáticos y caché renombrada a openfactura-v2 (borra la v1): el navegador del usuario mostraba la versión antigua de la app (bundle.js cacheado).
+- Iter 65 (2026-11-06): VeriFactu: el log (/conexion) muestra en cada envío rechazado el "Motivo AEAT" (status_msg guardado o extraído de CodigoErrorRegistro/DescripcionErrorRegistro/faultstring del XML). En Facturas el envío muestra rechazo como error (antes aparecía en verde) y bloquea dobles clics mientras se envía. Caso usuario: GRKY-2026-0025 (emisor NIE Z3452060H, IRPF 7%) rechazada 11 veces en producción; pendiente de conocer el motivo AEAT.
+
 
 
 

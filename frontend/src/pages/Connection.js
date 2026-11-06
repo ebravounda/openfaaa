@@ -9,6 +9,16 @@ import {
   Activity, ShieldCheck, ShieldAlert, ChevronDown, ChevronRight, KeyRound, Info, Download,
 } from "lucide-react";
 
+
+// Motivo del rechazo: el guardado en el log o, en envíos antiguos, el extraído de la respuesta SOAP.
+const aeatReason = (e) => {
+  if (e.status_msg && /rechaz|error/i.test(e.status_msg)) return e.status_msg;
+  const x = e.response_xml || "";
+  const tag = (t) => (x.match(new RegExp(`<[^>]*${t}>([^<]+)<`)) || [])[1];
+  const parts = [tag("CodigoErrorRegistro"), tag("DescripcionErrorRegistro")].filter(Boolean);
+  return parts.length ? parts.join(" · ") : (tag("faultstring") || (x.startsWith("ERROR DE CONEXIÓN") ? x.split("\n").slice(0, 2).join(" ") : ""));
+};
+
 export default function Connection() {
   const [cert, setCert] = useState(null);
   const [company, setCompany] = useState(null);
@@ -99,6 +109,11 @@ export default function Connection() {
                   {e.csv && <span className="font-mono text-xs text-slate-400">{e.csv}</span>}
                 </div>
               </button>
+              {e.estado !== "Correcto" && aeatReason(e) && (
+                <div className="px-4 pb-3 -mt-1 text-xs text-red-700 flex gap-1.5" data-testid={`log-error-${e.invoice_number}`}>
+                  <ShieldAlert className="w-3.5 h-3.5 shrink-0 mt-0.5" /><span><b>Motivo AEAT:</b> {aeatReason(e)}</span>
+                </div>
+              )}
               {open[e.id] && (
                 <div className="px-4 pb-4 pt-1 space-y-3 border-t border-slate-100">
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-xs text-slate-500">

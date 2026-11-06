@@ -1413,6 +1413,7 @@ async def verifactu_submit(invoice_id: str, user=Depends(get_current_user)):
         "estado": estado, "estado_registro": estado_reg, "csv": csv_code,
         "signed": signed, "signer": signer, "huella": vfd["huella"],
         "simulated": simulated, "mode": mode, "http_status": http_status,
+        "status_msg": status_msg,
         "request_xml": soap_request, "response_xml": aeat_response,
     }
     await db.verifactu_log.insert_one(entry)

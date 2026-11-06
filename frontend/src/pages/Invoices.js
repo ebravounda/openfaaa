@@ -1,4 +1,4 @@
-import { useEffect, useState, useMemo } from "react";
+import { useEffect, useState, useMemo, useRef } from "react";
 import { toast } from "sonner";
 import api, { API, eur, formatApiErrorDetail } from "@/lib/api";
 import Layout from "@/components/Layout";
@@ -377,13 +377,20 @@ export default function Invoices() {
     load();
   };
 
+  const vfBusy = useRef(new Set());
   const submitVf = async (inv) => {
+    if (vfBusy.current.has(inv.id)) return;
+    vfBusy.current.add(inv.id);
+    const tid = toast.loading(`Enviando ${inv.number} a la AEAT…`);
     try {
       const { data } = await api.post(`/invoices/${inv.id}/verifactu/submit`);
-      toast.success(data.status);
+      if (/rechaz|error/i.test(data.status || "")) toast.error(data.status, { id: tid, duration: 20000 });
+      else toast.success(data.status, { id: tid });
       load();
     } catch (e) {
-      toast.error(formatApiErrorDetail(e.response?.data?.detail), { duration: 12000 });
+      toast.error(formatApiErrorDetail(e.response?.data?.detail), { id: tid, duration: 12000 });
+    } finally {
+      vfBusy.current.delete(inv.id);
     }
   };
 
