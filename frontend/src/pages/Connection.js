@@ -19,6 +19,9 @@ const aeatReason = (e) => {
   return parts.length ? parts.join(" · ") : (tag("faultstring") || (x.startsWith("ERROR DE CONEXIÓN") ? x.split("\n").slice(0, 2).join(" ") : ""));
 };
 
+const isNoConn = (e) => (e.response_xml || "").startsWith("ERROR DE CONEXIÓN");
+const NO_CONN_HINT = "Hacienda no llegó a recibir este envío: el servidor no pudo conectar con la AEAT. Puedes reintentarlo; no cuenta como rechazo.";
+
 export default function Connection() {
   const [cert, setCert] = useState(null);
   const [company, setCompany] = useState(null);
@@ -105,13 +108,13 @@ export default function Connection() {
                 <div className="flex items-center gap-2">
                   {e.mode && <Badge className={`rounded-full text-[10px] ${e.mode === "produccion" ? "bg-emerald-100 text-emerald-700 hover:bg-emerald-100" : e.mode === "preproduccion" ? "bg-blue-100 text-blue-700 hover:bg-blue-100" : "bg-slate-100 text-slate-500 hover:bg-slate-100"}`}>{e.mode === "produccion" ? "Producción" : e.mode === "preproduccion" ? "Preprod" : "Simulado"}</Badge>}
                   {e.signed && <Badge className="bg-slate-100 text-slate-600 hover:bg-slate-100 rounded-full text-[10px]">Firmado</Badge>}
-                  <Badge className={`rounded-full ${e.estado === "Correcto" ? "bg-emerald-100 text-emerald-700 hover:bg-emerald-100" : "bg-red-100 text-red-700 hover:bg-red-100"}`}>{e.estado_registro}</Badge>
+                  <Badge className={`rounded-full ${e.estado === "Correcto" ? "bg-emerald-100 text-emerald-700 hover:bg-emerald-100" : isNoConn(e) ? "bg-amber-100 text-amber-800 hover:bg-amber-100" : "bg-red-100 text-red-700 hover:bg-red-100"}`} data-testid={`log-status-${e.id}`}>{isNoConn(e) ? "Sin conexión" : e.estado_registro}</Badge>
                   {e.csv && <span className="font-mono text-xs text-slate-400">{e.csv}</span>}
                 </div>
               </button>
               {e.estado !== "Correcto" && aeatReason(e) && (
-                <div className="px-4 pb-3 -mt-1 text-xs text-red-700 flex gap-1.5" data-testid={`log-error-${e.invoice_number}`}>
-                  <ShieldAlert className="w-3.5 h-3.5 shrink-0 mt-0.5" /><span><b>Motivo AEAT:</b> {aeatReason(e)}</span>
+                <div className={`px-4 pb-3 -mt-1 text-xs flex gap-1.5 ${isNoConn(e) ? "text-amber-800" : "text-red-700"}`} data-testid={`log-error-${e.invoice_number}`}>
+                  <ShieldAlert className="w-3.5 h-3.5 shrink-0 mt-0.5" /><span><b>{isNoConn(e) ? "Sin conexión:" : "Motivo AEAT:"}</b> {isNoConn(e) ? `${NO_CONN_HINT} (${aeatReason(e)})` : aeatReason(e)}</span>
                 </div>
               )}
               {open[e.id] && (

@@ -410,7 +410,7 @@ def pfx_to_pem(pfx_bytes: bytes, password: str):
 
 
 async def send_to_aeat(pfx_bytes: bytes, password: str, soap_xml: str,
-                       produccion: bool = False, seal: bool = False, timeout: int = 20) -> dict:
+                       produccion: bool = False, seal: bool = False, timeout: int = 45) -> dict:
     """Envío real (mTLS) a la AEAT (preproducción o PRODUCCIÓN) con el certificado del usuario."""
     import httpx, tempfile, os
     url = aeat_url(produccion, seal)
@@ -421,7 +421,10 @@ async def send_to_aeat(pfx_bytes: bytes, password: str, soap_xml: str,
     cf = tempfile.NamedTemporaryFile(delete=False, suffix=".pem"); cf.write(cert_pem); cf.close()
     kf = tempfile.NamedTemporaryFile(delete=False, suffix=".pem"); kf.write(key_pem); kf.close()
     try:
-        async with httpx.AsyncClient(cert=(cf.name, kf.name), timeout=timeout, verify=True) as client:
+        # IPv4 forzado y reintentos de conexión: evita cuelgues por IPv6 roto en el servidor.
+        transport = httpx.AsyncHTTPTransport(cert=(cf.name, kf.name), verify=True,
+                                             local_address="0.0.0.0", retries=2)
+        async with httpx.AsyncClient(transport=transport, timeout=httpx.Timeout(timeout, connect=20)) as client:
             r = await client.post(url, content=soap_xml.encode("utf-8"),
                                   headers={"Content-Type": "text/xml; charset=utf-8", "SOAPAction": ""})
         return {"ok": r.status_code == 200, "status": r.status_code, "response": r.text[:8000], "url": url, "error": None}

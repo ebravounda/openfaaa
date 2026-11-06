@@ -1390,9 +1390,10 @@ async def verifactu_submit(invoice_id: str, user=Depends(get_current_user)):
                           else f"Rechazado por la AEAT ({entorno})")
             await _vf_reject_notify(user, company, inv, parsed.get("codigo_error", ""), parsed.get("descripcion_error", ""), entorno)
         else:
-            estado, estado_reg, submitted = "Error", "Rechazado", False
+            estado, estado_reg, submitted = "Error", "Sin conexión", False
             csv_code = None
-            status_msg = f"Error de comunicación con la AEAT ({entorno})"
+            status_msg = (f"No enviado: el servidor no pudo conectar con la AEAT ({entorno}). "
+                          f"Hacienda no lo ha recibido; puedes reintentarlo. Detalle: {real['error']}")
     else:
         simulated, http_status = True, 200
         endpoint = "https://prewww1.aeat.es/wlpl/TIKE-CONT/ws/SistemaFacturacion/VerifactuSOAP (SIMULADO)"
