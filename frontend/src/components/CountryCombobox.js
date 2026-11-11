@@ -5,8 +5,10 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { COUNTRIES, countryName } from "@/lib/countries";
 
-export const CountryCombobox = ({ value, onChange, testid = "country-select" }) => {
-  const [open, setOpen] = useState(false);
+export const CountryCombobox = ({ value, onChange, testid = "country-select", open: openProp, onOpenChange }) => {
+  const [openState, setOpenState] = useState(false);
+  const open = openProp ?? openState;
+  const setOpen = onOpenChange ?? setOpenState;
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>

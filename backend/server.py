@@ -2181,6 +2181,7 @@ async def import_contacts(file: UploadFile = File(...), kind: str = Query("clien
             "id": str(uuid.uuid4()), "user_id": user["id"], "company_id": cid,
             "name": name, "nif": nif, "email": cell(row, "email"),
             "phone": cell(row, "phone"), "address": cell(row, "address"),
+            "country": (cell(row, "country").strip().upper() if len(cell(row, "country").strip()) == 2 else "ES"),
             "kind": kind if kind in ("client", "provider") else "client",
             "created_at": datetime.now(timezone.utc).isoformat(),
         })
@@ -2230,6 +2231,7 @@ IMPORT_FIELDS = {
         {"key": "email", "label": "Email", "aliases": ["email", "correo", "e-mail", "mail", "correo electronico", "correo electrónico"]},
         {"key": "phone", "label": "Teléfono", "aliases": ["phone", "telefono", "teléfono", "tel", "movil", "móvil", "tlf", "mobile"]},
         {"key": "address", "label": "Dirección", "aliases": ["address", "direccion", "dirección", "domicilio", "billing address"]},
+        {"key": "country", "label": "País (código ISO, ej. CL)", "aliases": ["country", "pais", "país", "country code", "codigo pais", "código país"]},
     ],
     "expenses": [
         {"key": "date", "label": "Fecha", "required": True, "aliases": ["date", "fecha", "fecha factura", "fecha emision", "fecha emisión", "issue date", "invoice date"]},

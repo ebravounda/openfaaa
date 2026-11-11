@@ -1,0 +1,40 @@
+{
+  "summary": "Tested invoices for clients outside the EU (services not subject to Spanish VAT, art. 69 LIVA). Backend: 14/14 pytest passed. A CL client with RUT 76.123.456-7, a general 21% line and IRPF 15 is created with total=base=1000, iva 0, irpf 0 (irpf_rate forced to 0), base_no_sujeta 1000, foreign_client true, lines no_sujeto/0 and country CL; this is also confirmed by GET. A lowercase 'us' is normalised to US. ES with an invalid NIF gives 422 with the hint 'elige su país'. FR (EU) with a non-Spanish NIF gives 422. A foreign client with no NIF gives 422 with the exact message 'El VAT / identificación fiscal del cliente es obligatorio.'. The PDF returns 200 and contains 'VAT / Tax ID' and the art. 69 legend. POST /api/contacts saves country CL and defaults to ES. Changing an invoice from ES to CL with PUT recalculates it to no VAT. VeriFactu: there is no standalone precheck endpoint (precheck only runs inside /verifactu/submit, which was NOT called). vf.precheck() was called in-process on the stored CL invoice and returned no client NIF error. The desglose has CalificacionOperacion N2, and the destinatario has IDOtro CodigoPais CL with IDType 04. GET /verifactu/xml (read-only) contains IDOtro and N2. Regression: a Spanish invoice with 21% and IRPF 15 gives 1060, and with no country field it gives 1210. Frontend (/facturas, /contactos): every requested behaviour works. Country defaults to España (ES). The suggestion appears for a non-Spanish ID and not for a valid CIF or NIE. suggest-yes sets Chile. Search 'chi' shows Chile/China/Chipre. With Chile: the label becomes 'VAT / Tax ID (ej. RUT)', the foreign note shows, line-iva-0 is disabled and shows 'No sujeto', IRPF is disabled, and the total is 1000 €. Saving shows the toast 'Factura emitida' and the list row shows IVA 0,00 €. In Contacts the label becomes VAT / Tax ID and the card shows '76.987.654-3 · CL'. All TEST_ data was deleted and maintenance is still disabled.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "/api/invoices/{id}/verifactu/precheck", "issue": "No standalone precheck endpoint exists. The precheck only runs inside submit, so it can't be tested over HTTP without submitting. A dry-run endpoint is optional."},
+      {"endpoint": "/api/contacts/import", "issue": "The import field list (IMPORT_FIELDS contacts) has no 'country'/'país' mapping, so foreign clients imported from Holded or NCS are saved as ES and their VAT ID fails validation when you invoice them."},
+      {"endpoint": "foreign_tax.is_extra_eu", "issue": "Any 2-letter alphabetic code that is not in the EU set counts as extra-EU, including invalid codes such as 'ZZ' and special territories like 'XI' (Northern Ireland, which is EU for goods). There is no check against the ISO country list on the backend. LOW."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "ClientCountryField suggest", "issue": "The button says 'Sí, elegir país' but sets Chile directly instead of opening the country selector. A user whose client is in the US or Mexico gets Chile without noticing. Open the combobox instead, or rename the button 'Sí, Chile' and also offer 'otro país'.", "selector": "[data-testid='client-country-suggest-yes']", "priority": "LOW"},
+      {"component": "Router", "issue": "/invoices (the path given in the review request) renders a blank page with no 404 or redirect. The real route is /facturas. A catch-all route is missing.", "selector": "Routes in App.js", "priority": "LOW"}
+    ],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Invoice dialog (foreign client)", "issues": ["The IRPF suggestion hint ('Actividad profesional: la…') still shows under the disabled IRPF select for foreign clients. Hide it when isExtraEU.", "The 'Recargo de equivalencia' checkbox stays enabled for foreign clients, but the backend forces it to false. Disable it, as was done for IRPF."]}
+    ]
+  },
+  "test_report_links": ["/app/backend/tests/test_iter30_foreign_clients.py", "/app/test_reports/pytest/iter30.xml"],
+  "action_items": [
+    "(LOW) Make 'Sí, elegir país' open the country combobox, or label it clearly as Chile",
+    "(LOW) Hide the IRPF hint and disable the recargo checkbox when the client is outside the EU",
+    "(LOW) Add a country column or alias to the contacts importer",
+    "(LOW) Add a catch-all 404 route (e.g. /invoices -> /facturas)",
+    "(OPTIONAL) Validate country against an ISO-3166 list on the backend"
+  ],
+  "critical_code_review_comments": [
+    "compute_invoice mutates line_items and irpf_rate in place through apply_foreign. This is correct for persistence, but the stored lines lose the user's original IVA choice. If the country is changed back to ES while editing, the lines remain no_sujeto (the frontend form keeps iva_sel, so this is OK only if the form is not reloaded from the stored invoice).",
+    "_destinatario_id uses IDType 04. That is fine for a RUT (official ID document of the country of residence). 02 (NIF-IVA) is reserved for EU VAT numbers.",
+    "Each test run consumes invoice numbers in the admin's main series and creates VeriFactu pending records, so deleting test invoices leaves numbering gaps. This only affects the preview environment."
+  ],
+  "updated_files": ["/app/backend/tests/test_iter30_foreign_clients.py"],
+  "success_rate": {"backend": "100% (14/14)", "frontend": "100% of requested flows"},
+  "seed_data_creation": "None persisted. TEST_ invoices and contacts were created and then deleted by id: the pytest fixture deleted its own, and the 2 UI items (TEST_UI Chile SpA invoice, TEST_UI Contacto Chile) were deleted manually.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "The invoices route is /facturas and contacts is /contactos. Log in with the login-email, login-password and login-submit testids. pymupdf is available for PDF text (pypdf is not). VeriFactu is enabled for the admin company, and the submit endpoint must not be called. Run the tests with: REACT_APP_BACKEND_URL=... pytest tests/test_iter30_foreign_clients.py from /app/backend."
+}

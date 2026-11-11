@@ -208,7 +208,7 @@ export default function Invoices() {
     let ivaAmount = 0, reAmount = 0;
     const breakdown = Object.keys(bd).map(Number).sort((a, b) => b - a).map((r) => {
       const b = bd[r]; const cuota = (b * r) / 100;
-      const reRate = form.recargo_equivalencia ? (RE_MAP[r] || 0) : 0;
+      const reRate = form.recargo_equivalencia && !foreign ? (RE_MAP[r] || 0) : 0;
       const reCuota = (b * reRate) / 100;
       ivaAmount += cuota; reAmount += reCuota;
       return { rate: r, base: b, cuota, reRate, reCuota };
@@ -745,7 +745,7 @@ export default function Invoices() {
                   <SelectTrigger data-testid="irpf-select"><SelectValue /></SelectTrigger>
                   <SelectContent>{IRPF_OPTIONS.map((o) => <SelectItem key={o.v} value={o.v}>{o.l}</SelectItem>)}</SelectContent>
                 </Select>
-                {irpfHint && (
+                {irpfHint && !isExtraEU(form.client.country) && (
                   <div className="text-xs text-slate-500 bg-blue-50 border border-blue-100 rounded-md p-2 flex items-start gap-2" data-testid="irpf-hint">
                     <Sparkles className="w-3.5 h-3.5 text-[#0052FF] shrink-0 mt-0.5" strokeWidth={1.5} />
                     <span>
@@ -765,7 +765,7 @@ export default function Invoices() {
               <div className="space-y-2">
                 <Label>Recargo de equivalencia</Label>
                 <div className="flex items-center gap-2 h-9 px-3 border border-slate-200 rounded-md bg-white">
-                  <Checkbox id="recargo_eq" checked={form.recargo_equivalencia} onCheckedChange={(v) => setForm({ ...form, recargo_equivalencia: !!v })} data-testid="recargo-checkbox" />
+                  <Checkbox id="recargo_eq" checked={!isExtraEU(form.client.country) && form.recargo_equivalencia} disabled={isExtraEU(form.client.country)} onCheckedChange={(v) => setForm({ ...form, recargo_equivalencia: !!v })} data-testid="recargo-checkbox" />
                   <label htmlFor="recargo_eq" className="text-sm text-slate-600 cursor-pointer">Cliente en RE</label>
                 </div>
                 <p className="text-xs text-slate-400">Añade el recargo por tipo (21→5,2 · 10→1,4 · 4→0,5).</p>
