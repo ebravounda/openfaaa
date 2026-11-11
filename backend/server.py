@@ -35,6 +35,7 @@ from ocr_service import extract_expense
 from export_service import build_libros_xlsx, build_libros_csv
 import verifactu_service as vf
 import spanish_tax
+import foreign_tax
 import ai_service
 import cert_service
 
@@ -67,6 +68,7 @@ class Client(BaseModel):
     address: str = ""
     email: str = ""
     phone: str = ""
+    country: str = "ES"
 
 
 class InvoiceInput(BaseModel):
@@ -170,6 +172,7 @@ class ContactInput(BaseModel):
     address: str = ""
     email: str = ""
     phone: str = ""
+    country: str = "ES"
     kind: str = "client"  # "client" or "provider"
 
 
@@ -196,6 +199,7 @@ RE_MAP = {21: 5.2, 10: 1.4, 4: 0.5, 0: 0.0}
 
 
 def compute_invoice(inv: dict) -> dict:
+    foreign_tax.apply_foreign(inv)
     recargo = bool(inv.get("recargo_equivalencia"))
     fallback_rate = inv.get("iva_rate", 21)
     gd = float(inv.get("global_discount") or 0)
@@ -272,10 +276,12 @@ def _validate_invoice(data) -> None:
     cl = data.client
     if not (cl.name or "").strip():
         errors.append("El nombre del cliente es obligatorio.")
+    foreign = foreign_tax.is_extra_eu(getattr(cl, "country", "ES"))
     if not (cl.nif or "").strip():
-        errors.append("El NIF/CIF del cliente es obligatorio.")
-    elif not spanish_tax.validate_nif(cl.nif):
-        errors.append(f"El NIF/CIF '{cl.nif}' no es válido (revisa la letra de control).")
+        errors.append("El VAT / identificación fiscal del cliente es obligatorio." if foreign else "El NIF/CIF del cliente es obligatorio.")
+    elif not foreign and not spanish_tax.validate_nif(cl.nif):
+        errors.append(f"El NIF/CIF '{cl.nif}' no es válido (revisa la letra de control). "
+                      "Si es un cliente de fuera de la UE, elige su país.")
     if not data.line_items:
         errors.append("Añade al menos un concepto a la factura.")
     valid_types = {"general", "exento", "no_sujeto", "suplido", "intracomunitaria"}

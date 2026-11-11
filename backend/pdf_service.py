@@ -8,6 +8,7 @@ def _ml(s) -> str:
     return _esc(str(s or "")).replace("\r\n", "\n").replace("\n", "<br/>")
 
 import re as _re
+import foreign_tax
 from datetime import datetime
 from io import BytesIO
 from reportlab.lib.pagesizes import A4
@@ -109,6 +110,12 @@ def _logo_flowable(company, max_h=15 * mm, max_w=58 * mm):
 
 def _eur(v):
     return f"{v:,.2f} €".replace(",", "X").replace(".", ",").replace("X", ".")
+
+
+def _client_tax_line(cl):
+    if foreign_tax.is_extra_eu(cl.get("country")):
+        return f"VAT / Tax ID: {_esc(cl.get('nif',''))} ({foreign_tax.norm_country(cl.get('country'))})"
+    return f"NIF/CIF: {_esc(cl.get('nif',''))}"
 
 
 def _iva_label(it):
@@ -266,7 +273,7 @@ def build_invoice_pdf(invoice: dict, company: dict, qr_png: bytes = None, verifa
     story.append(Paragraph(cl.get("name", ""), ParagraphStyle("cn", parent=normal,
                  fontName="Helvetica-Bold", fontSize=11)))
     if cl.get("nif"):
-        story.append(Paragraph(f"NIF/CIF: {cl.get('nif')}", normal))
+        story.append(Paragraph(_client_tax_line(cl), normal))
     if cl.get("address"):
         story.append(Paragraph(cl.get("address"), normal))
     if cl.get("email"):
@@ -388,6 +395,10 @@ def build_invoice_pdf(invoice: dict, company: dict, qr_png: bytes = None, verifa
             "(art. 25 de la Ley 37/1992 del IVA). Inversión del sujeto pasivo. "
             "VAT-exempt intra-Community supply · Reverse charge (Directive 2006/112/EC).",
             ParagraphStyle("intracom", parent=small, fontSize=7.5, textColor=MUTED, leading=10)))
+    if invoice.get("foreign_client"):
+        story.append(Spacer(1, 5 * mm))
+        story.append(Paragraph(foreign_tax.LEGEND,
+            ParagraphStyle("foreign", parent=small, fontSize=7.5, textColor=MUTED, leading=10)))
 
     # VeriFactu: QR + leyenda
     if qr_png and verifactu:
@@ -562,7 +573,7 @@ def build_goroky_invoice_pdf(invoice: dict, company: dict, qr_png: bytes = None,
         Paragraph(cl.get("name", ""), cname),
     ]
     if cl.get("nif"):
-        left.append(Paragraph(f"NIF/CIF: {cl.get('nif')}", normal))
+        left.append(Paragraph(_client_tax_line(cl), normal))
     if cl.get("address"):
         left.append(Paragraph(cl.get("address"), normal))
     if cl.get("email"):

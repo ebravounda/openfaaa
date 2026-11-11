@@ -11,8 +11,10 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from "@/components/ui/dialog";
 import { Plus, Trash2, Users, Building2, Mail, Loader2, Upload, FileDown, Phone } from "lucide-react";
+import { ClientCountryField } from "@/components/ClientCountryField";
+import { isExtraEU } from "@/lib/countries";
 
-const emptyForm = () => ({ name: "", nif: "", address: "", email: "", phone: "" });
+const emptyForm = () => ({ name: "", nif: "", address: "", email: "", phone: "", country: "ES" });
 
 export default function Contacts() {
   const [kind, setKind] = useState("client");
@@ -130,7 +132,7 @@ export default function Contacts() {
                 </button>
               </div>
               <div className="font-medium text-slate-900 mt-3">{c.name}</div>
-              {c.nif && <div className="text-sm text-slate-500 tabular">{c.nif}</div>}
+              {c.nif && <div className="text-sm text-slate-500 tabular">{c.nif}{isExtraEU(c.country) ? ` · ${c.country}` : ""}</div>}
               {c.email && <div className="text-sm text-slate-400 flex items-center gap-1.5 mt-1"><Mail className="w-3.5 h-3.5" strokeWidth={1.5} />{c.email}</div>}
               {c.phone && <div className="text-sm text-slate-400 flex items-center gap-1.5 mt-1"><Phone className="w-3.5 h-3.5" strokeWidth={1.5} />{c.phone}</div>}
             </div>
@@ -144,11 +146,12 @@ export default function Contacts() {
           <div className="space-y-4">
             <div className="space-y-2"><Label>Nombre / Razón social</Label><Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} data-testid="contact-name" /></div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div className="space-y-2"><Label>NIF / CIF</Label><Input value={form.nif} onChange={(e) => setForm({ ...form, nif: e.target.value })} data-testid="contact-nif" /></div>
+              <div className="space-y-2"><Label>{isExtraEU(form.country) ? "VAT / Tax ID" : "NIF / CIF"}</Label><Input value={form.nif} onChange={(e) => setForm({ ...form, nif: e.target.value })} data-testid="contact-nif" /></div>
               <div className="space-y-2"><Label>Teléfono</Label><Input value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} data-testid="contact-phone" /></div>
             </div>
             <div className="space-y-2"><Label>Email</Label><Input type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} data-testid="contact-email" /></div>
             <div className="space-y-2"><Label>Dirección</Label><Input value={form.address} onChange={(e) => setForm({ ...form, address: e.target.value })} data-testid="contact-address" /></div>
+            {isClient && <div className="grid"><ClientCountryField country={form.country} nif={form.nif} onChange={(v) => setForm((f) => ({ ...f, country: v }))} testid="contact-country" /></div>}
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setOpen(false)} className="border-slate-200">Cancelar</Button>

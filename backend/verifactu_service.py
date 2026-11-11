@@ -70,7 +70,11 @@ def precheck(invoice: dict, company: dict, validate_nif) -> list:
     cl = invoice.get("client") or {}
     if not (cl.get("name") or "").strip():
         errs.append("Falta el nombre del cliente.")
-    if not validate_nif(cl.get("nif", "")):
+    from foreign_tax import is_extra_eu
+    if is_extra_eu(cl.get("country")):
+        if not (cl.get("nif") or "").strip():
+            errs.append("Falta el VAT / identificación fiscal del cliente extranjero.")
+    elif not validate_nif(cl.get("nif", "")):
         errs.append(f"El NIF del cliente ({cl.get('nif') or 'vacío'}) no es válido.")
     x = _build_desglose(invoice)
     bases = sum(map(float, _re.findall(r"BaseImponibleOimporteNoSujeto>(-?[\d.]+)<", x)))
@@ -134,6 +138,18 @@ def build_qr_url(nif, numserie, fecha, importe, produccion: bool = False) -> str
     })
 
 
+def _destinatario_id(cl: dict) -> str:
+    """NIF español, o IDOtro (04 = documento oficial del país) para clientes extracomunitarios."""
+    from foreign_tax import is_extra_eu, norm_country
+    if is_extra_eu(cl.get("country")):
+        return ("<sum1:IDOtro>"
+                f"<sum1:CodigoPais>{norm_country(cl.get('country'))}</sum1:CodigoPais>"
+                "<sum1:IDType>04</sum1:IDType>"
+                f"<sum1:ID>{_xesc((cl.get('nif') or '').strip())}</sum1:ID>"
+                "</sum1:IDOtro>")
+    return f"<sum1:NIF>{_xesc(cl.get('nif',''))}</sum1:NIF>"
+
+
 def _build_desglose(invoice: dict) -> str:
     """Desglose por cada tipo impositivo (multi-IVA), operaciones exentas y recargo."""
     bd = invoice.get("iva_breakdown") or []
@@ -171,11 +187,12 @@ def _build_desglose(invoice: dict) -> str:
             "</sum1:DetalleDesglose>")
     no_sujeta = round(float(invoice.get("base_no_sujeta", 0) or 0), 2)
     if abs(no_sujeta) > 0.004:
+        calif = "N2" if invoice.get("foreign_client") else "N1"
         parts.append(
             "<sum1:DetalleDesglose>"
             "<sum1:Impuesto>01</sum1:Impuesto>"
             "<sum1:ClaveRegimen>01</sum1:ClaveRegimen>"
-            "<sum1:CalificacionOperacion>N1</sum1:CalificacionOperacion>"
+            f"<sum1:CalificacionOperacion>{calif}</sum1:CalificacionOperacion>"
             f"<sum1:BaseImponibleOimporteNoSujeto>{_fmt_num(no_sujeta)}</sum1:BaseImponibleOimporteNoSujeto>"
             "</sum1:DetalleDesglose>")
     if not parts:  # compatibilidad con facturas antiguas (un solo tipo)
@@ -287,7 +304,7 @@ def build_registro_alta_xml(company: dict, invoice: dict, prev_number: str, prev
         f"<sum1:DescripcionOperacion>{_xesc((invoice.get('line_items') or [{}])[0].get('description','Prestacion de servicios'))}</sum1:DescripcionOperacion>"
         f"<sum1:Destinatarios><sum1:IDDestinatario>"
         f"<sum1:NombreRazon>{_xesc(cl.get('name',''))}</sum1:NombreRazon>"
-        f"<sum1:NIF>{_xesc(cl.get('nif',''))}</sum1:NIF>"
+        f"{_destinatario_id(cl)}"
         f"</sum1:IDDestinatario></sum1:Destinatarios>"
         f"<sum1:Desglose>{_build_desglose(invoice)}</sum1:Desglose>"
         f"<sum1:CuotaTotal>{_fmt_num(cuota_total(invoice))}</sum1:CuotaTotal>"

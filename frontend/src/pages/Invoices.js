@@ -1,4 +1,6 @@
 import { useEffect, useState, useMemo, useRef } from "react";
+import { ClientCountryField } from "@/components/ClientCountryField";
+import { isExtraEU } from "@/lib/countries";
 import { toast } from "sonner";
 import api, { API, eur, formatApiErrorDetail } from "@/lib/api";
 import Layout from "@/components/Layout";
@@ -61,7 +63,7 @@ const round2 = (n) => Math.round((n + Number.EPSILON) * 100) / 100;
 
 const emptyForm = () => ({
   issue_date: new Date().toISOString().slice(0, 10),
-  client: { name: "", nif: "", address: "", email: "", phone: "" },
+  client: { name: "", nif: "", address: "", email: "", phone: "", country: "ES" },
   line_items: [emptyLine()],
   irpf_rate: "0",
   recargo_equivalencia: false,
@@ -190,10 +192,12 @@ export default function Invoices() {
     const bd = {};
     const RE_MAP = { 21: 5.2, 10: 1.4, 5: 0.625, 4: 0.5, 0: 0 };
     let baseGeneral = 0, baseExenta = 0, baseNoSujeta = 0, suplidos = 0, subtotal = 0, discountTotal = 0;
+    const foreign = isExtraEU(form.client.country);
     form.line_items.forEach((it) => {
       const gross = (Number(it.quantity) || 0) * (Number(it.unit_price) || 0);
       subtotal += gross;
-      const sel = it.iva_sel ?? "21";
+      const sel0 = it.iva_sel ?? "21";
+      const sel = foreign && sel0 !== "suplido" ? "no_sujeto" : sel0;
       if (sel === "suplido") { suplidos += gross; return; }
       const net = lineNet(it);
       discountTotal += (gross - net);
@@ -211,7 +215,7 @@ export default function Invoices() {
     });
     const base = baseGeneral + baseExenta + baseNoSujeta;
     const irpfBase = baseGeneral + baseExenta;
-    const irpfAmount = (irpfBase * Number(form.irpf_rate)) / 100;
+    const irpfAmount = foreign ? 0 : (irpfBase * Number(form.irpf_rate)) / 100;
     const total = base + suplidos + ivaAmount + reAmount - irpfAmount;
     return { subtotal, discountTotal, base, baseExenta, baseNoSujeta, suplidos, breakdown, ivaAmount, reAmount, irpfAmount, total };
   })();
@@ -233,7 +237,7 @@ export default function Invoices() {
 
   const pickClient = (id) => {
     const c = clients.find((x) => x.id === id);
-    if (c) setForm((f) => ({ ...f, client: { name: c.name || "", nif: c.nif || "", address: c.address || "", email: c.email || "", phone: c.phone || "" } }));
+    if (c) setForm((f) => ({ ...f, client: { name: c.name || "", nif: c.nif || "", address: c.address || "", email: c.email || "", phone: c.phone || "", country: c.country || "ES" } }));
   };
 
   const openNew = async () => {
@@ -255,7 +259,7 @@ export default function Invoices() {
     } catch (e) { /* noop */ }
     setForm({
       issue_date: new Date().toISOString().slice(0, 10),
-      client: { name: inv.client?.name || "", nif: inv.client?.nif || "", address: inv.client?.address || "", email: inv.client?.email || "", phone: inv.client?.phone || "" },
+      client: { name: inv.client?.name || "", nif: inv.client?.nif || "", address: inv.client?.address || "", email: inv.client?.email || "", phone: inv.client?.phone || "", country: inv.client?.country || "ES" },
       line_items: (inv.line_items?.length ? inv.line_items : [emptyLine()])
         .map((i) => ({ description: i.description, detail: i.detail || "", quantity: i.quantity, unit_price: -Math.abs(i.unit_price), discount: i.discount || 0, iva_sel: lineToSel(i) })),
       irpf_rate: String(inv.irpf_rate || 0),
@@ -283,7 +287,7 @@ export default function Invoices() {
     setNextNumber(inv.number);
     setForm({
       issue_date: inv.issue_date,
-      client: { name: inv.client?.name || "", nif: inv.client?.nif || "", address: inv.client?.address || "", email: inv.client?.email || "", phone: inv.client?.phone || "" },
+      client: { name: inv.client?.name || "", nif: inv.client?.nif || "", address: inv.client?.address || "", email: inv.client?.email || "", phone: inv.client?.phone || "", country: inv.client?.country || "ES" },
       line_items: inv.line_items?.length ? inv.line_items.map((i) => ({ description: i.description, detail: i.detail || "", quantity: i.quantity, unit_price: i.unit_price, discount: i.discount || 0, iva_sel: lineToSel(i) })) : [emptyLine()],
       irpf_rate: String(inv.irpf_rate || 0),
       recargo_equivalencia: !!inv.recargo_equivalencia,
@@ -679,7 +683,7 @@ export default function Invoices() {
               <div className="text-[11px] font-semibold uppercase tracking-wider text-slate-500">Datos del cliente</div>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="space-y-2"><Label>Nombre / Razón social</Label><Input value={form.client.name} onChange={(e) => setForm({ ...form, client: { ...form.client, name: e.target.value } })} data-testid="client-name" /></div>
-                <div className="space-y-2"><Label>NIF / CIF</Label>
+                <div className="space-y-2"><Label>{isExtraEU(form.client.country) ? "VAT / Tax ID (ej. RUT)" : "NIF / CIF"}</Label>
                   <div className="flex gap-2">
                     <Input value={form.client.nif} onChange={(e) => setForm({ ...form, client: { ...form.client, nif: e.target.value } })} placeholder="B12345678" data-testid="client-nif" />
                     <Button type="button" variant="outline" onClick={lookupNif} disabled={lookingUp} className="border-slate-200 shrink-0" data-testid="lookup-nif" title="Buscar datos por NIF/CIF (VIES)">
@@ -690,6 +694,7 @@ export default function Invoices() {
                 <div className="space-y-2"><Label>Email</Label><Input type="email" value={form.client.email} onChange={(e) => setForm({ ...form, client: { ...form.client, email: e.target.value } })} data-testid="client-email" /></div>
                 <div className="space-y-2"><Label>Teléfono</Label><Input value={form.client.phone || ""} onChange={(e) => setForm({ ...form, client: { ...form.client, phone: e.target.value } })} data-testid="client-phone" /></div>
                 <div className="space-y-2"><Label>Dirección</Label><Input value={form.client.address} onChange={(e) => setForm({ ...form, client: { ...form.client, address: e.target.value } })} data-testid="client-address" /></div>
+                <ClientCountryField country={form.client.country} nif={form.client.nif} onChange={(v) => setForm((f) => ({ ...f, client: { ...f.client, country: v } }))} />
               </div>
               {!editingId && (
                 <div className="flex items-center gap-2">
@@ -712,7 +717,7 @@ export default function Invoices() {
                     <div className="col-span-2 space-y-1">{idx === 0 && <Label className="text-xs">Precio (€)</Label>}<Input type="number" step="0.01" value={it.unit_price} onChange={(e) => updateItem(idx, "unit_price", e.target.value)} data-testid={`line-price-${idx}`} /></div>
                     <div className="col-span-1 space-y-1">{idx === 0 && <Label className="text-xs">Dto.%</Label>}<Input type="number" step="0.01" min="0" max="100" value={it.discount} onChange={(e) => updateItem(idx, "discount", e.target.value)} data-testid={`line-discount-${idx}`} /></div>
                     <div className="col-span-3 space-y-1">{idx === 0 && <Label className="text-xs">Impuesto</Label>}
-                      <Select value={it.iva_sel ?? "21"} onValueChange={(v) => updateItem(idx, "iva_sel", v)}>
+                      <Select value={isExtraEU(form.client.country) && it.iva_sel !== "suplido" ? "no_sujeto" : (it.iva_sel ?? "21")} onValueChange={(v) => updateItem(idx, "iva_sel", v)} disabled={isExtraEU(form.client.country)}>
                         <SelectTrigger data-testid={`line-iva-${idx}`}><SelectValue /></SelectTrigger>
                         <SelectContent>{LINE_IVA_OPTIONS.map((o) => <SelectItem key={o.v} value={o.v}>{o.l}</SelectItem>)}</SelectContent>
                       </Select>
@@ -736,7 +741,7 @@ export default function Invoices() {
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
               <div className="space-y-2">
                 <Label>Retención IRPF (global)</Label>
-                <Select value={form.irpf_rate} onValueChange={(v) => setForm({ ...form, irpf_rate: v })}>
+                <Select value={isExtraEU(form.client.country) ? "0" : form.irpf_rate} onValueChange={(v) => setForm({ ...form, irpf_rate: v })} disabled={isExtraEU(form.client.country)}>
                   <SelectTrigger data-testid="irpf-select"><SelectValue /></SelectTrigger>
                   <SelectContent>{IRPF_OPTIONS.map((o) => <SelectItem key={o.v} value={o.v}>{o.l}</SelectItem>)}</SelectContent>
                 </Select>
@@ -804,7 +809,7 @@ export default function Invoices() {
                 <div key={`re-${b.rate}`} className="flex justify-between text-slate-500"><span>Recargo equiv. ({b.reRate}%)</span><span className="tabular">{eur(b.reCuota)}</span></div>
               ))}
               {calc.suplidos > 0 && <div className="flex justify-between text-slate-500"><span>Suplidos</span><span className="tabular">{eur(calc.suplidos)}</span></div>}
-              {Number(form.irpf_rate) > 0 && <div className="flex justify-between text-slate-500"><span>Retención IRPF (-{form.irpf_rate}%)</span><span className="tabular">-{eur(calc.irpfAmount)}</span></div>}
+              {Number(form.irpf_rate) > 0 && !isExtraEU(form.client.country) && <div className="flex justify-between text-slate-500"><span>Retención IRPF (-{form.irpf_rate}%)</span><span className="tabular">-{eur(calc.irpfAmount)}</span></div>}
               <div className="flex justify-between font-display text-lg font-semibold text-slate-900 pt-2 border-t border-slate-200 mt-2"><span>Total</span><span className="tabular" data-testid="summary-total">{eur(calc.total)}</span></div>
             </div>
 
