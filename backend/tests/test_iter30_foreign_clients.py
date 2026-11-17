@@ -75,9 +75,13 @@ def test_es_invalid_nif_422(s):
     assert "elige su país" in r.text
 
 
-def test_fr_eu_non_spanish_nif_422(s):
+def test_fr_eu_vat_accepted(s):
+    # Since iter31 EU (non-ES) clients are foreign: VAT accepted, reverse charge
     r = s.post(f"{BASE_URL}/api/invoices", json=_inv({"name": "TEST_FR", "nif": "FR12345678901", "country": "FR"}))
-    assert r.status_code == 422, r.text
+    assert r.status_code == 200, r.text
+    d = r.json()
+    CREATED_INV.append(d["id"])
+    assert d["foreign_eu"] is True and d["iva_amount"] == 0
 
 
 def test_foreign_without_nif_422(s):

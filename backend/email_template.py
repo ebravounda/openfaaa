@@ -59,6 +59,10 @@ def _totals_rows(doc):
             rows.append((f"IVA ({bd[0]['rate']:g}%)", _eur(bd[0].get("cuota"))))
         elif doc.get("foreign_client"):
             rows.append(("IVA", "No sujeto"))
+        if bd and doc.get("base_exenta"):
+            rows.append(("Base exenta", _eur(doc.get("base_exenta"))))
+        if bd and doc.get("base_no_sujeta"):
+            rows.append(("Base no sujeta", _eur(doc.get("base_no_sujeta"))))
     if doc.get("re_amount"):
         rows.append(("Recargo de equivalencia", _eur(doc.get("re_amount"))))
     if doc.get("suplidos_total"):
@@ -81,7 +85,7 @@ def build_document_email(doc: dict, company: dict, doc_label: str = "FACTURA", h
             if has_logo else f'<div style="font-size:20px;font-weight:700;color:{acc};letter-spacing:-0.3px">{name}</div>')
     lines = ""
     for it in doc.get("line_items", []):
-        amount = float(it.get("quantity") or 0) * float(it.get("unit_price") or 0)
+        amount = round(float(it.get("quantity") or 0) * float(it.get("unit_price") or 0) * (1 - float(it.get("discount") or 0) / 100), 2)
         lines += (f'<tr><td style="padding:10px 0;border-bottom:1px solid #EEF0F4;font-size:14px;color:#1F2937">'
                   f'{escape(it.get("description") or "")}<div style="font-size:12px;color:#94A3B8">{it.get("quantity")} × {escape(_eur(it.get("unit_price")))}</div></td>'
                   f'<td style="padding:10px 0;border-bottom:1px solid #EEF0F4;font-size:14px;color:#1F2937;text-align:right;white-space:nowrap">{escape(_eur(amount))}</td></tr>')

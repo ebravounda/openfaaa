@@ -1,0 +1,37 @@
+{
+  "summary": "Iter 31: tested EU (non-ES) clients with reverse charge, the multi-VAT breakdown and the new email template. Backend: 13/13 new pytest passed (test_iter31_eu_multiiva_email.py). IT client with NIF IT08903531211 (and '08903531211' with lowercase 'it') returns 200, foreign_client/foreign_eu true, IVA 0, irpf_rate forced to 0 even when 15 is sent, lines no_sujeto. VeriFactu XML (read-only GET) for IT has IDOtro CodigoPais IT, IDType 02, ID IT08903531211 (prefix added when missing) and CalificacionOperacion N2. CL regression gives IDType 04. PDF for IT shows 'VAT / Tax ID' plus 'Inversión del sujeto pasivo' and 'Reverse charge'. PDF for CL shows the art. 69 'outside the EU' legend and no reverse-charge legend. An ES invoice at 21%+10% returns iva_breakdown {21: 100/21, 10: 200/20} and total 341. Its PDF shows Base imponible al 21%/IVA 21%/Base imponible al 10%/IVA 10%/Total base imponible/Total IVA. A single-rate PDF still shows 'Base imponible' + 'IVA (21%)'. POST /contacts with country IT is saved. ES with an IT NIF still gives 422. send-email for a client with no email gives 400 (no real email was sent). In-process checks pass: logo_attachment returns content_id 'company-logo', the HTML contains cid:company-logo, the PDF chip and the 'Base al X%' rows, and _assert_safe_email does not raise. By code review, send_invoice_email attaches the PDF and the inline logo. Frontend /facturas: a 21%+10% line gives iva-breakdown-21/10 with 'Base al X%' above 'IVA (X%)' and a total of 341 €. Choosing Italy shows the foreign note mentioning 'inversión del sujeto pasivo'. Line IVA selects are disabled ('No sujeto'), and IRPF and recargo are disabled. The total becomes 300 € and saving shows the toast 'Factura emitida' with no NIF error. The stored invoice has foreign_eu true and IVA 0. /contactos: a contact with Italia and IT08903531211 shows the toast 'Cliente guardado' and the card shows 'IT08903531211 · IT'. iter30 test_fr_eu_non_spanish_nif_422 was updated to the new expected behaviour (200). Iter30 suite: 14/14. All TEST_ data I created was deleted.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "email_template._totals_rows / line rows", "issue": "The line amount in the email is quantity*unit_price and ignores the line discount. With discounts, the line amounts don't add up to the totals. A single rate mixed with an exempt or not-subject base doesn't show 'Base exenta'/'Base no sujeta', unlike the PDF (detailed mode)."},
+      {"endpoint": "foreign_tax.vat_id", "issue": "Any value that already starts with 2 letters is kept as-is. A Greek VAT typed with a 'GR' prefix is not converted to 'EL', and a prefix that doesn't match the country (e.g. FR… for country IT) is not cross-checked."},
+      {"endpoint": "POST /api/invoices/{id}/send-email", "issue": "No real send was made (EMERGENT_EMAIL_KEY is set in preview, so a real call would send). I could not verify that the Emergent fallback email API accepts attachments with content_id (Resend does). Worth one manual send to an internal address."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Invoices dialog - client", "issues": ["The NIF label reads 'VAT / Tax ID (ej. RUT)' for EU clients too (RUT is Chilean). Suggest 'VAT / Tax ID (ej. IT12345678901)' for the EU."]},
+      {"screen": "Invoices dialog - lines", "issues": ["The Dto.% input (col-span-1) is too narrow: its value is clipped (shows only a partial glyph). This was already the case before."]}
+    ]
+  },
+  "test_report_links": ["/app/backend/tests/test_iter31_eu_multiiva_email.py", "/app/backend/tests/test_iter30_foreign_clients.py", "/app/test_reports/pytest/pytest_iter31.xml"],
+  "action_items": [
+    "Optional: in the email template, compute line amounts with the discount applied (use the same lineNet logic as the PDF)",
+    "Optional: change the EU VAT label example in Invoices.js (it says RUT)",
+    "Optional: normalise GR→EL and validate that the VAT prefix matches the country in foreign_tax.vat_id",
+    "Optional: do one manual send of an invoice email to an internal address to confirm the PDF attachment and the inline CID logo through the Emergent email fallback"
+  ],
+  "critical_code_review_comments": [
+    "server.py is 3336 lines; it should be split into routers",
+    "logo_attachment only base64-checks the first 64 chars; a corrupt logo would still be attached (low risk)",
+    "Creating and then deleting test invoices consumes VeriFactu-chained numbers (2026-0017..0022 were used in this run). Deleting chained invoices may leave gaps in the huella chain — this was already the case before"
+  ],
+  "updated_files": ["/app/backend/tests/test_iter31_eu_multiiva_email.py", "/app/backend/tests/test_iter30_foreign_clients.py"],
+  "success_rate": {"backend": "100%", "frontend": "100%"},
+  "seed_data_creation": "None. All TEST_ invoices and contacts created were deleted by id. Pre-existing contacts 'TEST Cliente Uno/Dos' (not created by me) were left untouched.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Run from /app/backend: REACT_APP_BACKEND_URL=<url> python -m pytest tests/test_iter31_eu_multiiva_email.py tests/test_iter30_foreign_clients.py (xdist is configured in pytest.ini, so don't pass -p no:xdist). Login testids: login-email/login-password/login-submit; routes /facturas and /contactos. Country combobox testids: client-country, client-country-search, client-country-opt-XX (contacts use the contact-country prefix). Line IVA option: get_by_role('option', name='IVA 10%'). Do NOT call send-email for clients that have an email: EMERGENT_EMAIL_KEY is configured and would really send. Never call /verifactu/submit."
+}

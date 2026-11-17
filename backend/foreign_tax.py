@@ -35,6 +35,8 @@ def vat_id(cl: dict) -> str:
     c = norm_country(cl.get("country"))
     if is_eu(c):
         pref = "EL" if c == "GR" else c
+        if raw[:2] == "GR":
+            raw = "EL" + raw[2:]
         return raw if raw[:2].isalpha() else pref + raw
     return (cl.get("nif") or "").strip()
 

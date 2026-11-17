@@ -1,6 +1,6 @@
 import { useEffect, useState, useMemo, useRef } from "react";
 import { ClientCountryField } from "@/components/ClientCountryField";
-import { isForeign } from "@/lib/countries";
+import { isForeign, isExtraEU } from "@/lib/countries";
 import { toast } from "sonner";
 import api, { API, eur, formatApiErrorDetail } from "@/lib/api";
 import Layout from "@/components/Layout";
@@ -683,7 +683,7 @@ export default function Invoices() {
               <div className="text-[11px] font-semibold uppercase tracking-wider text-slate-500">Datos del cliente</div>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="space-y-2"><Label>Nombre / Razón social</Label><Input value={form.client.name} onChange={(e) => setForm({ ...form, client: { ...form.client, name: e.target.value } })} data-testid="client-name" /></div>
-                <div className="space-y-2"><Label>{isForeign(form.client.country) ? "VAT / Tax ID (ej. RUT)" : "NIF / CIF"}</Label>
+                <div className="space-y-2"><Label>{isForeign(form.client.country) ? (isExtraEU(form.client.country) ? "VAT / Tax ID (ej. RUT)" : `VAT europeo (ej. ${form.client.country}12345678901)`) : "NIF / CIF"}</Label>
                   <div className="flex gap-2">
                     <Input value={form.client.nif} onChange={(e) => setForm({ ...form, client: { ...form.client, nif: e.target.value } })} placeholder="B12345678" data-testid="client-nif" />
                     <Button type="button" variant="outline" onClick={lookupNif} disabled={lookingUp} className="border-slate-200 shrink-0" data-testid="lookup-nif" title="Buscar datos por NIF/CIF (VIES)">

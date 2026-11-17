@@ -136,9 +136,7 @@ async def send_email(*, to: str, subject: str, html: str, reply_to: str | None =
     from fastapi import HTTPException
     if not EMAIL_KEY:
         raise HTTPException(status_code=400, detail="El email no está configurado. Añade tu API key de Resend en Integraciones.")
-    payload = {"to": [to], "subject": subject, "html": html, "from_name": EMAIL_FROM_NAME}
-    if attachments:
-        payload["attachments"] = attachments
+    payload = {"to": [to], "subject": subject, "html": re.sub(r'<img src="cid:[^>]*>', "", html), "from_name": EMAIL_FROM_NAME}
     if reply_to or EMAIL_REPLY_TO:
         payload["contact_email"] = reply_to or EMAIL_REPLY_TO
     try:
