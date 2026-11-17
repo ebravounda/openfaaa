@@ -8,6 +8,7 @@ export const COUNTRIES = CODES.map((code) => ({ code, name: names.of(code) || co
 
 export const countryName = (code) => (code ? names.of(code) || code : "");
 export const isExtraEU = (code) => !!code && code !== "ES" && !EU.has(code);
+export const isForeign = (code) => !!code && code !== "ES";
 
 const ES_ID = /^([0-9]{8}[A-Z]|[XYZ][0-9]{7}[A-Z]|[ABCDEFGHJNPQRSUVW][0-9]{7}[0-9A-J])$/;
 export const looksSpanishId = (v) => ES_ID.test((v || "").toUpperCase().replace(/[\s.-]/g, ""));

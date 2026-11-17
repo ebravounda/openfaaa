@@ -113,7 +113,7 @@ def _eur(v):
 
 
 def _client_tax_line(cl):
-    if foreign_tax.is_extra_eu(cl.get("country")):
+    if foreign_tax.is_foreign(cl.get("country")):
         return f"VAT / Tax ID: {_esc(cl.get('nif',''))} ({foreign_tax.norm_country(cl.get('country'))})"
     return f"NIF/CIF: {_esc(cl.get('nif',''))}"
 
@@ -149,7 +149,22 @@ def _totals_rows(invoice):
         rows.append((lbl, f"-{_eur(invoice.get('discount_total', 0))}", False))
     rows.append(("Base imponible", _eur(invoice.get("base", 0)), False))
     bd = invoice.get("iva_breakdown") or []
-    if bd:
+    detailed = len(bd) > 1 or (bd and (invoice.get("base_exenta") or invoice.get("base_no_sujeta")))
+    if detailed:
+        rows.pop()
+        for b in bd:
+            rows.append((f"Base imponible al {b['rate']:g}%", _eur(b.get("base", 0)), False))
+            rows.append((f"IVA {b['rate']:g}%", _eur(b.get("cuota", 0)), False))
+        if invoice.get("base_exenta"):
+            rows.append(("Base exenta", _eur(invoice.get("base_exenta", 0)), False))
+        if invoice.get("base_no_sujeta"):
+            rows.append(("Base no sujeta", _eur(invoice.get("base_no_sujeta", 0)), False))
+        rows.append(("Total base imponible", _eur(invoice.get("base", 0)), False))
+        rows.append(("Total IVA", _eur(invoice.get("iva_amount", 0)), False))
+        for b in bd:
+            if b.get("re_cuota"):
+                rows.append((f"Recargo equiv. ({b['re_rate']:g}%)", _eur(b.get("re_cuota", 0)), False))
+    elif bd:
         for b in bd:
             rows.append((f"IVA ({b['rate']:g}%)", _eur(b.get("cuota", 0)), False))
         for b in bd:
@@ -397,7 +412,7 @@ def build_invoice_pdf(invoice: dict, company: dict, qr_png: bytes = None, verifa
             ParagraphStyle("intracom", parent=small, fontSize=7.5, textColor=MUTED, leading=10)))
     if invoice.get("foreign_client"):
         story.append(Spacer(1, 5 * mm))
-        story.append(Paragraph(foreign_tax.LEGEND,
+        story.append(Paragraph(foreign_tax.legend((invoice.get("client") or {}).get("country")),
             ParagraphStyle("foreign", parent=small, fontSize=7.5, textColor=MUTED, leading=10)))
 
     # VeriFactu: QR + leyenda

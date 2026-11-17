@@ -137,6 +137,8 @@ async def send_email(*, to: str, subject: str, html: str, reply_to: str | None =
     if not EMAIL_KEY:
         raise HTTPException(status_code=400, detail="El email no está configurado. Añade tu API key de Resend en Integraciones.")
     payload = {"to": [to], "subject": subject, "html": html, "from_name": EMAIL_FROM_NAME}
+    if attachments:
+        payload["attachments"] = attachments
     if reply_to or EMAIL_REPLY_TO:
         payload["contact_email"] = reply_to or EMAIL_REPLY_TO
     try:
@@ -160,23 +162,25 @@ def _eur(v):
     return f"{v:,.2f} €".replace(",", "X").replace(".", ",").replace("X", ".")
 
 
-def build_payment_email_html(invoice: dict, company: dict, pay_url: str) -> str:
+def build_payment_email_html(invoice: dict, company: dict, pay_url: str, has_logo: bool = False, pdf_name: str = "") -> str:
+    from email_template import build_document_email
     total = float(invoice.get("total") or 0)
     button = (
-        f'<table role="presentation" width="100%" style="max-width:640px;margin:0 auto;'
-        f'font-family:Arial,Helvetica,sans-serif;background:#ffffff">'
-        f'<tr><td style="padding:28px 24px 4px 24px;text-align:center">'
-        f'<div style="font-size:15px;color:#333;margin-bottom:16px">Puedes pagar esta factura de forma segura con tarjeta:</div>'
+        f'<div style="padding:20px 32px 0 32px">'
         f'<a href="{escape(pay_url)}" style="display:inline-block;background:#635BFF;color:#ffffff;'
-        f'text-decoration:none;padding:14px 36px;border-radius:8px;font-weight:bold;font-size:16px">'
-        f'Pagar {escape(_eur(total))}</a>'
-        f'<div style="font-size:12px;color:#888;margin-top:10px">Pago seguro procesado por Stripe &middot; Tarjeta de credito o debito</div>'
-        f'</td></tr></table>'
+        f'text-decoration:none;padding:14px 32px;border-radius:10px;font-weight:bold;font-size:15px">'
+        f'Pagar {escape(_eur(total))} con tarjeta</a>'
+        f'<div style="font-size:12px;color:#94A3B8;margin-top:8px">Pago seguro procesado por Stripe</div></div>'
     )
-    return button + build_invoice_email_html(invoice, company)
+    return build_document_email(invoice, company, has_logo=has_logo, pdf_name=pdf_name, extra_html=button)
 
 
-def build_invoice_email_html(invoice: dict, company: dict, doc_label: str = "FACTURA") -> str:
+def build_invoice_email_html(invoice: dict, company: dict, doc_label: str = "FACTURA", has_logo: bool = False, pdf_name: str = "") -> str:
+    from email_template import build_document_email
+    return build_document_email(invoice, company, doc_label=doc_label, has_logo=has_logo, pdf_name=pdf_name)
+
+
+def _legacy_invoice_email_html(invoice: dict, company: dict, doc_label: str = "FACTURA") -> str:
     comp = company or {}
     rows = ""
     for it in invoice.get("line_items", []):

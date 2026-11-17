@@ -70,8 +70,8 @@ def precheck(invoice: dict, company: dict, validate_nif) -> list:
     cl = invoice.get("client") or {}
     if not (cl.get("name") or "").strip():
         errs.append("Falta el nombre del cliente.")
-    from foreign_tax import is_extra_eu
-    if is_extra_eu(cl.get("country")):
+    from foreign_tax import is_foreign
+    if is_foreign(cl.get("country")):
         if not (cl.get("nif") or "").strip():
             errs.append("Falta el VAT / identificación fiscal del cliente extranjero.")
     elif not validate_nif(cl.get("nif", "")):
@@ -139,13 +139,14 @@ def build_qr_url(nif, numserie, fecha, importe, produccion: bool = False) -> str
 
 
 def _destinatario_id(cl: dict) -> str:
-    """NIF español, o IDOtro (04 = documento oficial del país) para clientes extracomunitarios."""
-    from foreign_tax import is_extra_eu, norm_country
-    if is_extra_eu(cl.get("country")):
+    """NIF español, o IDOtro para extranjeros: 02 = NIF-IVA (UE), 04 = documento oficial del país."""
+    from foreign_tax import is_foreign, is_eu, norm_country, vat_id
+    if is_foreign(cl.get("country")):
+        c = norm_country(cl.get("country"))
         return ("<sum1:IDOtro>"
-                f"<sum1:CodigoPais>{norm_country(cl.get('country'))}</sum1:CodigoPais>"
-                "<sum1:IDType>04</sum1:IDType>"
-                f"<sum1:ID>{_xesc((cl.get('nif') or '').strip())}</sum1:ID>"
+                f"<sum1:CodigoPais>{c}</sum1:CodigoPais>"
+                f"<sum1:IDType>{'02' if is_eu(c) else '04'}</sum1:IDType>"
+                f"<sum1:ID>{_xesc(vat_id(cl))}</sum1:ID>"
                 "</sum1:IDOtro>")
     return f"<sum1:NIF>{_xesc(cl.get('nif',''))}</sum1:NIF>"
 

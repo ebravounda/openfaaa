@@ -276,12 +276,12 @@ def _validate_invoice(data) -> None:
     cl = data.client
     if not (cl.name or "").strip():
         errors.append("El nombre del cliente es obligatorio.")
-    foreign = foreign_tax.is_extra_eu(getattr(cl, "country", "ES"))
+    foreign = foreign_tax.is_foreign(getattr(cl, "country", "ES"))
     if not (cl.nif or "").strip():
         errors.append("El VAT / identificación fiscal del cliente es obligatorio." if foreign else "El NIF/CIF del cliente es obligatorio.")
     elif not foreign and not spanish_tax.validate_nif(cl.nif):
         errors.append(f"El NIF/CIF '{cl.nif}' no es válido (revisa la letra de control). "
-                      "Si es un cliente de fuera de la UE, elige su país.")
+                      "Si es un cliente extranjero, elige su país.")
     if not data.line_items:
         errors.append("Añade al menos un concepto a la factura.")
     valid_types = {"general", "exento", "no_sujeto", "suplido", "intracomunitaria"}
@@ -1200,11 +1200,14 @@ async def send_quote_email(quote_id: str, user=Depends(get_current_user)):
         raise HTTPException(status_code=400, detail="El cliente no tiene email registrado")
     company = await active_company(user)
     q["doc_type"] = "presupuesto"
-    html = build_invoice_email_html(q, company, doc_label="PRESUPUESTO")
-    subject = f"Presupuesto {q['number']} - {company.get('name', 'OpenFactura')}"
     import base64 as _b64
+    from email_template import logo_attachment
+    pdf_name = f"presupuesto-{q['number']}.pdf"
+    logo = logo_attachment(company)
+    html = build_invoice_email_html(q, company, doc_label="PRESUPUESTO", has_logo=bool(logo), pdf_name=pdf_name)
+    subject = f"Presupuesto {q['number']} - {company.get('trade_name') or company.get('name', 'OpenFactura')}"
     pdf = build_invoice_pdf(q, company)
-    attachments = [{"filename": f"presupuesto-{q['number']}.pdf", "content": _b64.b64encode(pdf).decode()}]
+    attachments = [{"filename": pdf_name, "content": _b64.b64encode(pdf).decode()}] + ([logo] if logo else [])
     email_id = await send_email(to=to, subject=subject, html=html, reply_to=company.get("email"), attachments=attachments)
     await db.quotes.update_one({"id": quote_id, "user_id": user["id"]},
                                {"$set": {"emailed_at": datetime.now(timezone.utc).isoformat(),
@@ -1577,9 +1580,24 @@ async def send_invoice_email(invoice_id: str, user=Depends(get_current_user)):
     if not to:
         raise HTTPException(status_code=400, detail="El cliente no tiene email registrado")
     company = await active_company(user)
-    html = build_invoice_email_html(inv, company)
-    subject = f"Factura {inv['number']} - {company.get('name', 'FiscalHub España')}"
-    email_id = await send_email(to=to, subject=subject, html=html, reply_to=company.get("email"))
+    import base64 as _b64
+    from email_template import logo_attachment
+    pdf_name = f"factura-{inv['number']}.pdf"
+    vfd = inv.get("verifactu")
+    qr_png = None
+    if vfd and vfd.get("qr_url"):
+        try:
+            qr_png = vf.generate_qr_png(vfd["qr_url"])
+        except Exception:
+            pass
+    pdf = build_invoice_pdf(inv, _gate_template(await _merge_global_goroky(company), user), qr_png=qr_png, verifactu=vfd)
+    attachments = [{"filename": pdf_name, "content": _b64.b64encode(pdf).decode()}]
+    logo = logo_attachment(company)
+    if logo:
+        attachments.append(logo)
+    html = build_invoice_email_html(inv, company, has_logo=bool(logo), pdf_name=pdf_name)
+    subject = f"Factura {inv['number']} - {company.get('trade_name') or company.get('name', 'OpenFactura')}"
+    email_id = await send_email(to=to, subject=subject, html=html, reply_to=company.get("email"), attachments=attachments)
     await db.invoices.update_one({"id": invoice_id, "user_id": user["id"]},
                                  {"$set": {"emailed_at": datetime.now(timezone.utc).isoformat()}})
     return {"status": "sent", "email_id": email_id, "to": to}
@@ -1690,8 +1708,11 @@ async def send_invoice_payment(invoice_id: str, data: SendPaymentReq, user=Depen
         except Exception:
             pass
     pdf = build_invoice_pdf(inv, _gate_template(await _merge_global_goroky(company), user), qr_png=qr_png, verifactu=vfd)
-    attachments = [{"filename": f"factura-{inv['number']}.pdf", "content": _b64.b64encode(pdf).decode()}]
-    html = build_payment_email_html(inv, company, session.url)
+    from email_template import logo_attachment
+    pdf_name = f"factura-{inv['number']}.pdf"
+    logo = logo_attachment(company)
+    attachments = [{"filename": pdf_name, "content": _b64.b64encode(pdf).decode()}] + ([logo] if logo else [])
+    html = build_payment_email_html(inv, company, session.url, has_logo=bool(logo), pdf_name=pdf_name)
     subject = f"Factura {inv['number']} · Pago pendiente"
     email_id = await send_email(to=to, subject=subject, html=html, reply_to=company.get("email"), attachments=attachments)
     await db.invoices.update_one({"id": invoice_id, "user_id": user["id"]}, {"$set": {

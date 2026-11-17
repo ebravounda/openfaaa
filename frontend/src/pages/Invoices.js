@@ -1,6 +1,6 @@
 import { useEffect, useState, useMemo, useRef } from "react";
 import { ClientCountryField } from "@/components/ClientCountryField";
-import { isExtraEU } from "@/lib/countries";
+import { isForeign } from "@/lib/countries";
 import { toast } from "sonner";
 import api, { API, eur, formatApiErrorDetail } from "@/lib/api";
 import Layout from "@/components/Layout";
@@ -192,7 +192,7 @@ export default function Invoices() {
     const bd = {};
     const RE_MAP = { 21: 5.2, 10: 1.4, 5: 0.625, 4: 0.5, 0: 0 };
     let baseGeneral = 0, baseExenta = 0, baseNoSujeta = 0, suplidos = 0, subtotal = 0, discountTotal = 0;
-    const foreign = isExtraEU(form.client.country);
+    const foreign = isForeign(form.client.country);
     form.line_items.forEach((it) => {
       const gross = (Number(it.quantity) || 0) * (Number(it.unit_price) || 0);
       subtotal += gross;
@@ -683,7 +683,7 @@ export default function Invoices() {
               <div className="text-[11px] font-semibold uppercase tracking-wider text-slate-500">Datos del cliente</div>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="space-y-2"><Label>Nombre / Razón social</Label><Input value={form.client.name} onChange={(e) => setForm({ ...form, client: { ...form.client, name: e.target.value } })} data-testid="client-name" /></div>
-                <div className="space-y-2"><Label>{isExtraEU(form.client.country) ? "VAT / Tax ID (ej. RUT)" : "NIF / CIF"}</Label>
+                <div className="space-y-2"><Label>{isForeign(form.client.country) ? "VAT / Tax ID (ej. RUT)" : "NIF / CIF"}</Label>
                   <div className="flex gap-2">
                     <Input value={form.client.nif} onChange={(e) => setForm({ ...form, client: { ...form.client, nif: e.target.value } })} placeholder="B12345678" data-testid="client-nif" />
                     <Button type="button" variant="outline" onClick={lookupNif} disabled={lookingUp} className="border-slate-200 shrink-0" data-testid="lookup-nif" title="Buscar datos por NIF/CIF (VIES)">
@@ -717,7 +717,7 @@ export default function Invoices() {
                     <div className="col-span-2 space-y-1">{idx === 0 && <Label className="text-xs">Precio (€)</Label>}<Input type="number" step="0.01" value={it.unit_price} onChange={(e) => updateItem(idx, "unit_price", e.target.value)} data-testid={`line-price-${idx}`} /></div>
                     <div className="col-span-1 space-y-1">{idx === 0 && <Label className="text-xs">Dto.%</Label>}<Input type="number" step="0.01" min="0" max="100" value={it.discount} onChange={(e) => updateItem(idx, "discount", e.target.value)} data-testid={`line-discount-${idx}`} /></div>
                     <div className="col-span-3 space-y-1">{idx === 0 && <Label className="text-xs">Impuesto</Label>}
-                      <Select value={isExtraEU(form.client.country) && it.iva_sel !== "suplido" ? "no_sujeto" : (it.iva_sel ?? "21")} onValueChange={(v) => updateItem(idx, "iva_sel", v)} disabled={isExtraEU(form.client.country)}>
+                      <Select value={isForeign(form.client.country) && it.iva_sel !== "suplido" ? "no_sujeto" : (it.iva_sel ?? "21")} onValueChange={(v) => updateItem(idx, "iva_sel", v)} disabled={isForeign(form.client.country)}>
                         <SelectTrigger data-testid={`line-iva-${idx}`}><SelectValue /></SelectTrigger>
                         <SelectContent>{LINE_IVA_OPTIONS.map((o) => <SelectItem key={o.v} value={o.v}>{o.l}</SelectItem>)}</SelectContent>
                       </Select>
@@ -741,11 +741,11 @@ export default function Invoices() {
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
               <div className="space-y-2">
                 <Label>Retención IRPF (global)</Label>
-                <Select value={isExtraEU(form.client.country) ? "0" : form.irpf_rate} onValueChange={(v) => setForm({ ...form, irpf_rate: v })} disabled={isExtraEU(form.client.country)}>
+                <Select value={isForeign(form.client.country) ? "0" : form.irpf_rate} onValueChange={(v) => setForm({ ...form, irpf_rate: v })} disabled={isForeign(form.client.country)}>
                   <SelectTrigger data-testid="irpf-select"><SelectValue /></SelectTrigger>
                   <SelectContent>{IRPF_OPTIONS.map((o) => <SelectItem key={o.v} value={o.v}>{o.l}</SelectItem>)}</SelectContent>
                 </Select>
-                {irpfHint && !isExtraEU(form.client.country) && (
+                {irpfHint && !isForeign(form.client.country) && (
                   <div className="text-xs text-slate-500 bg-blue-50 border border-blue-100 rounded-md p-2 flex items-start gap-2" data-testid="irpf-hint">
                     <Sparkles className="w-3.5 h-3.5 text-[#0052FF] shrink-0 mt-0.5" strokeWidth={1.5} />
                     <span>
@@ -765,7 +765,7 @@ export default function Invoices() {
               <div className="space-y-2">
                 <Label>Recargo de equivalencia</Label>
                 <div className="flex items-center gap-2 h-9 px-3 border border-slate-200 rounded-md bg-white">
-                  <Checkbox id="recargo_eq" checked={!isExtraEU(form.client.country) && form.recargo_equivalencia} disabled={isExtraEU(form.client.country)} onCheckedChange={(v) => setForm({ ...form, recargo_equivalencia: !!v })} data-testid="recargo-checkbox" />
+                  <Checkbox id="recargo_eq" checked={!isForeign(form.client.country) && form.recargo_equivalencia} disabled={isForeign(form.client.country)} onCheckedChange={(v) => setForm({ ...form, recargo_equivalencia: !!v })} data-testid="recargo-checkbox" />
                   <label htmlFor="recargo_eq" className="text-sm text-slate-600 cursor-pointer">Cliente en RE</label>
                 </div>
                 <p className="text-xs text-slate-400">Añade el recargo por tipo (21→5,2 · 10→1,4 · 4→0,5).</p>
@@ -803,13 +803,16 @@ export default function Invoices() {
               {calc.discountTotal > 0 && <div className="flex justify-between text-slate-500"><span>Descuento{gd ? ` global (-${gd}%)` : ""}</span><span className="tabular">-{eur(calc.discountTotal)}</span></div>}
               <div className="flex justify-between text-slate-500"><span>Base imponible</span><span className="tabular" data-testid="summary-base">{eur(calc.base)}</span></div>
               {calc.breakdown.map((b) => (
-                <div key={b.rate} className="flex justify-between text-slate-500"><span>IVA ({b.rate}%)</span><span className="tabular">{eur(b.cuota)}</span></div>
+                <div key={b.rate} data-testid={`iva-breakdown-${b.rate}`}>
+                  {calc.breakdown.length > 1 && <div className="flex justify-between text-slate-400 text-xs"><span>Base al {b.rate}%</span><span className="tabular">{eur(b.base)}</span></div>}
+                  <div className="flex justify-between text-slate-500"><span>IVA ({b.rate}%)</span><span className="tabular">{eur(b.cuota)}</span></div>
+                </div>
               ))}
               {calc.reAmount > 0 && calc.breakdown.filter((b) => b.reCuota > 0).map((b) => (
                 <div key={`re-${b.rate}`} className="flex justify-between text-slate-500"><span>Recargo equiv. ({b.reRate}%)</span><span className="tabular">{eur(b.reCuota)}</span></div>
               ))}
               {calc.suplidos > 0 && <div className="flex justify-between text-slate-500"><span>Suplidos</span><span className="tabular">{eur(calc.suplidos)}</span></div>}
-              {Number(form.irpf_rate) > 0 && !isExtraEU(form.client.country) && <div className="flex justify-between text-slate-500"><span>Retención IRPF (-{form.irpf_rate}%)</span><span className="tabular">-{eur(calc.irpfAmount)}</span></div>}
+              {Number(form.irpf_rate) > 0 && !isForeign(form.client.country) && <div className="flex justify-between text-slate-500"><span>Retención IRPF (-{form.irpf_rate}%)</span><span className="tabular">-{eur(calc.irpfAmount)}</span></div>}
               <div className="flex justify-between font-display text-lg font-semibold text-slate-900 pt-2 border-t border-slate-200 mt-2"><span>Total</span><span className="tabular" data-testid="summary-total">{eur(calc.total)}</span></div>
             </div>
 
