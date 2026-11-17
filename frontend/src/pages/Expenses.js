@@ -533,7 +533,7 @@ export default function Expenses() {
                       </Select>
                       )}
                     </div>
-                    <div className="space-y-1"><Label className="text-[11px] text-slate-500">Base (€)</Label><Input type="number" step="0.01" value={it.base_amount} onChange={(e) => updateBatchItem(it.key, { base_amount: e.target.value })} className="h-9" data-testid={`batch-base-${it.key}`} /></div>
+                    <div className="space-y-1"><Label className="text-[11px] text-slate-500">{it.doc_type === "ticket" ? "Importe total (€)" : "Base (€)"}</Label><Input type="number" step="0.01" value={it.base_amount} onChange={(e) => updateBatchItem(it.key, { base_amount: e.target.value })} className="h-9" data-testid={`batch-base-${it.key}`} /></div>
                     <div className="space-y-1"><Label className="text-[11px] text-slate-500">Total</Label><div className="h-9 flex items-center px-2 text-sm font-semibold tabular text-slate-900">{eur(batchRowTotal(it))}</div></div>
                   </div>
                 )}

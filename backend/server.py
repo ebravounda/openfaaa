@@ -2092,7 +2092,7 @@ async def annual_summary(year: Optional[int] = None, user=Depends(get_current_us
     for r in rates:
         iva_repercutido.append({"rate": r, "base": round(rep_map[r]["base"], 2),
                                 "cuota": round(rep_map[r]["cuota"], 2)})
-        sop_base = round(sum(e.get("base", 0) for e in expenses if e.get("iva_rate") == r), 2)
+        sop_base = round(sum(e.get("base", 0) for e in expenses if e.get("iva_rate") == r and e.get("doc_type") != "ticket"), 2)
         sop_cuota = round(sum(e.get("iva_amount", 0) for e in expenses if e.get("iva_rate") == r), 2)
         iva_soportado.append({"rate": r, "base": sop_base, "cuota": sop_cuota})
 

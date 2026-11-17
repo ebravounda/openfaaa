@@ -1,0 +1,32 @@
+{
+  "summary": "Tested the ticket OCR feature (expenses with no deductible IVA) end to end. Backend: 9/9 pytest passed. With ?ticket=true the scan of /app/ticket_test.jpg returns doc_type=ticket, iva_rate 0, base=total=13.5, category 'Material', vendor 'BAZAR ORIENTAL HUANG'. Without ?ticket the AI also returns 'ticket' (1/1 run). scan-batch?ticket=true with 2 files returns 2 ticket items, and the second is flagged as a batch duplicate. POST/PUT/bulk with doc_type ticket force iva 0 and total = base. A missing or unknown doc_type is saved as 'factura' with normal IVA (100 -> 121). Dashboard iva_soportado leaves tickets out. Frontend: the scan-ticket-button and scan-button are both visible. Ticking the manual ticket checkbox changes the label, locks IVA at 0 % and makes the total equal the amount. The saved row shows the Ticket badge and 'Sin IVA'. Scan ticket opens the dialog with the checkbox ticked, IVA 0 % and category Material. The batch dialog shows 'Ticket · sin IVA'. The normal invoice regression passes (121,00 €).",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "GET /api/export/libros (modelo_390.iva_soportado)", "issue": "Tickets are saved with iva_rate=0, so their base is added to the rate-0 bucket of IVA soportado in modelo 390. A ticket is not a 0 % operation. The cuota is still 0, but the reported base for rate 0 is inflated. Consider skipping doc_type=='ticket' in sop_base."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Gastos batch dialog", "issues": ["For ticket rows the amount field is still labelled 'Base (€)'. For consistency with the single dialog it could say 'Importe total (€)'."]}
+    ]
+  },
+  "test_report_links": ["/app/backend/tests/test_iter32_tickets.py", "/app/test_reports/pytest/iter32.xml"],
+  "action_items": [
+    "Optional: exclude doc_type=='ticket' expenses from modelo_390 iva_soportado rate-0 base",
+    "Optional: relabel the batch 'Base (€)' field as 'Importe total (€)' for ticket rows"
+  ],
+  "critical_code_review_comments": [
+    "Expenses.js is 557 lines, approaching the 700-line limit",
+    "compute_expense silently changes any unknown doc_type to 'factura'. This is fine, but a Literal['factura','ticket'] in ExpenseInput would give explicit 422 validation",
+    "OCR extracted a date of 2026-11-07 from '07/11/2026'. This is correct DD/MM parsing, noted only because it is in the future relative to some data"
+  ],
+  "updated_files": ["/app/backend/tests/test_iter32_tickets.py"],
+  "success_rate": {"backend": "100%", "frontend": "100%"},
+  "seed_data_creation": "None. The test expenses (TEST_Bazar, TEST_Proveedor, TEST_X, TEST_BulkBazar in year 2031, TEST_BazarUI and TEST_FacturaUI) were deleted by id. Scan uploads stored files in db.files and these were not removed.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "The ticket feature is covered by tests/test_iter32_tickets.py. It uses year 2031 to isolate the dashboard iva_soportado check. Run it with -p no:xdist -o addopts=''. Login needs the header X-OF-Client: web."
+}
