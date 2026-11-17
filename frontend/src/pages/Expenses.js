@@ -27,7 +27,7 @@ import { EXPENSE_CATEGORIES as CATEGORIES } from "@/lib/categories";
 const emptyForm = () => ({
   date: new Date().toISOString().slice(0, 10),
   vendor_name: "", vendor_nif: "", description: "", category: "General",
-  base_amount: "", iva_rate: "21", invoice_number: "", attachment_path: "", save_provider: false,
+  base_amount: "", iva_rate: "21", invoice_number: "", attachment_path: "", save_provider: false, doc_type: "factura",
 });
 
 export default function Expenses() {
@@ -43,6 +43,7 @@ export default function Expenses() {
   const [previewUrl, setPreviewUrl] = useState("");
   const [previewType, setPreviewType] = useState("");
   const fileRef = useRef(null);
+  const ticketMode = useRef(false);
   const [batchOpen, setBatchOpen] = useState(false);
   const [batchItems, setBatchItems] = useState([]);
   const [batchSaving, setBatchSaving] = useState(false);
@@ -56,7 +57,7 @@ export default function Expenses() {
   useEffect(() => { load(); loadProviders(); }, []);
 
   const base = Number(form.base_amount) || 0;
-  const ivaAmount = (base * Number(form.iva_rate)) / 100;
+  const ivaAmount = form.doc_type === "ticket" ? 0 : (base * Number(form.iva_rate)) / 100;
 
   const clearPreview = () => {
     if (previewUrl) URL.revokeObjectURL(previewUrl);
@@ -80,7 +81,7 @@ export default function Expenses() {
       date: exp.date, vendor_name: exp.vendor_name || "", vendor_nif: exp.vendor_nif || "",
       description: exp.description || "", category: CATEGORIES.includes(exp.category) ? exp.category : "General",
       base_amount: String(exp.base ?? exp.base_amount ?? ""), iva_rate: String(exp.iva_rate),
-      invoice_number: exp.invoice_number || "",
+      invoice_number: exp.invoice_number || "", doc_type: exp.doc_type || "factura",
       attachment_path: exp.attachment_path || "", save_provider: false,
     });
     if (exp.attachment_path) loadPreview(exp.attachment_path);
@@ -97,7 +98,7 @@ export default function Expenses() {
       if (files.length === 1) {
         const fd = new FormData();
         fd.append("file", files[0]);
-        const { data } = await api.post("/expenses/scan", fd, { headers: { "Content-Type": "multipart/form-data" } });
+        const { data } = await api.post(`/expenses/scan${ticketMode.current ? "?ticket=true" : ""}`, fd, { headers: { "Content-Type": "multipart/form-data" } });
         const ex = data.extracted || {};
         clearPreview();
         setEditingId(null);
@@ -110,6 +111,7 @@ export default function Expenses() {
           base_amount: ex.base_amount ? String(ex.base_amount) : "",
           iva_rate: IVA_OPTIONS.includes(String(ex.iva_rate)) ? String(ex.iva_rate) : "21",
           invoice_number: ex.invoice_number || "",
+          doc_type: ex.doc_type === "ticket" ? "ticket" : "factura",
           attachment_path: data.attachment_path || "",
           save_provider: false,
         });
@@ -121,7 +123,7 @@ export default function Expenses() {
       } else {
         const fd = new FormData();
         files.forEach((f) => fd.append("files", f));
-        const { data } = await api.post("/expenses/scan-batch", fd, { headers: { "Content-Type": "multipart/form-data" } });
+        const { data } = await api.post(`/expenses/scan-batch${ticketMode.current ? "?ticket=true" : ""}`, fd, { headers: { "Content-Type": "multipart/form-data" } });
         const items = (data.items || []).map((it) => {
           const ex = it.extracted || {};
           return {
@@ -141,6 +143,7 @@ export default function Expenses() {
             base_amount: ex.base_amount ? String(ex.base_amount) : "",
             iva_rate: IVA_OPTIONS.includes(String(ex.iva_rate)) ? String(ex.iva_rate) : "21",
             invoice_number: ex.invoice_number || "",
+            doc_type: ex.doc_type === "ticket" ? "ticket" : "factura",
           };
         });
         setBatchItems(items);
@@ -157,7 +160,7 @@ export default function Expenses() {
 
   const updateBatchItem = (key, patch) => setBatchItems((arr) => arr.map((i) => (i.key === key ? { ...i, ...patch } : i)));
   const removeBatchItem = (key) => setBatchItems((arr) => arr.filter((i) => i.key !== key));
-  const batchRowTotal = (i) => (Number(i.base_amount) || 0) * (1 + Number(i.iva_rate) / 100);
+  const batchRowTotal = (i) => (Number(i.base_amount) || 0) * (1 + (i.doc_type === "ticket" ? 0 : Number(i.iva_rate)) / 100);
 
   const fileUrl = (path) => `${API}/files/${path}`;
   const openFile = (path) => { if (path) window.open(`${API}/files/${path}`, "_blank", "noopener"); };
@@ -183,7 +186,7 @@ export default function Expenses() {
         date: i.date, vendor_name: i.vendor_name, vendor_nif: i.vendor_nif,
         description: i.description, category: i.category,
         base_amount: Number(i.base_amount), iva_rate: Number(i.iva_rate),
-        invoice_number: i.invoice_number, attachment_path: i.attachment_path,
+        invoice_number: i.invoice_number, attachment_path: i.attachment_path, doc_type: i.doc_type,
       }));
       const { data } = await api.post("/expenses/bulk", { items });
       toast.success(`${data.created} gasto(s) guardados`);
@@ -229,7 +232,7 @@ export default function Expenses() {
     const payload = {
       date: form.date, vendor_name: form.vendor_name, vendor_nif: form.vendor_nif,
       description: form.description, category: form.category, invoice_number: form.invoice_number,
-      base_amount: base, iva_rate: Number(form.iva_rate), attachment_path: form.attachment_path,
+      base_amount: base, iva_rate: form.doc_type === "ticket" ? 0 : Number(form.iva_rate), doc_type: form.doc_type || "factura", attachment_path: form.attachment_path,
     };
     try {
       if (editingId) {
@@ -268,7 +271,10 @@ export default function Expenses() {
         </div>
         <div className="flex items-center gap-2">
           <input ref={fileRef} type="file" multiple accept="image/*,application/pdf" onChange={onScanFile} className="hidden" data-testid="scan-file-input" />
-          <Button onClick={() => fileRef.current?.click()} disabled={scanning} className="bg-[#0052FF] hover:bg-[#0040CC] text-white rounded-xl shadow-[0_4px_14px_0_rgba(0,82,255,0.39)] transition-all hover:-translate-y-0.5 active:scale-95" data-testid="scan-button">
+          <Button variant="outline" onClick={() => { ticketMode.current = true; fileRef.current?.click(); }} disabled={scanning} className="border-amber-300 text-amber-800 bg-amber-50 hover:bg-amber-100 rounded-xl transition-all" data-testid="scan-ticket-button">
+            <Receipt className="w-4 h-4 mr-2" strokeWidth={1.5} /> Escanear ticket
+          </Button>
+          <Button onClick={() => { ticketMode.current = false; fileRef.current?.click(); }} disabled={scanning} className="bg-[#0052FF] hover:bg-[#0040CC] text-white rounded-xl shadow-[0_4px_14px_0_rgba(0,82,255,0.39)] transition-all hover:-translate-y-0.5 active:scale-95" data-testid="scan-button">
             {scanning ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <ScanLine className="w-4 h-4 mr-2" strokeWidth={1.5} />}
             {scanning ? "Analizando…" : "Escanear con IA"}
           </Button>
@@ -318,12 +324,13 @@ export default function Expenses() {
                     <span className="inline-flex items-center gap-1.5">
                       {exp.attachment_path && <Paperclip className="w-3.5 h-3.5 text-slate-400" strokeWidth={1.5} />}
                       {exp.vendor_name}
+                      {exp.doc_type === "ticket" && <span className="text-[10px] font-semibold uppercase tracking-wide bg-amber-100 text-amber-800 rounded px-1.5 py-0.5" data-testid={`expense-ticket-badge-${exp.id}`}>Ticket</span>}
                     </span>
                     {exp.description ? <span className="text-slate-400 font-normal"> · {exp.description}</span> : null}
                   </TableCell>
                   <TableCell className="text-sm text-slate-500">{exp.category}</TableCell>
                   <TableCell className="text-right text-sm tabular">{eur(exp.base)}</TableCell>
-                  <TableCell className="text-right text-sm text-[#0052FF] tabular">{eur(exp.iva_amount)} <span className="text-slate-400">({exp.iva_rate}%)</span></TableCell>
+                  <TableCell className="text-right text-sm text-[#0052FF] tabular">{exp.doc_type === "ticket" ? <span className="text-slate-400">Sin IVA</span> : <>{eur(exp.iva_amount)} <span className="text-slate-400">({exp.iva_rate}%)</span></>}</TableCell>
                   <TableCell className="text-right text-sm font-semibold tabular">{eur(exp.total)}</TableCell>
                   <TableCell className="text-right">
                     <div className="flex items-center justify-end gap-0.5">
@@ -421,11 +428,15 @@ export default function Expenses() {
                 <div className="space-y-2"><Label>Descripción</Label><Input value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} data-testid="expense-description" /></div>
                 <div className="space-y-2"><Label>Nº factura</Label><Input value={form.invoice_number} onChange={(e) => setForm({ ...form, invoice_number: e.target.value })} placeholder="Opcional" data-testid="expense-invoice-number" /></div>
               </div>
+              <div className="flex items-center gap-2 rounded-lg border border-amber-200 bg-amber-50/60 p-3">
+                <Checkbox id="is_ticket" checked={form.doc_type === "ticket"} onCheckedChange={(v) => setForm({ ...form, doc_type: v ? "ticket" : "factura", iva_rate: v ? "0" : "21" })} data-testid="expense-ticket-checkbox" />
+                <label htmlFor="is_ticket" className="text-sm text-slate-700 cursor-pointer"><b>Es un ticket</b> (bazar, almacén, gasolinera…): se guarda por el total, sin IVA deducible</label>
+              </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div className="space-y-2"><Label>Base imponible (€)</Label><Input type="number" step="0.01" value={form.base_amount} onChange={(e) => setForm({ ...form, base_amount: e.target.value })} data-testid="expense-base" /></div>
+                <div className="space-y-2"><Label>{form.doc_type === "ticket" ? "Importe total del ticket (€)" : "Base imponible (€)"}</Label><Input type="number" step="0.01" value={form.base_amount} onChange={(e) => setForm({ ...form, base_amount: e.target.value })} data-testid="expense-base" /></div>
                 <div className="space-y-2">
                   <Label>Tipo de IVA</Label>
-                  <Select value={form.iva_rate} onValueChange={(v) => setForm({ ...form, iva_rate: v })}>
+                  <Select value={form.doc_type === "ticket" ? "0" : form.iva_rate} onValueChange={(v) => setForm({ ...form, iva_rate: v })} disabled={form.doc_type === "ticket"}>
                     <SelectTrigger data-testid="expense-iva"><SelectValue /></SelectTrigger>
                     <SelectContent>{IVA_OPTIONS.map((o) => <SelectItem key={o} value={o}>{o}%</SelectItem>)}</SelectContent>
                   </Select>
@@ -513,10 +524,14 @@ export default function Expenses() {
                     </div>
                     <div className="space-y-1">
                       <Label className="text-[11px] text-slate-500">IVA</Label>
+                      {it.doc_type === "ticket" ? (
+                        <button type="button" onClick={() => updateBatchItem(it.key, { doc_type: "factura", iva_rate: "21" })} className="h-9 w-full rounded-md border border-amber-200 bg-amber-50 text-amber-800 text-xs font-medium" title="Pulsa para tratarlo como factura con IVA" data-testid={`batch-ticket-${it.key}`}>Ticket · sin IVA</button>
+                      ) : (
                       <Select value={it.iva_rate} onValueChange={(v) => updateBatchItem(it.key, { iva_rate: v })}>
                         <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
                         <SelectContent>{IVA_OPTIONS.map((o) => <SelectItem key={o} value={o}>{o}%</SelectItem>)}</SelectContent>
                       </Select>
+                      )}
                     </div>
                     <div className="space-y-1"><Label className="text-[11px] text-slate-500">Base (€)</Label><Input type="number" step="0.01" value={it.base_amount} onChange={(e) => updateBatchItem(it.key, { base_amount: e.target.value })} className="h-9" data-testid={`batch-base-${it.key}`} /></div>
                     <div className="space-y-1"><Label className="text-[11px] text-slate-500">Total</Label><div className="h-9 flex items-center px-2 text-sm font-semibold tabular text-slate-900">{eur(batchRowTotal(it))}</div></div>

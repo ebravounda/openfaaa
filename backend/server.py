@@ -106,6 +106,7 @@ class ExpenseInput(BaseModel):
     iva_rate: float = 21
     invoice_number: str = ""
     attachment_path: str = ""
+    doc_type: str = "factura"  # "factura" o "ticket" (sin IVA deducible)
 
 
 class ExpenseBulkInput(BaseModel):
@@ -302,6 +303,10 @@ def _validate_invoice(data) -> None:
 
 
 def compute_expense(exp: dict) -> dict:
+    if exp.get("doc_type") == "ticket":
+        exp["iva_rate"] = 0
+    else:
+        exp["doc_type"] = "factura"
     base = round(exp["base_amount"], 2)
     iva_amount = round(base * exp["iva_rate"] / 100, 2)
     exp["base"] = base
@@ -2913,7 +2918,7 @@ async def delete_contact(contact_id: str, user=Depends(get_current_user)):
 
 # ---------- Expense document scan (OCR) ----------
 @api.post("/expenses/scan")
-async def scan_expense(file: UploadFile = File(...), user=Depends(get_current_user)):
+async def scan_expense(file: UploadFile = File(...), ticket: bool = Query(False), user=Depends(get_current_user)):
     plan = await plan_for_user(user)
     if not plan["features"].get("ocr"):
         raise _plan_denied(plan, "ocr")
@@ -2959,7 +2964,7 @@ async def scan_expense(file: UploadFile = File(...), user=Depends(get_current_us
         raise HTTPException(status_code=400, detail="No se pudo procesar el documento")
 
     try:
-        extracted = await asyncio.wait_for(extract_expense(image_b64), timeout=90)
+        extracted = await asyncio.wait_for(extract_expense(image_b64, force_ticket=ticket), timeout=90)
     except asyncio.TimeoutError:
         logger.error("OCR timeout (90s)")
         raise HTTPException(status_code=504, detail="El análisis con IA tardó demasiado. Inténtalo de nuevo.")
@@ -3002,7 +3007,7 @@ async def _prep_pages_from_file(data: bytes, ext: str, ct: str, max_pages: int):
 
 
 @api.post("/expenses/scan-batch")
-async def scan_expense_batch(files: List[UploadFile] = File(...), user=Depends(get_current_user)):
+async def scan_expense_batch(files: List[UploadFile] = File(...), ticket: bool = Query(False), user=Depends(get_current_user)):
     plan = await plan_for_user(user)
     if not plan["features"].get("ocr"):
         raise _plan_denied(plan, "ocr")
@@ -3058,7 +3063,7 @@ async def scan_expense_batch(files: List[UploadFile] = File(...), user=Depends(g
     async def _run_one(it):
         async with sem:
             try:
-                ex = await asyncio.wait_for(extract_expense(it["image_b64"]), timeout=90)
+                ex = await asyncio.wait_for(extract_expense(it["image_b64"], force_ticket=ticket), timeout=90)
                 return (it, ex, None)
             except Exception as e:
                 logger.error(f"OCR batch item failed: {e}")

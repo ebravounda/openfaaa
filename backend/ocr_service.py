@@ -5,21 +5,29 @@ import logging
 
 logger = logging.getLogger(__name__)
 EMERGENT_LLM_KEY = os.environ.get("EMERGENT_LLM_KEY")
+CATEGORIES = ["General", "Suministros", "Telefonía e internet", "Combustible", "Restauración y dietas",
+              "Viajes y alojamiento", "Alquiler", "Reparaciones y mantenimiento", "Servicios profesionales",
+              "Transporte", "Seguros", "Servicios bancarios", "Publicidad y marketing", "Material de oficina",
+              "Material", "Compras de mercaderías", "Trabajos de otras empresas", "Software", "Formación",
+              "Tributos", "Servicios", "Otros"]
 
 SYSTEM_MSG = (
     "Eres un experto contable español especializado en leer facturas y tickets de gasto con MÁXIMA precisión. "
     "Recibes la imagen de UNA sola factura o ticket de compra. Analízala con seriedad y cuidado, revisando "
     "importes, fechas, NIF y número de factura. Responde EXCLUSIVAMENTE con un objeto JSON válido, sin texto "
     "adicional ni bloques de código. Usa estas claves exactas:\n"
-    '{"vendor_name": string, "vendor_nif": string, "invoice_number": string, "date": "YYYY-MM-DD", '
+    '{"doc_type": "factura" | "ticket", "vendor_name": string, "vendor_nif": string, "invoice_number": string, "date": "YYYY-MM-DD", '
     '"description": string, "category": string, "base_amount": number, '
     '"iva_rate": number, "total": number}\n'
     "Reglas estrictas:\n"
+    "- 'doc_type': 'ticket' si es un ticket de caja o factura simplificada (tiendas, bazares, almacenes, gasolineras, "
+    "restaurantes…) que NO identifica al comprador con su NIF; 'factura' si es una factura completa con los datos del cliente.\n"
     "- 'vendor_name': el emisor/proveedor de la factura (quien cobra), NO el cliente.\n"
     "- 'vendor_nif': NIF/CIF del proveedor en formato español (p.ej. B12345678). Si no aparece, cadena vacía.\n"
     "- 'invoice_number': el número o serie de la factura tal cual aparece; si no hay, cadena vacía.\n"
     "- 'date': fecha de emisión en formato YYYY-MM-DD.\n"
-    "- 'category' debe ser uno de: General, Suministros, Material, Servicios, Alquiler, Software, Transporte, Otros.\n"
+    "- 'category' debe ser uno de: " + ", ".join(CATEGORIES) + ". Elige según lo que se compró "
+    "(p. ej. comida → Restauración y dietas, gasolina → Combustible, artículos de bazar o ferretería → Material).\n"
     "- 'iva_rate' debe ser uno de: 21, 10, 4, 0.\n"
     "- 'base_amount' es la base imponible (sin IVA) y 'total' el importe total con IVA, ambos como número decimal con punto.\n"
     "- Verifica la coherencia: base_amount + IVA debe aproximarse al total. Si solo ves el total con IVA, calcula la base según el tipo detectado.\n"
@@ -40,7 +48,7 @@ def _parse_json(text: str) -> dict:
     return json.loads(text)
 
 
-async def extract_expense(image_base64: str) -> dict:
+async def extract_expense(image_base64: str, force_ticket: bool = False) -> dict:
     from emergentintegrations.llm.chat import LlmChat, UserMessage, ImageContent
 
     chat = LlmChat(
@@ -59,8 +67,8 @@ async def extract_expense(image_base64: str) -> dict:
         data = _parse_json(text)
     except Exception as e:
         logger.error(f"OCR parse error: {e} | raw: {text[:500]}")
-        return {"vendor_name": "", "vendor_nif": "", "invoice_number": "", "date": "", "description": "",
-                "category": "General", "base_amount": 0, "iva_rate": 21, "total": 0}
+        return {"doc_type": "ticket" if force_ticket else "factura", "vendor_name": "", "vendor_nif": "", "invoice_number": "", "date": "", "description": "",
+                "category": "General", "base_amount": 0, "iva_rate": 0 if force_ticket else 21, "total": 0}
 
     def num(v):
         try:
@@ -71,14 +79,20 @@ async def extract_expense(image_base64: str) -> dict:
     rate = num(data.get("iva_rate", 21))
     if rate not in (21, 10, 4, 0):
         rate = 21
+    is_ticket = force_ticket or str(data.get("doc_type", "")).lower() == "ticket"
+    total = num(data.get("total", 0))
+    base = num(data.get("base_amount", 0))
+    if is_ticket:
+        base, rate = total or round(base * (1 + rate / 100), 2), 0
     return {
+        "doc_type": "ticket" if is_ticket else "factura",
         "vendor_name": str(data.get("vendor_name", "") or ""),
         "vendor_nif": str(data.get("vendor_nif", "") or ""),
         "invoice_number": str(data.get("invoice_number", "") or ""),
         "date": str(data.get("date", "") or ""),
         "description": str(data.get("description", "") or ""),
         "category": str(data.get("category", "General") or "General"),
-        "base_amount": num(data.get("base_amount", 0)),
+        "base_amount": base,
         "iva_rate": rate,
-        "total": num(data.get("total", 0)),
+        "total": total,
     }
