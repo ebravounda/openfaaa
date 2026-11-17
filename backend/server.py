@@ -276,12 +276,10 @@ def _validate_invoice(data) -> None:
     cl = data.client
     if not (cl.name or "").strip():
         errors.append("El nombre del cliente es obligatorio.")
-    foreign = foreign_tax.is_foreign(getattr(cl, "country", "ES"))
+    cl.country = foreign_tax.detect_country(cl.nif, getattr(cl, "country", "ES"))
+    foreign = foreign_tax.is_foreign(cl.country)
     if not (cl.nif or "").strip():
         errors.append("El VAT / identificación fiscal del cliente es obligatorio." if foreign else "El NIF/CIF del cliente es obligatorio.")
-    elif not foreign and not spanish_tax.validate_nif(cl.nif):
-        errors.append(f"El NIF/CIF '{cl.nif}' no es válido (revisa la letra de control). "
-                      "Si es un cliente extranjero, elige su país.")
     if not data.line_items:
         errors.append("Añade al menos un concepto a la factura.")
     valid_types = {"general", "exento", "no_sujeto", "suplido", "intracomunitaria"}
@@ -1525,7 +1523,9 @@ async def lookup_nif(nif: str, user=Depends(get_current_user)):
     def _norm(v):
         return (v or "").strip().upper().replace(" ", "").replace("-", "").replace(".", "").removeprefix("ES")
 
-    num = _norm(nif)
+    raw = (nif or "").strip().upper().replace(" ", "").replace("-", "").replace(".", "")
+    eu_cc = raw[:2] if len(raw) > 4 and raw[:2].isalpha() and raw[:2] != "ES" and foreign_tax.is_eu("GR" if raw[:2] == "EL" else raw[:2]) else ""
+    num = raw[2:] if eu_cc else _norm(nif)
     if not num:
         raise HTTPException(status_code=400, detail="Introduce un NIF/CIF")
 
@@ -1539,7 +1539,7 @@ async def lookup_nif(nif: str, user=Depends(get_current_user)):
 
     # 2) Validación local (DNI/NIE/CIF). VIES solo valida IVA de empresas, así que
     # un NIE/DNI de autónomo es válido aunque VIES no lo reconozca.
-    local_valid = spanish_tax.validate_nif(num)
+    local_valid = False if eu_cc else spanish_tax.validate_nif(num)
 
     # 3) VIES (valida y, para no-ES, suele devolver nombre/dirección)
     name = address = ""
@@ -1548,7 +1548,7 @@ async def lookup_nif(nif: str, user=Depends(get_current_user)):
         async with httpx.AsyncClient(timeout=12) as http_client:
             r = await http_client.post(
                 "https://ec.europa.eu/taxation_customs/vies/rest-api/check-vat-number",
-                json={"countryCode": "ES", "vatNumber": num})
+                json={"countryCode": eu_cc or "ES", "vatNumber": num})
         r.raise_for_status()
         d = r.json()
         vies_valid = bool(d.get("valid"))
@@ -1565,7 +1565,8 @@ async def lookup_nif(nif: str, user=Depends(get_current_user)):
 
     source = "VIES (Comisión Europea)" if vies_valid else ("Validación local (DNI/NIE/CIF)" if local_valid else "No válido")
     return {"valid": vies_valid or local_valid, "name": name, "address": address, "email": "",
-            "phone": "", "nif": num, "source": source}
+            "phone": "", "nif": num, "source": source,
+            "country": ("GR" if eu_cc == "EL" else eu_cc) or None}
 
 
 @api.post("/invoices/{invoice_id}/send-email")

@@ -29,6 +29,17 @@ def legend(country) -> str:
     return LEGEND_EU if is_eu(country) else LEGEND_EXTRA
 
 
+def detect_country(nif, country) -> str:
+    """Si el país es ES pero el ID empieza por un prefijo de IVA de la UE (IT, FR, EL…), usa ese país."""
+    c = norm_country(country)
+    raw = (nif or "").strip().upper().replace(" ", "").replace("-", "").replace(".", "")
+    if c == "ES" and len(raw) > 4 and raw[:2].isalpha() and raw[:2] != "ES":
+        p = "GR" if raw[:2] == "EL" else raw[:2]
+        if p in EU and any(ch.isdigit() for ch in raw[2:]):
+            return p
+    return c
+
+
 def vat_id(cl: dict) -> str:
     """ID para VeriFactu: en la UE, el NIF-IVA con prefijo de país."""
     raw = (cl.get("nif") or "").strip().upper().replace(" ", "").replace(".", "").replace("-", "")
@@ -44,6 +55,7 @@ def vat_id(cl: dict) -> str:
 def apply_foreign(inv: dict) -> bool:
     """Cliente extranjero: todas las líneas pasan a no sujetas, sin IRPF ni recargo."""
     cl = inv.get("client") or {}
+    cl["country"] = detect_country(cl.get("nif"), cl.get("country"))
     foreign = is_foreign(cl.get("country"))
     inv["foreign_client"] = foreign
     inv["foreign_eu"] = foreign and is_eu(cl.get("country"))

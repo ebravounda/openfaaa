@@ -1,14 +1,19 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Globe2 } from "lucide-react";
 import { Label } from "@/components/ui/label";
 import { CountryCombobox } from "@/components/CountryCombobox";
-import { isForeign, isExtraEU, looksSpanishId, countryName } from "@/lib/countries";
+import { isForeign, isExtraEU, looksSpanishId, countryName, euPrefixCountry } from "@/lib/countries";
 
 // País + aviso «¿VAT extracomunitario?» bajo el NIF del cliente.
 export const ClientCountryField = ({ country, nif, onChange, testid = "client-country" }) => {
   const [open, setOpen] = useState(false);
   const c = country || "ES";
   const foreign = isForeign(c);
+  useEffect(() => {
+    const p = euPrefixCountry(nif);
+    if (p && (country || "ES") === "ES") onChange(p);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [nif]);
   const suggest = c === "ES" && (nif || "").trim().length >= 5 && !looksSpanishId(nif);
   return (
     <div className="space-y-2 sm:col-span-2">
@@ -17,7 +22,7 @@ export const ClientCountryField = ({ country, nif, onChange, testid = "client-co
       {suggest && (
         <div className="text-xs rounded-md border border-amber-200 bg-amber-50 text-amber-800 p-2 flex items-start gap-2" data-testid={`${testid}-suggest`}>
           <Globe2 className="w-4 h-4 shrink-0 mt-0.5" />
-          <span>No parece un NIF, CIF, NIE o DNI español. ¿Deseas agregar un <b>VAT extranjero</b> (UE, como Italia, o de fuera, como un RUT de Chile)?{" "}
+          <span>No parece un NIF, CIF, NIE o DNI español. Puedes emitir la factura igualmente, pero si es un cliente extranjero elige su país para que vaya sin IVA.{" "}
             <button type="button" className="underline font-medium" onClick={() => setOpen(true)} data-testid={`${testid}-suggest-yes`}>Sí, elegir país</button>
           </span>
         </div>

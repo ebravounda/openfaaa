@@ -1,6 +1,6 @@
 import { useEffect, useState, useMemo, useRef } from "react";
 import { ClientCountryField } from "@/components/ClientCountryField";
-import { isForeign, isExtraEU } from "@/lib/countries";
+import { isForeign, isExtraEU, looksSpanishId } from "@/lib/countries";
 import { toast } from "sonner";
 import api, { API, eur, formatApiErrorDetail } from "@/lib/api";
 import Layout from "@/components/Layout";
@@ -133,7 +133,7 @@ export default function Invoices() {
     setLookingUp(true);
     try {
       const { data } = await api.get(`/lookup/nif?nif=${encodeURIComponent(nif)}`);
-      if (!data.valid) return toast.error("NIF/CIF no válido según VIES");
+      if (!data.valid) return toast.warning("No se ha encontrado este NIF/VAT en VIES. Puedes emitir la factura igualmente.");
       if (data.name) {
         setForm((f) => ({
           ...f,
@@ -143,6 +143,7 @@ export default function Invoices() {
             address: data.address || f.client.address,
             email: data.email || f.client.email,
             phone: data.phone || f.client.phone,
+            country: data.country || f.client.country,
           },
         }));
         toast.success(data.source === "Contactos guardados" ? `Datos cargados de tus contactos: ${data.name}` : `Encontrado: ${data.name}`);
@@ -341,6 +342,9 @@ export default function Invoices() {
         await api.post("/invoices", payload);
         if (form.save_client) { try { await api.post("/contacts", { ...form.client, kind: "client" }); loadClients(); } catch (e) {} }
         toast.success("Factura emitida");
+        if (!isForeign(form.client.country) && !looksSpanishId(form.client.nif)) {
+          toast.warning(`No se ha podido verificar el NIF/CIF "${form.client.nif}". La factura se ha emitido; revísalo antes de enviarla a VeriFactu.`, { duration: 9000 });
+        }
       }
       setOpen(false);
       setForm(emptyForm());

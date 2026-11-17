@@ -12,3 +12,11 @@ export const isForeign = (code) => !!code && code !== "ES";
 
 const ES_ID = /^([0-9]{8}[A-Z]|[XYZ][0-9]{7}[A-Z]|[ABCDEFGHJNPQRSUVW][0-9]{7}[0-9A-J])$/;
 export const looksSpanishId = (v) => ES_ID.test((v || "").toUpperCase().replace(/[\s.-]/g, ""));
+
+// Prefijo de IVA europeo en el ID (IT0890… → IT; EL… → GR).
+export const euPrefixCountry = (v) => {
+  const raw = (v || "").toUpperCase().replace(/[\s.-]/g, "");
+  if (raw.length < 5 || !/^[A-Z]{2}/.test(raw) || raw.startsWith("ES") || !/\d/.test(raw.slice(2))) return null;
+  const p = raw.startsWith("EL") ? "GR" : raw.slice(0, 2);
+  return EU.has(p) ? p : null;
+};
