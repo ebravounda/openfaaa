@@ -6,15 +6,15 @@ import { Seo } from "@/components/Seo";
 const ACCENT = "#0052FF";
 
 const RESOURCES = [
-  [Building2, "Empresas", "Consulta la empresa vinculada a cada clave.", "GET /api/v1/companies"],
-  [Users, "Clientes", "Crea y lista clientes, también extranjeros con su VAT.", "POST /api/v1/contacts"],
+  [Building2, "Empresas", "Consulta la empresa vinculada a cada clave.", "GET /api/v1/me"],
+  [Users, "Clientes", "Crea y lista clientes, también extranjeros con su VAT.", "POST /api/v1/clients"],
   [FileText, "Facturas", "Emite facturas con varios tipos de IVA, IRPF y numeración automática.", "POST /api/v1/invoices"],
   [FileDown, "PDF", "Descarga el PDF de cualquier factura con tu logo.", "GET /api/v1/invoices/{id}/pdf"],
   [ShieldCheck, "VeriFactu", "Envía la factura a la AEAT y consulta su estado y CSV.", "POST /api/v1/invoices/{id}/verifactu"],
   [Receipt, "Gastos", "Registra gastos y tickets desde tu sistema.", "POST /api/v1/expenses"],
 ];
 
-const EVENTS = ["invoice.created", "invoice.verifactu.accepted", "invoice.verifactu.rejected", "client.created", "expense.created"];
+const EVENTS = ["invoice.created", "invoice.verifactu.accepted", "invoice.verifactu.rejected", "invoice.verifactu.error", "client.created", "expense.created"];
 
 const PLANS = [
   { name: "Platino", price: "24,99€", items: ["API REST completa", "1 empresa con su clave", "60 peticiones por minuto", "Webhooks firmados y registro de actividad"] },

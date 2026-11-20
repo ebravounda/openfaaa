@@ -477,3 +477,11 @@ Sistema de facturación para España: crear facturas introduciendo datos (CIF/NI
 - Iter 41c (2026-10-06): Panel "Estado de webhooks Powens" en /conciliacion visible SOLO para admin (`components/PowensWebhookPanel.js`). Backend: colección `powens_webhook_log` (fecha, evento, resultado: OK/duplicado/usuario no encontrado/firma inválida/error), `last_sync_at`/`last_sync_count` en `powens_clients`, endpoint `GET /api/admin/powens/webhook-log` (403 si no admin). Webhook URL dada de alta por el usuario en Powens: https://openfactura.es/api/powens/webhook.
 
 
+
+## Iteración 42 (2026-11-20) — API pública REST, seguridad y planes editables
+- API REST `/api/v1` (Platino, Multiempresas, gestorías): una clave por empresa, logs, webhooks firmados HMAC, panel `/desarrolladores`, docs `/api/v1/docs`.
+- Seguridad: webhooks solo a direcciones públicas https (bloqueo de localhost/IP internas/metadata, sin redirecciones; comprobado al crear y al enviar). Límite de peticiones compartido en MongoDB (`api_rate`, TTL) con cabecera Retry-After. Probar un webhook eliminado da 404.
+- Página pública de venta `/para-desarrolladores` (enlaces en el pie de la home y de /precios, y en sitemap). La fila «API REST y webhooks» se añadió a la comparativa de /precios.
+- Planes (super admin): ahora se guardan «Máx. empresas / autónomos» y las opciones Multiempresa/TPV (antes se perdían al guardar). Nuevo `GET /api/public/plans`; la home y /precios muestran los precios y límites reales configurados (antes eran fijos en el código).
+- Pendiente (menor): hueco de DNS-rebinding en webhooks y ventana fija de 1 minuto en el límite.
+

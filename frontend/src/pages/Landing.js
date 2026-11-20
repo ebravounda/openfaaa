@@ -4,6 +4,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { Seo } from "@/components/Seo";
 import { Button } from "@/components/ui/button";
 import { LatestArticles } from "@/components/blog/BlogCards";
+import { usePublicPlans, applyLive } from "@/lib/publicPlans";
 import {
   Accordion, AccordionItem, AccordionTrigger, AccordionContent,
 } from "@/components/ui/accordion";
@@ -372,10 +373,10 @@ const PROXIMAMENTE = [
 const BANKS = ["Santander", "CaixaBank", "BBVA", "Sabadell", "Bankinter", "ING"];
 
 const PLANS = [
-  { name: "Básico", price: "0€", per: "/mes", desc: "Para empezar a facturar", features: ["Hasta 10 facturas al mes", "Clientes y presupuestos", "Cálculo de IVA e IRPF"], cta: "Empezar gratis", highlight: false },
-  { name: "Medio", price: "9,99€", per: "/mes", desc: "Para autónomos en activo", features: ["Hasta 100 facturas al mes", "Envío de facturas por email", "Escáner de gastos con IA"], cta: "Probar 14 días gratis", highlight: false },
-  { name: "Platino", price: "24,99€", per: "/mes", desc: "Sin límites y con VeriFactu", features: ["Facturas ilimitadas", "VeriFactu AEAT + tu certificado", "Cobros con tarjeta (Stripe)"], cta: "Probar 14 días gratis", highlight: true },
-  { name: "Multiempresas", price: "49,99€", per: "/mes", desc: "Para asesorías y grupos", features: ["Hasta 20 empresas y autónomos", "Todo lo de Platino en cada empresa", "Certificado y contabilidad por empresa"], cta: "Probar 14 días gratis", highlight: false, badge: "Nuevo" },
+  { id: "basico", name: "Básico", price: "0€", per: "/mes", desc: "Para empezar a facturar", features: ["Hasta 10 facturas al mes", "Clientes y presupuestos", "Cálculo de IVA e IRPF"], cta: "Empezar gratis", highlight: false },
+  { id: "medio", name: "Medio", price: "9,99€", per: "/mes", desc: "Para autónomos en activo", features: ["Hasta 100 facturas al mes", "Envío de facturas por email", "Escáner de gastos con IA"], cta: "Probar 14 días gratis", highlight: false },
+  { id: "platino", name: "Platino", price: "24,99€", per: "/mes", desc: "Sin límites y con VeriFactu", features: ["Facturas ilimitadas", "VeriFactu AEAT + tu certificado", "Cobros con tarjeta (Stripe)"], cta: "Probar 14 días gratis", highlight: true },
+  { id: "multiempresas", name: "Multiempresas", price: "49,99€", per: "/mes", desc: "Para asesorías y grupos", features: ["Hasta 20 empresas y autónomos", "Todo lo de Platino en cada empresa", "Certificado y contabilidad por empresa"], cta: "Probar 14 días gratis", highlight: false, badge: "Nuevo" },
 ];
 
 function CursorPointer({ clicking }) {
@@ -569,6 +570,7 @@ function GestoriaMockup() {
 }
 
 export default function Landing() {
+  const livePlans = usePublicPlans();
   return (
     <div className="min-h-screen bg-white text-slate-900 font-outfit selection:bg-[#0052FF]/20">
       <Seo
@@ -1012,8 +1014,8 @@ export default function Landing() {
             <p className="text-slate-500 mt-3 text-center max-w-2xl mx-auto leading-relaxed">14 días gratis en cualquier plan. Opción anual con 2 meses gratis. Sin permanencia.</p>
           </Reveal>
           <motion.div variants={stagger} initial="hidden" whileInView="show" viewport={{ once: true }} className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mt-12 items-stretch">
-            {PLANS.map((p) => (
-              <motion.div key={p.name} variants={fadeUp} data-testid={`plan-${p.name}`} className={`rounded-2xl border p-6 bg-white flex flex-col ${p.highlight ? "border-[#0052FF] shadow-xl ring-1 ring-[#0052FF]/20" : "border-slate-200"}`}>
+            {PLANS.map((sp) => applyLive(sp, livePlans[sp.id])).map((p, i) => (
+              <motion.div key={PLANS[i].id} variants={fadeUp} data-testid={`plan-${PLANS[i].name}`} className={`rounded-2xl border p-6 bg-white flex flex-col ${p.highlight ? "border-[#0052FF] shadow-xl ring-1 ring-[#0052FF]/20" : "border-slate-200"}`}>
                 <div className="flex items-center justify-between">
                   <div className="font-semibold text-lg text-slate-900">{p.name}</div>
                   {p.badge ? <span className="text-[10px] font-semibold uppercase tracking-wider bg-[#0052FF]/10 text-[#0052FF] rounded-full px-2 py-0.5">{p.badge}</span>
@@ -1024,11 +1026,11 @@ export default function Landing() {
                 <ul className="mt-5 space-y-2.5 flex-1">
                   {p.features.map((f) => (<li key={f} className="flex items-start gap-2 text-sm text-slate-600"><span className="mt-[7px] w-1.5 h-1.5 rounded-full shrink-0" style={{ background: ACCENT }} /> {f}</li>))}
                 </ul>
-                <Link to="/registro" className="mt-6"><Button className="w-full rounded-full text-white" style={{ background: ACCENT }} data-testid={`plan-cta-${p.name}`}>{p.cta}</Button></Link>
+                <Link to="/registro" className="mt-6"><Button className="w-full rounded-full text-white" style={{ background: ACCENT }} data-testid={`plan-cta-${PLANS[i].name}`}>{p.cta}</Button></Link>
               </motion.div>
             ))}
           </motion.div>
-          <p className="text-center text-sm text-slate-500 mt-8">¿Gestionas más de 20 empresas? Disponemos de un plan de <strong>50 empresas</strong> y planes a medida. <a href="mailto:soporte@goroky.com" className="font-medium" style={{ color: ACCENT }}>Escríbenos</a> y lo adaptamos a tu asesoría.</p>
+          <p className="text-center text-sm text-slate-500 mt-8">¿Gestionas más de {livePlans.multiempresas?.max_companies ?? 20} empresas? Disponemos de un plan de <strong>{livePlans.multiempresas_50?.max_companies ?? 50} empresas</strong> y planes a medida. <a href="mailto:soporte@goroky.com" className="font-medium" style={{ color: ACCENT }}>Escríbenos</a> y lo adaptamos a tu asesoría.</p>
         </div>
       </section>
 

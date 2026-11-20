@@ -401,6 +401,12 @@ async def list_public_plans(user=Depends(get_current_user)):
     return await plans_list()
 
 
+@api.get("/public/plans")
+async def list_marketing_plans():
+    keys = ("id", "name", "price", "max_invoices", "max_contacts", "max_companies", "features")
+    return [{k: p.get(k) for k in keys} for p in await plans_list()]
+
+
 @api.post("/contact-sales")
 async def contact_sales(data: ContactSalesInput, user=Depends(get_current_user)):
     from html import escape as _esc

@@ -116,7 +116,8 @@ async def update_plans(data: PlansUpdateInput, admin_user=Depends(require_admin)
             "price": p.get("price", 0),
             "max_invoices": p.get("max_invoices"),
             "max_contacts": p.get("max_contacts"),
-            "features": {k: bool(feats.get(k)) for k in ("email", "verifactu", "ocr")},
+            "max_companies": max(1, int(p.get("max_companies") or 1)),
+            "features": {k: bool(feats.get(k)) for k in ("email", "verifactu", "ocr", "multi_company", "pos")},
         }
     await db.global_settings.update_one({"_id": "plans"}, {"$set": {"plans": clean}}, upsert=True)
     await _audit(admin_user["id"], "edit_plans", None)
@@ -265,7 +266,7 @@ async def set_plan(user_id: str, data: PlanInput, admin_user=Depends(require_adm
     if data.plan not in PLANS:
         raise HTTPException(status_code=400, detail="Plan no válido")
     upd = {"plan": data.plan}
-    p = PLANS.get(data.plan) or {}
+    p = (await load_plans()).get(data.plan) or {}
     if "gestor" in f"{data.plan} {p.get('name', '')}".lower():
         u = await db.users.find_one({"_id": ObjectId(user_id)}, {"role": 1, "gestoria_id": 1, "name": 1, "email": 1, "firm_name": 1})
         if u and u.get("role") == "user" and not u.get("gestoria_id"):

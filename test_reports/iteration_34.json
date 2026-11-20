@@ -1,0 +1,35 @@
+{
+  "summary": "Tested the API security changes and the public page /para-desarrolladores. Backend: 20/20 tests pass in /app/backend/tests/test_iter_api_security.py after two fixes to my own test. I had first used /v1/companies and /contacts, which do not exist; the real endpoints are /clients and /expenses. A 123/130 result in the first run came from my burst running across a minute boundary. Webhook SSRF guard: 15 bad URLs all return 400 with a Spanish message. They are localhost, 127.0.0.1, 169.254.169.254, 10.x, 192.168.x, 100.64.x, 0.0.0.0, [::1], [::ffff:127.0.0.1], decimal and hex IPs, localtest.me, http://, user:pw@ and .invalid. https://httpbin.org/post is accepted. The ping test logs a 200 delivery; on a deleted or unknown webhook it returns 404. Rate limit: the api_rate collection has a TTL index on exp (expireAfterSeconds 0) and docs keyed '<key_id>:<minute>' with n. Admin gets exactly 120 OK then 429; Platino (clidemo1) gets exactly 60 OK then 429. Retry-After is between 1 and 60, and a second key is not affected. Regression: /v1 me, clients, invoices and expenses return 200, X-API-Key also works, no key gives 401, and /v1/docs returns 200. Frontend: /para-desarrolladores loads without login and every requested testid is present and visible. Register and CTA go to /registro, back goes to /, and docs opens /api/v1/docs (Swagger) in a new tab. Home footer-api and pricing-footer-api go to the page, and /precios has the row 'API REST y webhooks'. At 390px there is no horizontal overflow (scrollWidth is 390). The /desarrolladores panel renders, and the webhook form shows the SSRF error toast. One content bug: the marketing page lists endpoints that do not exist.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "_deliver / _check_webhook_url", "issue": "DNS-rebinding gap: the URL is checked with getaddrinfo, then httpx resolves the host again on its own. An attacker's DNS could return a public IP for the check and 127.0.0.1 for the request. To close it, pin the checked IP for the connection (custom transport, or connect to the IP with a Host/SNI header). Redirects are already off (follow_redirects=False), which is good."},
+      {"endpoint": "api_ctx rate limit", "issue": "Fixed 1-minute window, so up to 2x the limit is possible across a boundary. Requests rejected with 429 still increment n. Both are acceptable; noting for awareness."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "ApiPublic RESOURCES", "issue": "The page advertises 'GET /api/v1/companies' (Empresas card) and 'POST /api/v1/contacts' (Clientes card). Neither exists; both return 404. The real endpoints are GET /api/v1/me and GET/POST /api/v1/clients. Developers who copy these paths will get 404s.", "selector": "[data-testid='api-resource-empresas'], [data-testid='api-resource-clientes']", "priority": "MEDIUM"}
+    ],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "/para-desarrolladores", "issues": ["The event chips (api-page-events) leave out invoice.verifactu.error, which the backend EVENTS list and the panel do include (cosmetic)."]}
+    ]
+  },
+  "test_report_links": ["/app/backend/tests/test_iter_api_security.py", "/app/test_reports/pytest/pytest_api_security.xml"],
+  "action_items": [
+    "ApiPublic.jsx RESOURCES: change 'GET /api/v1/companies' to 'GET /api/v1/me' and 'POST /api/v1/contacts' to 'POST /api/v1/clients'",
+    "Optional: add invoice.verifactu.error to the EVENTS chips on the page",
+    "Optional hardening: pin the resolved IP in _deliver to prevent DNS rebinding"
+  ],
+  "critical_code_review_comments": [
+    "public_api.py: TOCTOU between the SSRF check and the httpx connect (DNS rebinding)",
+    "Rate-limit index creation uses a module global flag. Fine, but it could move to startup."
+  ],
+  "updated_files": ["/app/backend/tests/test_iter_api_security.py"],
+  "success_rate": {"backend": "100%", "frontend": "95% (endpoint text mismatch on the marketing page)"},
+  "seed_data_creation": "None. Created TEST_ API keys and one webhook (httpbin.org); all keys are revoked and the webhook is deleted. Live TEST_ keys: 0, active test hooks: 0. Maintenance stays disabled. No invoices were created and nothing was sent to AEAT.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Run with: pytest tests/test_iter_api_security.py -n 0. The pytest.ini xdist would run the rate-limit bursts in parallel, so use -n 0. The rate-limit tests wait for the start of a minute. clidemo1 is Platino (rate 60); admin is 120. The /v1 endpoints are me, clients, invoices, invoices/{id}, invoices/{id}/pdf, invoices/{id}/verifactu and expenses; there is no /companies or /contacts."
+}

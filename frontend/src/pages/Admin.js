@@ -307,7 +307,8 @@ export default function Admin() {
           price: Number(p.price) || 0,
           max_invoices: p.max_invoices === "" || p.max_invoices === null ? null : Number(p.max_invoices),
           max_contacts: p.max_contacts === "" || p.max_contacts === null ? null : Number(p.max_contacts),
-          features: { email: !!p.features.email, verifactu: !!p.features.verifactu, ocr: !!p.features.ocr },
+          max_companies: Math.max(1, Number(p.max_companies) || 1),
+          features: { email: !!p.features.email, verifactu: !!p.features.verifactu, ocr: !!p.features.ocr, multi_company: !!p.features.multi_company, pos: !!p.features.pos },
         };
       });
       const { data } = await api.put("/admin/plans", payload);
@@ -502,8 +503,12 @@ export default function Admin() {
                 <Label className="text-xs">Contactos (vacío = ilimitado)</Label>
                 <Input type="number" placeholder="∞" value={p.max_contacts ?? ""} onChange={(e) => patchPlan(idx, "max_contacts", e.target.value)} data-testid={`plan-contacts-${p.id}`} />
               </div>
+              <div className="space-y-2">
+                <Label className="text-xs">Máx. empresas / autónomos</Label>
+                <Input type="number" min="1" value={p.max_companies ?? 1} onChange={(e) => patchPlan(idx, "max_companies", e.target.value)} data-testid={`plan-companies-${p.id}`} />
+              </div>
               <div className="space-y-2 pt-1">
-                {[["email", "Envío por email"], ["ocr", "Escaneo OCR"], ["verifactu", "VeriFactu AEAT"]].map(([key, lbl]) => (
+                {[["email", "Envío por email"], ["ocr", "Escaneo OCR"], ["verifactu", "VeriFactu AEAT"], ["multi_company", "Multiempresa"], ["pos", "TPV"]].map(([key, lbl]) => (
                   <div key={key} className="flex items-center justify-between">
                     <span className="text-sm text-slate-600">{lbl}</span>
                     <Switch checked={!!p.features?.[key]} onCheckedChange={(v) => patchFeature(idx, key, v)} data-testid={`plan-feat-${key}-${p.id}`} />

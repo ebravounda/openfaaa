@@ -211,6 +211,10 @@ export default function Pricing() {
                       <Check className="w-4 h-4 text-emerald-500 shrink-0" strokeWidth={2} />
                       {p.max_contacts == null ? <span className="flex items-center gap-1"><InfinityIcon className="w-3.5 h-3.5" /> Contactos ilimitados</span> : <span><strong>{p.max_contacts}</strong> contactos</span>}
                     </div>
+                    <div className="flex items-center gap-2 text-slate-700" data-testid={`plan-max-companies-${p.id}`}>
+                      <Check className="w-4 h-4 text-emerald-500 shrink-0" strokeWidth={2} />
+                      <span><strong>{p.max_companies ?? 1}</strong> {(p.max_companies ?? 1) === 1 ? "empresa" : "empresas / autónomos"}</span>
+                    </div>
                     {FEATURES.map((f) => (
                       <div key={f.key} className={`flex items-center gap-2 ${p.features?.[f.key] ? "text-slate-700" : "text-slate-400"}`}>
                         {p.features?.[f.key]

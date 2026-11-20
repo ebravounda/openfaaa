@@ -2,14 +2,15 @@ import { Link } from "react-router-dom";
 import { Helmet } from "react-helmet-async";
 import { Check, ArrowRight, ArrowLeft } from "lucide-react";
 import { Seo } from "@/components/Seo";
+import { usePublicPlans, applyLive } from "@/lib/publicPlans";
 
 const ACCENT = "#0052FF";
 
 const PLANS = [
-  { name: "Básico", price: "0€", per: "/mes", desc: "Para empezar a facturar", features: ["Hasta 10 facturas al mes", "Clientes y presupuestos", "Cálculo de IVA e IRPF", "Facturas en PDF"], highlight: false },
-  { name: "Medio", price: "9,99€", per: "/mes", desc: "Para autónomos en activo", features: ["Hasta 100 facturas al mes", "Envío de facturas por email", "Escáner de gastos con IA (OCR)", "Todo lo del plan Básico"], highlight: false },
-  { name: "Platino", price: "24,99€", per: "/mes", desc: "Sin límites y con VeriFactu", features: ["Facturas ilimitadas", "VeriFactu AEAT + tu certificado", "Cobros con tarjeta (Stripe)", "Todo lo del plan Medio"], highlight: true },
-  { name: "Multiempresas", price: "49,99€", per: "/mes", desc: "Para asesorías y grupos", features: ["Hasta 20 empresas y autónomos", "Certificado y contabilidad por empresa", "Todo lo de Platino en cada empresa", "Plan de 50 empresas disponible"], highlight: false, badge: "Nuevo" },
+  { id: "basico", name: "Básico", price: "0€", per: "/mes", desc: "Para empezar a facturar", features: ["Hasta 10 facturas al mes", "Clientes y presupuestos", "Cálculo de IVA e IRPF", "Facturas en PDF"], highlight: false },
+  { id: "medio", name: "Medio", price: "9,99€", per: "/mes", desc: "Para autónomos en activo", features: ["Hasta 100 facturas al mes", "Envío de facturas por email", "Escáner de gastos con IA (OCR)", "Todo lo del plan Básico"], highlight: false },
+  { id: "platino", name: "Platino", price: "24,99€", per: "/mes", desc: "Sin límites y con VeriFactu", features: ["Facturas ilimitadas", "VeriFactu AEAT + tu certificado", "Cobros con tarjeta (Stripe)", "Todo lo del plan Medio"], highlight: true },
+  { id: "multiempresas", name: "Multiempresas", price: "49,99€", per: "/mes", desc: "Para asesorías y grupos", features: ["Hasta 20 empresas y autónomos", "Certificado y contabilidad por empresa", "Todo lo de Platino en cada empresa", "Plan de 50 empresas disponible"], highlight: false, badge: "Nuevo" },
 ];
 
 const COMPARISON = [
@@ -31,7 +32,22 @@ const FAQ = [
   ["¿Necesito más de 20 empresas?", "Disponemos de un plan de 50 empresas y planes a medida. Escríbenos a soporte@goroky.com y lo adaptamos."],
 ];
 
+const IDS = ["basico", "medio", "platino", "multiempresas"];
+
+function liveComparison(lp) {
+  if (!lp.basico) return COMPARISON;
+  const inv = (p) => (p.max_invoices == null ? "Ilimitadas" : String(p.max_invoices));
+  return COMPARISON.map((row) => {
+    if (row[0] === "Facturas al mes") return [row[0], ...IDS.map((id) => inv(lp[id]))];
+    if (row[0] === "Nº de empresas") return [row[0], ...IDS.slice(0, 3).map((id) => String(lp[id].max_companies)), `${lp.multiempresas.max_companies}${lp.multiempresas_50 ? ` (o ${lp.multiempresas_50.max_companies})` : ""}`];
+    return row;
+  });
+}
+
 export default function PreciosPublic() {
+  const lp = usePublicPlans();
+  const plans = PLANS.map((p) => applyLive(p, lp[p.id]));
+  const comparison = liveComparison(lp);
   return (
     <div className="min-h-screen bg-white text-slate-900 font-outfit">
       <Seo path="/precios" title="Precios y planes de facturación"
@@ -56,8 +72,8 @@ export default function PreciosPublic() {
         <p className="text-slate-500 mt-4 text-center max-w-2xl mx-auto text-lg">El programa de facturación para autónomos, pymes y asesorías en España. 14 días gratis, opción anual con 2 meses gratis y sin permanencia.</p>
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mt-14 items-stretch">
-          {PLANS.map((p) => (
-            <div key={p.name} data-testid={`ppub-plan-${p.name}`} className={`rounded-2xl border p-6 flex flex-col ${p.highlight ? "border-[#0052FF] shadow-xl ring-1 ring-[#0052FF]/20" : "border-slate-200"}`}>
+          {plans.map((p, i) => (
+            <div key={p.id} data-testid={`ppub-plan-${PLANS[i].name}`} className={`rounded-2xl border p-6 flex flex-col ${p.highlight ? "border-[#0052FF] shadow-xl ring-1 ring-[#0052FF]/20" : "border-slate-200"}`}>
               <div className="flex items-center justify-between">
                 <div className="font-semibold text-lg">{p.name}</div>
                 {p.badge ? <span className="text-[10px] font-semibold uppercase tracking-wider bg-[#0052FF]/10 text-[#0052FF] rounded-full px-2 py-0.5">{p.badge}</span>
@@ -80,7 +96,7 @@ export default function PreciosPublic() {
               <tr><th className="text-left p-3 font-semibold">Característica</th><th className="p-3 font-semibold">Básico</th><th className="p-3 font-semibold">Medio</th><th className="p-3 font-semibold text-[#0052FF]">Platino</th><th className="p-3 font-semibold">Multiempresas</th></tr>
             </thead>
             <tbody>
-              {COMPARISON.map((row, i) => (
+              {comparison.map((row, i) => (
                 <tr key={row[0]} className={i % 2 ? "bg-white" : "bg-slate-50/40"}>
                   <td className="p-3 text-slate-600">{row[0]}</td>
                   {row.slice(1).map((c, j) => <td key={j} className="p-3 text-center text-slate-700">{c}</td>)}
