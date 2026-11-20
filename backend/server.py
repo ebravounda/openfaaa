@@ -1,6 +1,7 @@
 from dotenv import load_dotenv
 from pathlib import Path
 import os
+import sys
 import asyncio
 load_dotenv(Path(__file__).parent / ".env")
 
@@ -3271,6 +3272,9 @@ _cors_env = os.environ.get("CORS_ORIGINS") or os.environ.get("FRONTEND_URL", "ht
 _cors_origins = [o.strip().rstrip("/") for o in _cors_env.split(",") if o.strip()]
 
 app.middleware("http")(maintenance_middleware)
+import public_api  # noqa: E402
+public_api.setup(app, sys.modules[__name__])
+app.middleware("http")(public_api.api_log_middleware)
 app.add_middleware(SecurityMiddleware)
 app.add_middleware(
     CORSMiddleware,

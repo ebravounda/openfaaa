@@ -17,7 +17,7 @@ SECURITY_HEADERS = {
 
 STATE_CHANGING = {"POST", "PUT", "PATCH", "DELETE"}
 # Rutas exentas de la comprobación anti-CSRF (autenticadas por firma/secreto, no por cookie).
-CSRF_EXEMPT_PREFIXES = ("/api/stripe/webhook", "/api/cron/")
+CSRF_EXEMPT_PREFIXES = ("/api/stripe/webhook", "/api/cron/", "/api/v1/")
 
 # Límite de tamaño del cuerpo de la petición (protección DoS): 12 MB.
 MAX_BODY_BYTES = 12 * 1024 * 1024
