@@ -1,231 +1,214 @@
 {
-  "project": "OpenFactura - TPV / POS Module (Square / Lightspeed / Holded Style)",
-  "context": "Modern, ultra-pro visual redesign for the Spanish POS invoicing module in /app/frontend/src/pages/Pos.js. Follows Holded design language with rounded-[20px]/rounded-[24px] surfaces, soft depth shadows shadow-[0_8px_30px_rgb(0,0,0,0.04)], brand blue #0052FF, display typography, and smooth micro-interactions.",
-  "tech_stack": {
-    "framework": "React.js (.js files)",
-    "styling": "Tailwind CSS + shadcn/ui primitives",
-    "icons": "lucide-react",
-    "notifications": "sonner",
-    "fonts": [
-      "Manrope (font-display for headings & totals)",
-      "IBM Plex Sans (body)",
-      "IBM Plex Mono (font-mono tabular-nums for money & tickets)"
-    ]
+  "build_now": "Choose the smallest useful set of features from the user's scope that delivers the fastest aha moment through a complete core workflow, honoring explicit user priorities.",
+  "meta": {
+    "project": "OpenFactura - Developer API Landing Redesign (/para-desarrolladores)",
+    "target_path": "/para-desarrolladores",
+    "primary_actor": "Software Developer / CTO / Technical Lead evaluating Spanish invoicing & VeriFactu REST API integration",
+    "locale": "es-ES (Spain, Europe)",
+    "currency": "EUR (€)",
+    "date_format": "DD/MM/YYYY",
+    "number_format": "1.234,56 € (European decimal comma)"
   },
-  "color_system": {
-    "primary": "#0052FF",
-    "primary_hover": "#0043CC",
-    "primary_light": "#EFF4FF",
-    "primary_glow": "rgba(0, 82, 255, 0.15)",
-    "background": "#F8FAFC",
-    "surface": "#FFFFFF",
-    "border_subtle": "rgba(226, 232, 240, 0.8)",
-    "border_active": "#0052FF",
+  "workflow_and_architecture": {
+    "workflow_trigger": "Developer arrives looking to integrate automated Spanish invoicing, VeriFactu compliance, and expense syncing into their SaaS/ERP/CRM.",
+    "user_decision_journey": [
+      "1. Verify developer ergonomic quality & real-world request/response shape in Hero (curl/fetch live interactive terminal).",
+      "2. Explore API capabilities across 6 core endpoints (Empresas, Clientes, Facturas, PDF, VeriFactu, Gastos) with immediate interactive endpoint inspector.",
+      "3. Understand architecture pillars: multi-tenant company isolation, HMAC-SHA256 signed webhooks with live interactive delivery trace simulation, and request audit logging.",
+      "4. Compare plans with transparent limits (Platino 24,99€/mes 60 req/min vs Multiempresas 49,99€/mes 120 req/min).",
+      "5. Resolve compliance & integration questions in interactive FAQ accordion.",
+      "6. Convert via primary CTA ('Empieza gratis' 14-day trial) or navigate to Swagger docs ('/api/v1/docs')."
+    ],
+    "workspace_layout": {
+      "type": "Focused Developer Landing Page (Single Page App with high-impact dark slate aesthetic matching OpenFactura home API section)",
+      "alternative_evaluated": "Light SaaS landing page identical to Pos/billing pages",
+      "tradeoff_rationale": "Developer marketing standard (Stripe, Resend, Clerk) favors dark void/slate backgrounds with high-contrast syntax highlighting, vibrant #0052FF glows, and live terminals. OpenFactura's home page already features dark slate-950 for its API section; bringing this dark-mode developer experience to /para-desarrolladores creates instant credibility, cohesive brand authority, and developer delight.",
+      "mobile_adaptation": "Two-column grids collapse to stacked single-column; terminal tabs switch horizontally with smooth swipe; sticky topbar retains quick docs and start buttons; webhook event pills wrap cleanly with tap-to-inspect modal."
+    }
+  },
+  "visual_system": {
+    "theme": "Dark Developer Tech Slate with OpenFactura Blue Glow (#0052FF)",
+    "surfaces": {
+      "background_void": "oklch(0.129 0.041 264.7)",
+      "surface_base": "oklch(0.208 0.040 265.8)",
+      "surface_elevated": "oklch(0.279 0.037 260.0)",
+      "surface_highlight": "oklch(0.350 0.035 260.0)",
+      "surface_glass": "oklch(0.208 0.040 265.8 / 0.75)"
+    },
+    "accents": {
+      "brand_primary": "oklch(0.528 0.263 262.9)",
+      "brand_hover": "oklch(0.460 0.260 262.9)",
+      "brand_light": "oklch(0.734 0.137 264.9)",
+      "brand_subtle": "oklch(0.528 0.263 262.9 / 0.15)"
+    },
     "text": {
-      "main": "#0F172A",
-      "muted": "#64748B",
-      "subtle": "#94A3B8"
+      "primary": "oklch(0.968 0.007 247.9)",
+      "secondary": "oklch(0.711 0.035 256.8)",
+      "muted": "oklch(0.550 0.020 260.0)",
+      "inverse": "oklch(0.129 0.041 264.7)"
     },
-    "table_states": {
-      "free": {
-        "bg": "bg-slate-50 hover:bg-slate-100",
-        "border": "border-slate-200",
-        "text": "text-slate-700",
-        "badge": "bg-slate-200/60 text-slate-600"
-      },
-      "occupied": {
-        "bg": "bg-amber-50/80 hover:bg-amber-100/80",
-        "border": "border-amber-300",
-        "text": "text-amber-900",
-        "badge": "bg-amber-500 text-white font-medium"
-      },
-      "active_selected": {
-        "bg": "bg-[#0052FF] text-white",
-        "border": "border-[#0052FF]",
-        "text": "text-white",
-        "shadow": "shadow-lg shadow-[#0052FF]/20"
-      }
+    "semantics": {
+      "success": "oklch(0.773 0.153 163.2)",
+      "warning": "oklch(0.837 0.164 84.4)",
+      "error": "oklch(0.719 0.169 13.4)",
+      "info": "oklch(0.734 0.137 264.9)"
     },
-    "payment_methods": {
-      "efectivo": {
-        "color": "#10B981",
-        "bg_active": "bg-emerald-50 border-emerald-500 text-emerald-700"
-      },
-      "tarjeta": {
-        "color": "#0052FF",
-        "bg_active": "bg-blue-50 border-[#0052FF] text-[#0052FF]"
-      },
-      "mixto": {
-        "color": "#8B5CF6",
-        "bg_active": "bg-purple-50 border-purple-500 text-purple-700"
+    "typography": {
+      "font_family_body": "Outfit, system-ui, -apple-system, sans-serif",
+      "font_family_mono": "JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace",
+      "scale": {
+        "hero_title": "text-4xl sm:text-5xl lg:text-6xl font-extrabold tracking-tight",
+        "section_title": "text-2xl sm:text-3xl lg:text-4xl font-bold tracking-tight",
+        "card_title": "text-base sm:text-lg font-semibold",
+        "body": "text-sm sm:text-base leading-relaxed",
+        "code_snippet": "font-mono text-xs sm:text-[13px] leading-relaxed"
       }
     }
   },
-  "layout_and_architecture": {
-    "header_session_bar": {
-      "wrapper": "flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-6 p-5 rounded-[24px] bg-white border border-slate-200/80 shadow-[0_4px_20px_rgb(0,0,0,0.03)] backdrop-blur-md",
-      "title_badge": "font-display text-2xl font-bold tracking-tight text-slate-900 flex items-center gap-2.5",
-      "session_indicator": "flex items-center gap-2 px-3.5 py-1.5 rounded-full text-xs font-semibold tracking-wide"
+  "sections_and_components": {
+    "header": {
+      "testids": ["api-page-logo", "api-page-header-register", "api-page-docs"],
+      "layout": "Sticky glass navbar with backdrop-blur-md, border-b border-white/10, logo, link to docs, and primary CTA pill button."
     },
-    "tab_navigation": {
-      "wrapper": "bg-slate-100/80 p-1.5 rounded-2xl border border-slate-200/60 inline-flex flex-wrap gap-1",
-      "trigger": "px-4 py-2 rounded-xl text-xs sm:text-sm font-medium transition-all duration-200 data-[state=active]:bg-white data-[state=active]:text-[#0052FF] data-[state=active]:shadow-sm data-[state=active]:font-semibold text-slate-600 hover:text-slate-900"
+    "hero_section": {
+      "headline": "Conecta tu plataforma con OpenFactura",
+      "badge": "API REST · v1 · Cumplimiento VeriFactu AEAT",
+      "description": "Emite facturas, envíalas a VeriFactu, descarga los PDF y registra gastos directamente desde tu ERP, tienda online o CRM. Una API pensada para desarrolladores, con avisos automáticos y registro de cada petición.",
+      "ctas": [
+        { "label": "Empieza gratis", "to": "/registro", "testid": "api-page-register", "variant": "primary" },
+        { "label": "Ver documentación", "href": "/api/v1/docs", "testid": "api-page-docs", "variant": "outline" }
+      ],
+      "interactive_terminal": {
+        "features": [
+          "Interactive tabs: cURL, Node.js / TypeScript, Python, and Live 201 Response.",
+          "Live typing animation effect on initial load or language switch.",
+          "One-click 'Copiar código' with toast feedback and copied icon check state.",
+          "Status badge: 201 Created (82ms) · VeriFactu ✓ AEAT Aceptada."
+        ],
+        "testid": "api-page-code"
+      }
     },
-    "sell_screen_grid": {
-      "container": "grid grid-cols-1 lg:grid-cols-12 gap-6 items-start",
-      "products_column": "lg:col-span-7 xl:col-span-8 space-y-5",
-      "cart_column": "lg:col-span-5 xl:col-span-4"
+    "resources_grid": {
+      "title": "Todo lo principal, en una sola API",
+      "subtitle": "Endpoints REST limpios, autenticación Bearer token por empresa y payloads JSON intuitivos.",
+      "cards": [
+        { "id": "me", "icon": "Building2", "title": "Empresas", "desc": "Consulta la empresa vinculada a cada clave.", "endpoint": "GET /api/v1/me", "method": "GET" },
+        { "id": "clients", "icon": "Users", "title": "Clientes", "desc": "Crea y lista clientes, también extranjeros con su VAT.", "endpoint": "POST /api/v1/clients", "method": "POST" },
+        { "id": "invoices", "icon": "FileText", "title": "Facturas", "desc": "Emite facturas con varios tipos de IVA, IRPF y numeración automática.", "endpoint": "POST /api/v1/invoices", "method": "POST" },
+        { "id": "pdf", "icon": "FileDown", "title": "PDF", "desc": "Descarga el PDF de cualquier factura con tu logo.", "endpoint": "GET /api/v1/invoices/{id}/pdf", "method": "GET" },
+        { "id": "verifactu", "icon": "ShieldCheck", "title": "VeriFactu", "desc": "Envía la factura a la AEAT y consulta su estado y CSV.", "endpoint": "POST /api/v1/invoices/{id}/verifactu", "method": "POST" },
+        { "id": "expenses", "icon": "Receipt", "title": "Gastos", "desc": "Registra gastos y tickets desde tu sistema.", "endpoint": "POST /api/v1/expenses", "method": "POST" }
+      ],
+      "hover_animation": "framer-motion card hover with subtle border glow, method badge, and micro-elevation."
+    },
+    "pillars_and_webhooks": {
+      "pillars": [
+        { "icon": "KeyRound", "title": "Una clave por empresa", "desc": "Cada clave solo ve los datos de su empresa. Ideal para asesorías y grupos con varias sociedades." },
+        { "icon": "Webhook", "title": "Avisos automáticos", "desc": "Recibe un aviso firmado (HMAC-SHA256) cuando se crea una factura o Hacienda la acepta." },
+        { "icon": "Activity", "title": "Todo queda registrado", "desc": "Desde tu panel ves cada petición, su resultado y los avisos enviados." }
+      ],
+      "interactive_webhook_simulator": {
+        "events": [
+          "invoice.created",
+          "invoice.verifactu.accepted",
+          "invoice.verifactu.rejected",
+          "invoice.verifactu.error",
+          "client.created",
+          "expense.created"
+        ],
+        "animation": "Pulsing event pipeline node visualizer with animated payload inspector on event chip click."
+      }
+    },
+    "plans_block": {
+      "title": "Incluida en Platino y Multiempresas",
+      "subtitle": "Sin sorpresas ni costes ocultos por llamada a la API.",
+      "plans": [
+        {
+          "name": "Platino",
+          "price": "24,99 €",
+          "cadence": "/mes",
+          "features": [
+            "API REST completa",
+            "1 empresa con su clave",
+            "60 peticiones por minuto",
+            "Webhooks firmados y registro de actividad"
+          ],
+          "highlight": false,
+          "testid": "api-plan-platino"
+        },
+        {
+          "name": "Multiempresas",
+          "price": "49,99 €",
+          "cadence": "/mes",
+          "features": [
+            "API REST completa",
+            "Una clave por cada empresa (hasta 20 o 50)",
+            "120 peticiones por minuto por clave",
+            "Webhooks y registro por empresa"
+          ],
+          "highlight": true,
+          "badge": "Recomendado para asesorías & integradores",
+          "testid": "api-plan-multiempresas"
+        }
+      ],
+      "all_plans_link": { "label": "Ver todos los planes", "to": "/precios", "testid": "api-page-pricing" }
+    },
+    "faq_accordion": {
+      "title": "Preguntas frecuentes",
+      "items": [
+        {
+          "q": "¿Qué planes incluyen la API?",
+          "a": "Platino y Multiempresas. Las gestorías también pueden crear claves para las empresas de sus clientes."
+        },
+        {
+          "q": "¿Cómo me autentico?",
+          "a": "Con una clave de API en la cabecera Authorization: Bearer of_live_... Cada clave pertenece a una sola empresa y puede ser de solo lectura o de lectura y escritura."
+        },
+        {
+          "q": "¿Las facturas cumplen VeriFactu?",
+          "a": "Sí. Las facturas emitidas por la API siguen el mismo proceso que en la app: huella encadenada, QR y envío a la AEAT con el certificado de la empresa."
+        },
+        {
+          "q": "¿Dónde veo lo que hace mi sistema?",
+          "a": "En el panel «API» de tu cuenta verás cada petición, su resultado, los avisos (webhooks) enviados y el estado de la conexión."
+        }
+      ]
+    },
+    "final_cta": {
+      "headline": "Integra OpenFactura hoy",
+      "subheadline": "Prueba gratis 14 días. Crea tu clave en el panel «API» y emite tu primera factura en minutos.",
+      "button": { "label": "Crear cuenta", "to": "/registro", "testid": "api-page-cta" }
     }
   },
-  "component_design_specs": {
-    "product_card": {
-      "class_name": "group relative flex flex-col justify-between p-4 rounded-[20px] bg-white border border-slate-200/80 hover:border-[#0052FF]/50 shadow-[0_4px_16px_rgb(0,0,0,0.02)] hover:shadow-[0_12px_28px_rgba(0,82,255,0.08)] active:scale-[0.98] transition-all duration-200 cursor-pointer overflow-hidden text-left min-h-[110px]",
-      "title": "font-medium text-sm text-slate-800 group-hover:text-[#0052FF] line-clamp-2 transition-colors",
-      "price_tag": "font-display text-base font-bold text-[#0052FF] tabular",
-      "stock_badge": "text-[11px] px-2 py-0.5 rounded-md font-medium bg-slate-100 text-slate-500",
-      "hover_accent": "absolute inset-x-0 bottom-0 h-1 bg-[#0052FF] opacity-0 group-hover:opacity-100 transition-opacity"
-    },
-    "category_filter_pills": {
-      "container": "flex items-center gap-2 overflow-x-auto pb-1 no-scrollbar",
-      "pill_active": "px-4 py-2 rounded-full text-xs font-semibold text-white shadow-md shadow-slate-900/10 scale-[1.02] transition-all",
-      "pill_inactive": "px-4 py-2 rounded-full text-xs font-medium bg-slate-100 text-slate-600 hover:bg-slate-200/70 transition-all cursor-pointer"
-    },
-    "cart_sidebar": {
-      "container": "rounded-[24px] border border-slate-200/80 bg-white/95 backdrop-blur-xl p-5 shadow-[0_12px_36px_rgb(0,0,0,0.05)] h-fit lg:sticky lg:top-4 space-y-4",
-      "header": "flex items-center justify-between border-b border-slate-100 pb-3",
-      "item_row": "group relative flex items-center justify-between gap-3 p-2.5 rounded-xl hover:bg-slate-50 transition-colors border border-transparent hover:border-slate-100",
-      "quantity_control": "flex items-center gap-1 bg-slate-100/80 rounded-lg p-1 border border-slate-200/50",
-      "qty_button": "w-7 h-7 rounded-md bg-white hover:bg-slate-200/80 flex items-center justify-center text-slate-700 shadow-2xs active:scale-95 transition-transform",
-      "total_summary_box": "p-4 rounded-2xl bg-slate-50 border border-slate-100 space-y-2 mt-4",
-      "checkout_button": "w-full h-13 rounded-2xl bg-[#0052FF] hover:bg-[#0043CC] text-white font-display text-base font-semibold shadow-lg shadow-[#0052FF]/25 hover:shadow-xl hover:shadow-[#0052FF]/35 active:scale-[0.99] transition-all duration-200 flex items-center justify-center gap-2"
-    },
-    "tables_grid_view": {
-      "table_card": "group relative rounded-[22px] border border-slate-200/90 bg-white p-5 shadow-[0_4px_20px_rgb(0,0,0,0.03)] hover:shadow-md transition-all cursor-pointer flex flex-col justify-between min-h-[120px]",
-      "table_header": "flex items-center justify-between",
-      "status_badge_free": "inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200/60",
-      "status_badge_occupied": "inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-amber-50 text-amber-800 border border-amber-200/80 animate-pulse"
-    },
-    "checkout_modal": {
-      "dialog_content": "rounded-[28px] border border-slate-200/80 bg-white/95 backdrop-blur-2xl p-6 shadow-2xl max-w-md w-full",
-      "payment_tile": "group flex flex-col items-center justify-center gap-2 p-4 rounded-2xl border-2 transition-all cursor-pointer text-sm font-semibold active:scale-95",
-      "tendered_quick_buttons": "flex gap-2 mt-2",
-      "quick_chip": "px-3 py-1.5 rounded-xl border border-slate-200 bg-slate-50 hover:bg-slate-100 text-xs font-medium text-slate-700 active:scale-95 transition-all"
+  "animation_guidelines": {
+    "engine": "framer-motion",
+    "specs": {
+      "hero_entrance": { "initial": { "opacity": 0, "y": 20 }, "animate": { "opacity": 1, "y": 0 }, "transition": { "duration": 0.5 } },
+      "terminal_typing": "Timer/interval driven streaming string for cURL command simulation",
+      "card_stagger": { "staggerChildren": 0.08 },
+      "hover_micro_interaction": "whileHover: { y: -4, transition: { duration: 0.2 } }",
+      "webhook_ping": "animate-ping or motion.span continuous pulsing glow on active webhook socket indicator",
+      "reduced_motion": "All motion primitives respect prefers-reduced-motion media query"
     }
   },
-  "micro_interactions_and_animations": {
-    "fade_up": "of-fade-up",
-    "button_press": "active:scale-[0.97] transition-transform duration-150",
-    "card_hover_lift": "hover:-translate-y-0.5 transition-transform duration-200",
-    "badge_pulse": "animate-pulse"
-  },
-  "critical_data_testids_to_preserve": [
-    "pos-loading",
-    "pos-title",
-    "pos-session-badge",
-    "pos-tab-vender",
-    "pos-tab-mesas",
-    "pos-tab-productos",
-    "pos-tab-categorias",
-    "pos-tab-caja",
-    "pos-tab-ventas",
-    "pos-tab-ajustes",
-    "pos-tables-strip",
-    "pos-table-${name}",
-    "pos-cat-all",
-    "pos-cat-${name}",
-    "pos-product-${name}",
-    "pos-cart",
-    "pos-cart-clear",
-    "pos-cart-item-${name}",
-    "pos-qty-minus-${name}",
-    "pos-qty-plus-${name}",
-    "pos-note-${name}",
-    "pos-remove-${name}",
-    "pos-tip-input",
-    "pos-cart-total",
-    "pos-checkout-btn",
-    "pos-save-comanda-btn",
-    "pos-variant-dialog",
-    "pos-variant-${name}",
-    "pos-checkout-dialog",
-    "pos-method-${method}",
-    "pos-cash-given",
-    "pos-change",
-    "pos-cash-part",
-    "pos-confirm-pay",
-    "pos-sale-done",
-    "pos-new-sale",
-    "pos-print-receipt",
-    "pos-add-table",
-    "pos-table-card-${name}",
-    "pos-edit-table-${name}",
-    "pos-table-dialog",
-    "pos-table-name",
-    "pos-table-room",
-    "pos-table-save",
-    "pos-add-product",
-    "pos-product-row-${name}",
-    "pos-edit-product-${name}",
-    "pos-product-dialog",
-    "pos-product-name",
-    "pos-product-price",
-    "pos-product-tax",
-    "pos-product-category",
-    "pos-product-sku",
-    "pos-product-barcode",
-    "pos-product-track-stock",
-    "pos-product-stock",
-    "pos-add-variant",
-    "pos-product-save",
-    "pos-add-category",
-    "pos-category-card-${name}",
-    "pos-edit-category-${name}",
-    "pos-category-dialog",
-    "pos-category-name",
-    "pos-category-color",
-    "pos-category-save",
-    "pos-open-session",
-    "pos-opening-cash",
-    "pos-open-session-btn",
-    "pos-cash-summary",
-    "pos-expected-cash",
-    "pos-withdraw-btn",
-    "pos-deposit-btn",
-    "pos-close-session-btn",
-    "pos-movement-dialog",
-    "pos-movement-amount",
-    "pos-movement-reason",
-    "pos-movement-save",
-    "pos-close-dialog",
-    "pos-close-cash",
-    "pos-close-confirm",
-    "pos-ticket-row-${id}",
-    "pos-print-${id}",
-    "pos-refund-${id}",
-    "pos-settings",
-    "pos-settings-type",
-    "pos-settings-width",
-    "pos-settings-bizname",
-    "pos-settings-footer",
-    "pos-settings-tip",
-    "pos-settings-verifactu",
-    "pos-settings-save"
-  ],
-  "UNIVERSAL GUIDELINES FOR MAIN AGENT": [
-    "You tend to converge toward generic, 'on distribution' outputs. In frontend design, this creates what users call the 'AI slop' aesthetic. Avoid this: make creative, distinctive frontends that surprise and delight.",
-    "Dark colors look good when used independently without gradients. DO NOT use dark colors as gradients.",
-    "Don't make generic centered layouts, simplistic gradients, and uniform styling.",
-    "Create depth through layered design elements with z-index hierarchy.",
-    "Use glass-morphism effects with backdrop filters (12-24px blur).",
-    "You MUST NOT apply universal transition (e.g. transition: all). This results in breaking transforms. Always add transitions for specific interactive elements like button, input excluding transforms.",
-    "You MUST NOT center align the app container, i.e. do not add .App { text-align: center; } in the css file.",
-    "Always use modern button styles like pill-shaped, or sharp button with interaction animations & color relevant to the app style.",
-    "NEVER use AI assistant Emoji characters like 🤖🧠💭💡🔮🎯 etc for icons.",
-    "Every interaction needs micro-animations - hover states, transitions, parallax effects, and entrance animations.",
-    "Use generous spacing (2-3x more spacing than default). Cramped designs look cheap.",
-    "Subtle grain textures, noise overlays, custom cursors, selection states, and loading animations separate good from extraordinary.",
-    "Prioritize using pre-existing components from src/components/ui when applicable.",
-    "Use sonner for toasts.",
-    "All interactive and key informational elements MUST include data-testid attributes."
+  "required_testids_to_preserve": [
+    "api-page-title",
+    "api-page-register",
+    "api-page-docs",
+    "api-page-code",
+    "api-resource-empresas",
+    "api-resource-clientes",
+    "api-resource-facturas",
+    "api-resource-pdf",
+    "api-resource-verifactu",
+    "api-resource-gastos",
+    "api-page-events",
+    "api-plan-platino",
+    "api-plan-multiempresas",
+    "api-page-pricing",
+    "api-page-logo",
+    "api-page-header-register",
+    "api-page-back",
+    "api-page-cta"
   ]
 }

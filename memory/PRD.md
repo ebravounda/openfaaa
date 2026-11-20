@@ -484,4 +484,7 @@ Sistema de facturación para España: crear facturas introduciendo datos (CIF/NI
 - Página pública de venta `/para-desarrolladores` (enlaces en el pie de la home y de /precios, y en sitemap). La fila «API REST y webhooks» se añadió a la comparativa de /precios.
 - Planes (super admin): ahora se guardan «Máx. empresas / autónomos» y las opciones Multiempresa/TPV (antes se perdían al guardar). Nuevo `GET /api/public/plans`; la home y /precios muestran los precios y límites reales configurados (antes eran fijos en el código).
 - Pendiente (menor): hueco de DNS-rebinding en webhooks y ventana fija de 1 minuto en el límite.
+- Sección «API» en la home (`components/landing/ApiSection.js`, enlace «API» en el menú).
+- Rediseño oscuro y animado de `/para-desarrolladores`: terminal con escritura en vivo (cURL/Node.js/Python/Respuesta) y botón de copiar (`components/apipage/Terminal.js`), animación de webhooks (`components/apipage/WebhookFlow.js`), tarjetas con brillo al pasar el ratón, precios en vivo y preguntas frecuentes desplegables.
+
 
