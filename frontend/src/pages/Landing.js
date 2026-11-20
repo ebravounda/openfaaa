@@ -5,6 +5,7 @@ import { Seo } from "@/components/Seo";
 import { Button } from "@/components/ui/button";
 import { LatestArticles } from "@/components/blog/BlogCards";
 import { usePublicPlans, applyLive } from "@/lib/publicPlans";
+import { ApiSection } from "@/components/landing/ApiSection";
 import {
   Accordion, AccordionItem, AccordionTrigger, AccordionContent,
 } from "@/components/ui/accordion";
@@ -596,6 +597,7 @@ export default function Landing() {
             <a href="#impuestos" className="hover:text-slate-900 transition-colors">Impuestos</a>
             <a href="#funcionalidades" className="hover:text-slate-900 transition-colors">Funcionalidades</a>
             <a href="#gestorias" className="hover:text-slate-900 transition-colors">Gestorías</a>
+            <a href="#api" className="hover:text-slate-900 transition-colors" data-testid="nav-api">API</a>
             <a href="#precios" className="hover:text-slate-900 transition-colors">Precios</a>
             <Link to="/blog" className="hover:text-slate-900 transition-colors" data-testid="nav-blog">Blog</Link>
           </nav>
@@ -1005,6 +1007,8 @@ export default function Landing() {
           </motion.div>
         </div>
       </section>
+
+      <ApiSection />
 
       {/* Pricing */}
       <section id="precios" className="bg-[#F8FAFC] border-t border-slate-100">
