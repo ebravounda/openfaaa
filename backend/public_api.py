@@ -2,12 +2,15 @@
 import asyncio
 import hashlib
 import hmac
+import ipaddress
 import json
+import socket
 import secrets
 import time
 import uuid
 from datetime import datetime, timezone, timedelta
 from typing import List, Optional
+from urllib.parse import urlparse
 
 import httpx
 from bson import ObjectId
@@ -16,6 +19,7 @@ from fastapi.openapi.docs import get_swagger_ui_html
 from fastapi.openapi.utils import get_openapi
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
+from pymongo import ReturnDocument
 
 from database import db
 from auth import get_current_user, _public_user
@@ -24,7 +28,7 @@ from plans import plan_for_user
 RATE_LIMITS = {"platino": 60, "multiempresas": 120}
 EVENTS = ["invoice.created", "invoice.verifactu.accepted", "invoice.verifactu.rejected", "invoice.verifactu.error",
           "client.created", "expense.created"]
-_hits: dict = {}
+_rate_index_ready = False
 
 
 def _now():
@@ -52,17 +56,34 @@ async def require_api_plan(user=Depends(get_current_user)) -> dict:
 
 
 # ---------- Webhooks ----------
+async def _check_webhook_url(url: str):
+    p = urlparse(url)
+    if p.scheme != "https" or not p.hostname or p.username or p.password:
+        raise ValueError("La URL del webhook debe empezar por https:// y no llevar usuario/contrase\u00f1a")
+    try:
+        infos = await asyncio.get_running_loop().getaddrinfo(p.hostname, p.port or 443, type=socket.SOCK_STREAM)
+    except (socket.gaierror, UnicodeError):
+        raise ValueError("No se encuentra el dominio de la URL del webhook")
+    for info in infos:
+        ip = ipaddress.ip_address(info[4][0])
+        if not ip.is_global or ip.is_multicast:
+            raise ValueError("La URL del webhook debe ser una direcci\u00f3n p\u00fablica de internet (no se permiten direcciones internas)")
+
+
 async def _deliver(hook: dict, event: str, data: dict):
     body = json.dumps({"id": str(uuid.uuid4()), "event": event, "created_at": _now(), "data": data},
                       ensure_ascii=False, default=str).encode()
     sig = hmac.new(hook["secret"].encode(), body, hashlib.sha256).hexdigest()
     status, err = 0, ""
     try:
-        async with httpx.AsyncClient(timeout=10) as c:
+        await _check_webhook_url(hook["url"])
+        async with httpx.AsyncClient(timeout=10, follow_redirects=False) as c:
             r = await c.post(hook["url"], content=body, headers={
                 "Content-Type": "application/json", "User-Agent": "OpenFactura-Webhooks/1.0",
                 "X-OpenFactura-Event": event, "X-OpenFactura-Signature": f"sha256={sig}"})
             status = r.status_code
+    except ValueError as e:
+        err = str(e)
     except Exception as e:
         err = type(e).__name__
     await db.api_webhook_deliveries.insert_one({
@@ -181,8 +202,10 @@ async def list_hooks(user=Depends(require_api_plan)):
 @dev.post("/webhooks")
 async def create_hook(data: HookInput, user=Depends(require_api_plan)):
     comp = await _own_company(user, data.company_id)
-    if not data.url.startswith("https://"):
-        raise HTTPException(status_code=400, detail="La URL del webhook debe empezar por https://")
+    try:
+        await _check_webhook_url(data.url.strip())
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
     events = [e for e in data.events if e in EVENTS] or list(EVENTS)
     doc = {"id": str(uuid.uuid4()), "user_id": user["id"], "company_id": comp["id"], "company_name": comp.get("name", ""),
            "url": data.url.strip(), "events": events, "secret": "whsec_" + secrets.token_hex(24), "active": True, "created_at": _now()}
@@ -200,7 +223,7 @@ async def delete_hook(hook_id: str, user=Depends(get_current_user)):
 
 @dev.post("/webhooks/{hook_id}/test")
 async def test_hook(hook_id: str, user=Depends(require_api_plan)):
-    h = await db.api_webhooks.find_one({"id": hook_id, "user_id": user["id"]}, {"_id": 0})
+    h = await db.api_webhooks.find_one({"id": hook_id, "user_id": user["id"], "deleted": {"$ne": True}}, {"_id": 0})
     if not h:
         raise HTTPException(status_code=404, detail="Webhook no encontrado")
     await _deliver(h, "ping", {"message": "Prueba de webhook de OpenFactura"})
@@ -227,14 +250,19 @@ async def api_ctx(request: Request) -> dict:
     acc = await api_access(owner)
     if not acc["allowed"]:
         raise HTTPException(status_code=403, detail="Tu plan ya no incluye la API. Cambia a Platino o Multiempresas.")
-    minute = int(time.time() // 60)
-    k = (key["id"], minute)
-    _hits[k] = _hits.get(k, 0) + 1
-    if len(_hits) > 5000:
-        for old in [x for x in _hits if x[1] < minute]:
-            _hits.pop(old, None)
-    if _hits[k] > acc["rate"]:
-        raise HTTPException(status_code=429, detail=f"L\u00edmite de {acc['rate']} peticiones por minuto superado")
+    global _rate_index_ready
+    if not _rate_index_ready:
+        await db.api_rate.create_index("exp", expireAfterSeconds=0)
+        _rate_index_ready = True
+    now = time.time()
+    minute = int(now // 60)
+    hit = await db.api_rate.find_one_and_update(
+        {"_id": f"{key['id']}:{minute}"},
+        {"$inc": {"n": 1}, "$setOnInsert": {"exp": datetime.now(timezone.utc) + timedelta(minutes=2)}},
+        upsert=True, return_document=ReturnDocument.AFTER)
+    if hit["n"] > acc["rate"]:
+        raise HTTPException(status_code=429, detail=f"L\u00edmite de {acc['rate']} peticiones por minuto superado",
+                            headers={"Retry-After": str(60 - int(now % 60))})
     if request.method != "GET" and key.get("scope") == "read":
         raise HTTPException(status_code=403, detail="Esta clave es de solo lectura")
     await _own_company(owner, key["company_id"])

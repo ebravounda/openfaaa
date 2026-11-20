@@ -1119,6 +1119,7 @@ export default function Landing() {
           </div>
           <div className="flex gap-6">
             <Link to="/blog" className="hover:text-slate-900 transition-colors" data-testid="footer-blog">Blog</Link>
+            <Link to="/para-desarrolladores" className="hover:text-slate-900 transition-colors" data-testid="footer-api">API para desarrolladores</Link>
             <Link to="/terminos" className="hover:text-slate-900 transition-colors" data-testid="footer-terms">Términos y condiciones</Link>
             <Link to="/privacidad" className="hover:text-slate-900 transition-colors" data-testid="footer-privacy">Política de privacidad</Link>
           </div>

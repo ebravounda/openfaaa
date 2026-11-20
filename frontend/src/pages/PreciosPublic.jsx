@@ -19,6 +19,7 @@ const COMPARISON = [
   ["Envío por email", "—", "Sí", "Sí", "Sí"],
   ["VeriFactu AEAT", "—", "—", "Sí", "Sí"],
   ["Cobros con tarjeta", "—", "—", "Sí", "Sí"],
+  ["API REST y webhooks", "—", "—", "Sí", "Sí (una clave por empresa)"],
   ["Nº de empresas", "1", "1", "1", "20 (o 50)"],
 ];
 
@@ -110,6 +111,7 @@ export default function PreciosPublic() {
         <div className="max-w-6xl mx-auto px-4 sm:px-6 flex flex-wrap gap-6 justify-center text-sm text-slate-500">
           <Link to="/" className="hover:text-slate-900">Inicio</Link>
           <Link to="/blog" className="hover:text-slate-900">Blog</Link>
+          <Link to="/para-desarrolladores" className="hover:text-slate-900" data-testid="pricing-footer-api">API</Link>
           <Link to="/terminos" className="hover:text-slate-900">Términos</Link>
           <Link to="/privacidad" className="hover:text-slate-900">Privacidad</Link>
         </div>

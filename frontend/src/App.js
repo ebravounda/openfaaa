@@ -32,6 +32,7 @@ import Contabilidad from "@/pages/Contabilidad";
 import Pricing from "@/pages/Pricing";
 import PreciosRoute from "@/pages/PreciosRoute";
 import Blog from "@/pages/Blog";
+import ApiPublic from "@/pages/ApiPublic";
 import BlogPost from "@/pages/BlogPost";
 import FirmarAlbaran from "@/pages/FirmarAlbaran";
 import PaymentSuccess from "@/pages/PaymentSuccess";
@@ -84,6 +85,7 @@ function App() {
           <Route path="/conciliacion" element={<ProtectedRoute><Conciliacion /></ProtectedRoute>} />
           <Route path="/precios" element={<PreciosRoute />} />
           <Route path="/blog" element={<Blog />} />
+          <Route path="/para-desarrolladores" element={<ApiPublic />} />
           <Route path="/blog/:slug" element={<BlogPost />} />
           <Route path="/firmar/:token" element={<FirmarAlbaran />} />
           <Route path="/pago/exito" element={<PagoExito />} />
