@@ -1,0 +1,48 @@
+{
+  "summary": "Probé la API pública v1 y el panel /desarrolladores. Backend: 21 de 23 pruebas pytest pasan. Fallo CRÍTICO de aislamiento entre empresas: una clave de la empresa B puede leer la factura (y su PDF) de la empresa A del mismo usuario, si conoce el id. Frontend: todos los flujos funcionan (claves, actividad, webhooks, documentación, vista bloqueada). La página no mostraba el menú lateral porque no estaba envuelta en Layout; lo he corregido.",
+  "backend_issues": {
+    "critical": [
+      {"endpoint": "GET /api/v1/invoices/{id} y GET /api/v1/invoices/{id}/pdf", "issue": "Las facturas no se filtran por empresa. server.get_invoice y server.invoice_pdf buscan solo por {id, user_id}, sin company_id. Con la clave de la empresa B (Autonomo B) se lee la factura de A y se descarga su PDF (200 en lugar de 404). Reproducido en TestV1Data::test_isolation_get_by_id y test_isolation_pdf_by_id.", "priority": "CRITICAL"},
+      {"endpoint": "POST /api/v1/invoices/{id}/verifactu", "issue": "Mismo fallo sin probar en vivo (no envié nada a la AEAT): server.verifactu_submit busca la factura solo por {id, user_id}. Una clave de la empresa B podría enviar a la AEAT facturas de la empresa A.", "priority": "HIGH"}
+    ],
+    "minor": [
+      {"endpoint": "POST /api/developer/keys (gestoría)", "issue": "_own_company solo admite las empresas propias del usuario (db.companies user_id). Las empresas cliente de la gestoría son otras cuentas (clidemo1...), así que la gestoría no puede crear una clave para un cliente: da 404. Si 'una clave por cada empresa cliente' quería decir los clientes de la gestoría, no está implementado. La separación entre empresas solo se pudo probar con las 2 empresas propias del admin."},
+      {"endpoint": "POST /api/developer/webhooks", "issue": "Solo exige https://. No bloquea hosts internos o privados (https://localhost, 10.x, 169.254.x), así que hay riesgo de SSRF."},
+      {"endpoint": "POST /api/developer/webhooks/{id}/test", "issue": "Sigue enviando a un webhook borrado (soft delete), porque find_one no filtra deleted. DELETE /webhooks/{id} devuelve ok aunque el id no exista (no da 404)."},
+      {"endpoint": "GET /api/v1/openapi.json", "issue": "servers está fijado a https://openfactura.es. En preview, 'Try it out' de Swagger ataca a producción. Mejor usar la URL de la petición o una variable de entorno."},
+      {"endpoint": "rate limit", "issue": "El contador _hits está en memoria y es por proceso. Con varios workers o réplicas el límite real se multiplica."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "Developer.js", "issue": "La página no estaba envuelta en <Layout>: se veía sin menú lateral ni cabecera y no había forma de volver a otra sección. CORREGIDO por el agente de pruebas.", "selector": "[data-testid='developer-page']", "priority": "HIGH (fixed)"},
+      {"component": "KeysPanel", "issue": "Carrera de carga: KeysPanel se monta antes de que llegue /companies, así que form.company_id queda vacío. El selector muestra 'Elige empresa' y create-key-button sigue desactivado hasta elegir empresa a mano. Solución: un useEffect que fije company_id cuando cambie companies, o no renderizar hasta tener las empresas. WebhooksPanel no lo sufre porque se monta más tarde.", "selector": "[data-testid='key-company-select']", "priority": "LOW"}
+    ],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "/desarrolladores selector de empresa", "issues": ["Una empresa sin nombre ni NIF aparece como su UUID (45ce8d83-...)"]},
+      {"screen": "Docs", "issues": ["El NIF del ejemplo curl (B12345678) no es un CIF válido: la factura se crea (201), pero luego fallará en VeriFactu. Usar un CIF válido, por ejemplo B12345674."]}
+    ]
+  },
+  "test_report_links": ["/app/backend/tests/test_iter33_public_api.py", "/app/test_reports/pytest/pytest_iter33.xml"],
+  "action_items": [
+    "CRÍTICO: filtrar por company_id las rutas v1 de factura por id. Opción A: crear un helper en public_api que compruebe inv.company_id == user['active_company_id'] antes de llamar a get_invoice, invoice_pdf y verifactu_submit. Opción B: añadir company_id: await active_cid(user) al filtro en server.get_invoice, invoice_pdf y verifactu_submit.",
+    "Decidir si la gestoría debe poder crear claves para sus empresas cliente (otras cuentas de usuario); ahora devuelve 404",
+    "KeysPanel: fijar company_id por defecto cuando cargan las empresas",
+    "Webhooks: rechazar hosts privados o locales; que el test de un webhook borrado dé 404; que DELETE de un id inexistente dé 404",
+    "OpenAPI servers: no fijar el dominio de producción"
+  ],
+  "critical_code_review_comments": [
+    "api_ctx suma la petición al rate limit antes de comprobar el permiso de escritura, así que las peticiones 403 también gastan cuota. Aceptable, pero conviene documentarlo.",
+    "Las rutas v1 llaman a funciones de server por sys.modules y _own_company hace 'import server': hay acoplamiento circular y es frágil si cambia el nombre del módulo.",
+    "list_hooks devuelve el secret de cada webhook en claro siempre. Valorar mostrarlo solo al crearlo, igual que las claves.",
+    "Las claves revocadas se acumulan en la lista sin opción de ocultarlas."
+  ],
+  "updated_files": ["/app/frontend/src/pages/Developer.js (envuelto en Layout)", "/app/backend/tests/test_iter33_public_api.py"],
+  "success_rate": {"backend": "91% (21/23)", "frontend": "95%"},
+  "seed_data_creation": "Ninguno. Todo lo de prueba se limpió: claves TEST_* revocadas (siguen en la lista como 'Revocada'), webhooks borrados (soft delete), y borradas las facturas, el cliente y el gasto TEST_ creados por la v1. No se llamó a POST /v1/invoices/{id}/verifactu.",
+  "retest_needed": true,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Ejecutar: cd /app/backend && REACT_APP_BACKEND_URL=... python -m pytest tests/test_iter33_public_api.py -n 0. Debe ir en serie porque usa el estado compartido CREATED. Para la separación entre empresas usa las 2 empresas con nombre del admin (Mi Empresa / Autonomo B). clidemo1 = Platino (límite 60, prueba de 429); clidemo2 = Medio (bloqueado). La entrega de webhooks se probó con https://httpbin.org/post (responde 200).",
+  "rca of the issue": "public_api.setup reutiliza server.get_invoice, server.invoice_pdf y server.verifactu_submit. Esas funciones se escribieron para la sesión web, donde basta filtrar por user_id. En la API cada clave es de una sola empresa, así que el filtro por usuario no basta. Los listados sí filtran por active_cid(user) y están bien aislados. Pasos para reproducir: crear clave A (Mi Empresa) y clave B (Autonomo B); POST /v1/invoices con la clave A; GET /v1/invoices/{id} con la clave B devuelve 200."
+}

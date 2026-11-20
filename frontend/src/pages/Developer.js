@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import api from "@/lib/api";
+import Layout from "@/components/Layout";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Code2, Activity, KeyRound, Webhook, AlertTriangle, Lock } from "lucide-react";
 import { KeysPanel, LogsPanel, WebhooksPanel, DocsPanel } from "@/components/developer/DevParts";
@@ -27,11 +28,12 @@ export default function Developer() {
   const loadStatus = () => api.get("/developer/status").then((r) => setSt(r.data)).catch(() => {});
   useEffect(() => {
     loadStatus();
-    api.get("/companies").then((r) => setCompanies(r.data || [])).catch(() => {});
+    api.get("/developer/companies").then((r) => setCompanies(r.data || [])).catch(() => {});
   }, []);
-  if (!st) return null;
+  if (!st) return <Layout><div data-testid="developer-loading" /></Layout>;
   const connected = st.keys > 0;
   return (
+    <Layout>
     <div className="space-y-6" data-testid="developer-page">
       <div>
         <h1 className="font-[Outfit] text-3xl sm:text-4xl font-semibold tracking-tight text-slate-900 flex items-center gap-3"><Code2 className="w-8 h-8 text-[#0052FF]" />API para desarrolladores</h1>
@@ -65,5 +67,6 @@ export default function Developer() {
         </>
       )}
     </div>
+    </Layout>
   );
 }

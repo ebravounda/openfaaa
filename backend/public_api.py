@@ -97,9 +97,30 @@ async def _own_company(user: dict, cid: str) -> dict:
     import server
     comps = await server._list_companies(user)
     c = next((c for c in comps if c.get("id") == cid), None)
+    if not c and user.get("role") == "gestoria":
+        for cu in await _gestoria_clients(user):
+            c = next((x for x in await server._list_companies(cu) if x.get("id") == cid), None)
+            if c:
+                c = {**c, "_data_user_id": cu["id"]}
+                break
     if not c:
         raise HTTPException(status_code=404, detail="Empresa no encontrada")
     return c
+
+
+async def _gestoria_clients(user: dict) -> list:
+    return [_public_user(u) async for u in db.users.find({"gestoria_id": user["id"]}).limit(1000)]
+
+
+@dev.get("/companies")
+async def dev_companies(user=Depends(get_current_user)):
+    import server
+    out = [{"id": c["id"], "name": c.get("name") or c.get("nif") or "Mi empresa"} for c in await server._list_companies(user)]
+    if user.get("role") == "gestoria":
+        for cu in await _gestoria_clients(user):
+            for c in await server._list_companies(cu):
+                out.append({"id": c["id"], "name": f"{c.get('name') or c.get('nif') or cu.get('email')} (cliente)"})
+    return out
 
 
 @dev.get("/status")
@@ -125,6 +146,7 @@ async def create_key(data: KeyInput, user=Depends(require_api_plan)):
     comp = await _own_company(user, data.company_id)
     raw = "of_live_" + secrets.token_urlsafe(32)
     doc = {"id": str(uuid.uuid4()), "user_id": user["id"], "company_id": comp["id"], "company_name": comp.get("name", ""),
+           "data_user_id": comp.get("_data_user_id") or user["id"],
            "name": data.name.strip(), "scope": "read" if data.scope == "read" else "write", "prefix": raw[:14],
            "key_hash": _hash(raw), "revoked": False, "created_at": _now(), "last_used_at": None}
     await db.api_keys.insert_one(doc)
@@ -201,8 +223,8 @@ async def api_ctx(request: Request) -> dict:
     u = await db.users.find_one({"_id": ObjectId(key["user_id"])})
     if not u or u.get("is_blocked"):
         raise HTTPException(status_code=403, detail="Cuenta bloqueada")
-    user = _public_user(u)
-    acc = await api_access(user)
+    owner = _public_user(u)
+    acc = await api_access(owner)
     if not acc["allowed"]:
         raise HTTPException(status_code=403, detail="Tu plan ya no incluye la API. Cambia a Platino o Multiempresas.")
     minute = int(time.time() // 60)
@@ -215,7 +237,11 @@ async def api_ctx(request: Request) -> dict:
         raise HTTPException(status_code=429, detail=f"L\u00edmite de {acc['rate']} peticiones por minuto superado")
     if request.method != "GET" and key.get("scope") == "read":
         raise HTTPException(status_code=403, detail="Esta clave es de solo lectura")
-    await _own_company(user, key["company_id"])
+    await _own_company(owner, key["company_id"])
+    du = key.get("data_user_id") or key["user_id"]
+    user = owner if du == key["user_id"] else _public_user(await db.users.find_one({"_id": ObjectId(du)}) or {})
+    if not user.get("id"):
+        raise HTTPException(status_code=404, detail="Empresa no encontrada")
     user["active_company_id"] = key["company_id"]
     user["_api_key"] = key
     await db.api_keys.update_one({"id": key["id"]}, {"$set": {"last_used_at": _now()}})
@@ -245,6 +271,13 @@ async def api_log_middleware(request: Request, call_next):
 
 
 def setup(app, s):
+    async def _same_company(invoice_id: str, user: dict):
+        inv = await db.invoices.find_one({"id": invoice_id, "user_id": user["id"]}, {"_id": 0, "company_id": 1})
+        if not inv or (inv.get("company_id") or "") != user["active_company_id"]:
+            raise HTTPException(status_code=404, detail="Factura no encontrada")
+
+    def _owner(user):
+        return user["_api_key"]["user_id"]
     """Registra las rutas v1 reutilizando la l\u00f3gica interna del m\u00f3dulo server (s)."""
 
     @v1.get("/me", summary="Cuenta y empresa de la clave")
@@ -261,7 +294,7 @@ def setup(app, s):
     async def client_create(data: s.ContactInput, user=Depends(api_ctx)):
         data.kind = "client"
         doc = await s.create_contact(data, user=user)
-        await emit(user["id"], user["active_company_id"], "client.created", doc)
+        await emit(_owner(user), user["active_company_id"], "client.created", doc)
         return doc
 
     @v1.get("/invoices", summary="Listar facturas")
@@ -271,28 +304,31 @@ def setup(app, s):
     @v1.post("/invoices", status_code=201, summary="Emitir factura")
     async def invoice_create(data: s.InvoiceInput, user=Depends(api_ctx)):
         doc = await s.create_invoice(data, user=user)
-        await emit(user["id"], user["active_company_id"], "invoice.created", doc)
+        await emit(_owner(user), user["active_company_id"], "invoice.created", doc)
         return doc
 
     @v1.get("/invoices/{invoice_id}", summary="Ver factura")
     async def invoice_get(invoice_id: str, user=Depends(api_ctx)):
+        await _same_company(invoice_id, user)
         return await s.get_invoice(invoice_id, user=user)
 
     @v1.get("/invoices/{invoice_id}/pdf", summary="Descargar PDF de la factura")
     async def invoice_pdf(invoice_id: str, user=Depends(api_ctx)):
+        await _same_company(invoice_id, user)
         return await s.invoice_pdf(invoice_id, user=user)
 
     @v1.post("/invoices/{invoice_id}/verifactu", summary="Enviar factura a VeriFactu (AEAT)")
     async def invoice_vf(invoice_id: str, user=Depends(api_ctx)):
+        await _same_company(invoice_id, user)
         try:
             res = await s.verifactu_submit(invoice_id, user=user)
         except HTTPException as e:
-            await emit(user["id"], user["active_company_id"], "invoice.verifactu.error",
+            await emit(_owner(user), user["active_company_id"], "invoice.verifactu.error",
                        {"invoice_id": invoice_id, "detail": e.detail})
             raise
         ok = bool((res or {}).get("csv")) and not (res or {}).get("error")
         ev = "invoice.verifactu.accepted" if ok else "invoice.verifactu.rejected"
-        await emit(user["id"], user["active_company_id"], ev, {"invoice_id": invoice_id, "result": res})
+        await emit(_owner(user), user["active_company_id"], ev, {"invoice_id": invoice_id, "result": res})
         return res
 
     @v1.get("/expenses", summary="Listar gastos")
@@ -302,7 +338,7 @@ def setup(app, s):
     @v1.post("/expenses", status_code=201, summary="Registrar gasto")
     async def expense_create(data: s.ExpenseInput, user=Depends(api_ctx)):
         doc = await s.create_expense(data, user=user)
-        await emit(user["id"], user["active_company_id"], "expense.created", doc)
+        await emit(_owner(user), user["active_company_id"], "expense.created", doc)
         return doc
 
     app.include_router(dev)
